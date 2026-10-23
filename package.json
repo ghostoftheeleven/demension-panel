@@ -1,0 +1,23 @@
+{
+  "name": "demension-panel",
+  "version": "1.0.0",
+  "description": "AmneziaWG Multi-Server Management Panel",
+  "private": true,
+  "scripts": {
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client",
+    "build:client": "npm run build --prefix client",
+    "build:server": "npm run build --prefix server",
+    "build": "npm run build:client && npm run build:server",
+    "start": "npm run start --prefix server"
+  },
+  "keywords": [
+    "amneziawg",
+    "wireguard",
+    "vpn",
+    "panel",
+    "dpi-bypass"
+  ],
+  "author": "ghostoftheeleven",
+  "license": "MIT"
+}

@@ -1,0 +1,234 @@
+import React, { useState } from 'react';
+import {
+  Server as ServerIcon,
+  Play,
+  Settings2,
+  RefreshCw,
+  Trash2,
+  KeyRound,
+  Shield,
+} from 'lucide-react';
+import type { Server } from '../types';
+import { api } from '../api';
+
+interface ServerCardsProps {
+  servers: Server[];
+  selectedServerId: number | null;
+  onSelectServer: (id: number) => void;
+  onInstallServer: (server: Server) => void;
+  onEditParams: (server: Server) => void;
+  onServerDeleted: (id: number) => void;
+}
+
+export const ServerCards: React.FC<ServerCardsProps> = ({
+  servers,
+  selectedServerId,
+  onSelectServer,
+  onInstallServer,
+  onEditParams,
+  onServerDeleted,
+}) => {
+  const [testingSsh, setTestingSsh] = useState<number | null>(null);
+  const [syncing, setSyncing] = useState<number | null>(null);
+
+  const selectedServer = servers.find((s) => s.id === selectedServerId) || servers[0];
+
+  const handleTestSsh = async (serverId: number) => {
+    setTestingSsh(serverId);
+    try {
+      const res = await api.testSsh(serverId);
+      alert(res.message);
+    } catch (err: any) {
+      alert(`Ошибка SSH: ${err.message}`);
+    } finally {
+      setTestingSsh(null);
+    }
+  };
+
+  const handleSync = async (serverId: number) => {
+    setSyncing(serverId);
+    try {
+      const res = await api.syncServer(serverId);
+      if (res.success) {
+        alert('Пиры успешно синхронизированы на сервере!');
+      } else {
+        alert(`Ошибка синхронизации: ${res.error}`);
+      }
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setSyncing(null);
+    }
+  };
+
+  const handleDelete = async (server: Server) => {
+    if (!confirm(`Удалить сервер "${server.name}" из панели?`)) return;
+    try {
+      await api.deleteServer(server.id);
+      onServerDeleted(server.id);
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  if (servers.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Server Switcher Tabs */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        {servers.map((s) => {
+          const isSelected = s.id === selectedServer?.id;
+          const isOnline = s.status === 'online';
+
+          return (
+            <button
+              key={s.id}
+              onClick={() => onSelectServer(s.id)}
+              className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border text-xs font-medium transition flex-shrink-0 ${
+                isSelected
+                  ? 'bg-zinc-800/90 border-emerald-500/40 text-white shadow-lg shadow-emerald-950/40'
+                  : 'bg-zinc-900/50 border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800/50'
+              }`}
+            >
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  isOnline
+                    ? 'bg-emerald-400 shadow-sm shadow-emerald-400'
+                    : s.status === 'installing'
+                    ? 'bg-amber-400 animate-ping'
+                    : s.status === 'error'
+                    ? 'bg-red-400'
+                    : 'bg-zinc-500'
+                }`}
+              />
+              <span className="font-semibold">{s.name}</span>
+              <span className="text-[11px] font-mono text-zinc-500">{s.host}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Selected Server Detailed Card */}
+      {selectedServer && (
+        <div className="bg-gradient-to-b from-zinc-900/90 to-zinc-950/90 border border-zinc-800/90 rounded-2xl p-6 shadow-2xl space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            {/* Left Info */}
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-zinc-800/80 border border-zinc-700/50 flex items-center justify-center flex-shrink-0">
+                <ServerIcon className="w-6 h-6 text-emerald-400" />
+              </div>
+              <div>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-lg font-bold text-white tracking-tight">{selectedServer.name}</h2>
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                      selectedServer.status === 'online'
+                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                        : selectedServer.status === 'installing'
+                        ? 'bg-amber-400/10 text-amber-400 border border-amber-400/20'
+                        : selectedServer.status === 'error'
+                        ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                        : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
+                    }`}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                    {selectedServer.status === 'online'
+                      ? 'AmneziaWG Активен'
+                      : selectedServer.status === 'installing'
+                      ? 'Идет установка'
+                      : selectedServer.status === 'error'
+                      ? 'Ошибка'
+                      : 'Не установлен'}
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-400 mt-1 font-mono">
+                  <span>Хост: <strong className="text-zinc-200">{selectedServer.host}</strong></span>
+                  <span>SSH Порт: <strong className="text-zinc-200">{selectedServer.ssh_port}</strong></span>
+                  <span>AWG Порт: <strong className="text-zinc-200">{selectedServer.awg_port} (UDP)</strong></span>
+                  <span>Подсеть: <strong className="text-zinc-200">{selectedServer.subnet}</strong></span>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Quick Actions */}
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => onInstallServer(selectedServer)}
+                className="flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-medium text-xs px-4 py-2.5 rounded-xl transition shadow-lg shadow-emerald-600/20 active:scale-[0.98]"
+              >
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>
+                  {selectedServer.status === 'online' ? 'Переустановить AWG' : 'Установить AmneziaWG'}
+                </span>
+              </button>
+
+              <button
+                onClick={() => onEditParams(selectedServer)}
+                className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium px-3.5 py-2.5 rounded-xl border border-zinc-700/60 transition"
+                title="Настроить заголовки и мусорные пакеты"
+              >
+                <Settings2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Параметры AWG</span>
+              </button>
+
+              <button
+                onClick={() => handleTestSsh(selectedServer.id)}
+                disabled={testingSsh === selectedServer.id}
+                className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium px-3.5 py-2.5 rounded-xl border border-zinc-700/60 transition"
+                title="Проверить SSH-соединение"
+              >
+                <KeyRound className="w-3.5 h-3.5 text-cyan-400" />
+                <span>{testingSsh === selectedServer.id ? 'Тест...' : 'Тест SSH'}</span>
+              </button>
+
+              {selectedServer.status === 'online' && (
+                <button
+                  onClick={() => handleSync(selectedServer.id)}
+                  disabled={syncing === selectedServer.id}
+                  className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium px-3.5 py-2.5 rounded-xl border border-zinc-700/60 transition"
+                  title="Синхронизировать конфигурацию на сервере"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${syncing === selectedServer.id ? 'animate-spin' : ''}`} />
+                  <span>Синхронизация</span>
+                </button>
+              )}
+
+              <button
+                onClick={() => handleDelete(selectedServer)}
+                className="p-2.5 text-zinc-500 hover:text-red-400 hover:bg-zinc-800/80 rounded-xl transition"
+                title="Удалить сервер"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Obfuscation Badges Banner */}
+          <div className="bg-zinc-950/70 border border-zinc-800/80 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2 text-zinc-400">
+              <Shield className="w-4 h-4 text-emerald-400" />
+              <span className="font-medium text-zinc-300">Активная маскировка (DPI Bypass):</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 font-mono text-[11px]">
+              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-300">
+                Jc: <strong className="text-emerald-400">{selectedServer.jc}</strong>
+              </span>
+              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-300">
+                Junk: <strong className="text-emerald-400">{selectedServer.jmin}-{selectedServer.jmax}B</strong>
+              </span>
+              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-300">
+                S1/S2: <strong className="text-cyan-400">{selectedServer.s1}/{selectedServer.s2}B</strong>
+              </span>
+              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-300">
+                H1-H4: <strong className="text-purple-400">Спец. заголовки</strong>
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
