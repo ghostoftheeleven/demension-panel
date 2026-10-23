@@ -5,12 +5,22 @@ import express from 'express';
 import cors from 'cors';
 import { WebSocketServer, WebSocket } from 'ws';
 import { initDatabase, db } from './db/index.js';
+import { AuthService } from './services/auth.service.js';
+import { requireAuth } from './middleware/auth.middleware.js';
+import { authRouter } from './routes/auth.js';
 import { serversRouter } from './routes/servers.js';
 import { clientsRouter } from './routes/clients.js';
+import { subscribersRouter } from './routes/subscribers.js';
+import { subscriptionRouter } from './routes/subscription.js';
 import { ProvisionService } from './services/provision.service.js';
 
 // Initialize SQLite database
 initDatabase();
+
+// Ensure initial admin exists
+const initialUser = process.env.PANEL_USER || 'admin';
+const initialPass = process.env.PANEL_PASSWORD || 'admin';
+AuthService.ensureDefaultAdmin(initialUser, initialPass);
 
 const app = express();
 const server = http.createServer(app);
@@ -19,11 +29,10 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 app.use(cors());
 app.use(express.json());
 
-// API Routes
-app.use('/api/servers', serversRouter);
-app.use('/api', clientsRouter);
+// Public Subscription Endpoint (for HAPP, Incy, etc.)
+app.use('/sub', subscriptionRouter);
 
-// System health check
+// Public Health Check
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -31,6 +40,14 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+// Authentication routes (login, me, logout, change-password)
+app.use('/api/auth', authRouter);
+
+// Protected Admin API Routes
+app.use('/api/servers', requireAuth, serversRouter);
+app.use('/api/subscribers', subscribersRouter);
+app.use('/api', requireAuth, clientsRouter);
 
 // Serve frontend if built
 const clientDistCandidates = [
@@ -45,7 +62,7 @@ if (clientDistPath) {
   });
 }
 
-// WebSocket handling for real-time install logs and live server monitoring
+// WebSocket handling for real-time install logs
 wss.on('connection', (ws: WebSocket) => {
   ws.on('message', async (data: string) => {
     try {
@@ -88,4 +105,5 @@ const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
   console.log(`🚀 Demension Panel Server running on http://localhost:${PORT}`);
   console.log(`📡 WebSocket ready on ws://localhost:${PORT}/ws`);
+  console.log(`🔑 Default admin credentials: ${initialUser} / ${initialPass}`);
 });

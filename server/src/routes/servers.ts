@@ -105,8 +105,8 @@ serversRouter.put('/:id', (req, res) => {
       h4 = COALESCE(?, h4)
     WHERE id = ?
   `).run(
-    name, host, ssh_port, ssh_user, ssh_password, ssh_key,
-    awg_port, subnet, jc, jmin, jmax, s1, s2, h1, h2, h3, h4,
+    name ?? null, host ?? null, ssh_port ?? null, ssh_user ?? null, ssh_password ?? null, ssh_key ?? null,
+    awg_port ?? null, subnet ?? null, jc ?? null, jmin ?? null, jmax ?? null, s1 ?? null, s2 ?? null, h1 ?? null, h2 ?? null, h3 ?? null, h4 ?? null,
     req.params.id
   );
 

@@ -65,7 +65,7 @@ clientsRouter.put('/clients/:id', async (req, res) => {
       name = COALESCE(?, name),
       enabled = COALESCE(?, enabled)
     WHERE id = ?
-  `).run(name, enabled, req.params.id);
+  `).run(name ?? null, enabled ?? null, req.params.id);
 
   const updated = db.prepare('SELECT * FROM clients WHERE id = ?').get(req.params.id) as any;
 

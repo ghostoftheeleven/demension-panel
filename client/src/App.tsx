@@ -2,19 +2,29 @@ import React, { useState, useEffect } from 'react';
 import { Navbar } from './components/Navbar';
 import { ServerCards } from './components/ServerCards';
 import { ClientList } from './components/ClientList';
+import { SubscribersList } from './components/SubscribersList';
 import { AddServerModal } from './components/AddServerModal';
 import { InstallLogsModal } from './components/InstallLogsModal';
 import { AwgParamsModal } from './components/AwgParamsModal';
 import { AddClientModal } from './components/AddClientModal';
+import { AddSubscriberModal } from './components/AddSubscriberModal';
+import { SubscriptionModal } from './components/SubscriptionModal';
+import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { QrCodeModal } from './components/QrCodeModal';
-import type { Server, Client, QrCodeData } from './types';
+import { LoginView } from './components/LoginView';
+import type { Server, Client, Subscriber, QrCodeData, AdminUser } from './types';
 import { api } from './api';
 import { ShieldCheck, Plus, Terminal, Zap, Sparkles } from 'lucide-react';
 
 export const App: React.FC = () => {
+  const [user, setUser] = useState<AdminUser | null>(null);
+  const [authChecking, setAuthChecking] = useState(true);
+
+  const [activeTab, setActiveTab] = useState<'servers' | 'subscribers'>('servers');
   const [servers, setServers] = useState<Server[]>([]);
   const [selectedServerId, setSelectedServerId] = useState<number | null>(null);
   const [clients, setClients] = useState<Client[]>([]);
+  const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Modals state
@@ -25,15 +35,46 @@ export const App: React.FC = () => {
   const [qrModalClientId, setQrModalClientId] = useState<number | null>(null);
   const [qrData, setQrData] = useState<QrCodeData | null>(null);
 
-  const loadServers = async () => {
+  // Subscriber modals
+  const [isAddSubscriberOpen, setIsAddSubscriberOpen] = useState(false);
+  const [editingSubscriber, setEditingSubscriber] = useState<Subscriber | null>(null);
+  const [subscriptionModalSub, setSubscriptionModalSub] = useState<Subscriber | null>(null);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+
+  // Check auth on mount
+  useEffect(() => {
+    api.me()
+      .then((res) => {
+        setUser(res.user);
+      })
+      .catch(() => {
+        setUser(null);
+      })
+      .finally(() => {
+        setAuthChecking(false);
+      });
+
+    const handleUnauthorized = () => {
+      setUser(null);
+    };
+    window.addEventListener('auth_unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('auth_unauthorized', handleUnauthorized);
+  }, []);
+
+  const loadData = async () => {
+    if (!user) return;
     try {
-      const data = await api.getServers();
-      setServers(data);
-      if (data.length > 0 && selectedServerId === null) {
-        setSelectedServerId(data[0].id);
+      const [serversData, subscribersData] = await Promise.all([
+        api.getServers(),
+        api.getSubscribers(),
+      ]);
+      setServers(serversData);
+      setSubscribers(subscribersData);
+      if (serversData.length > 0 && selectedServerId === null) {
+        setSelectedServerId(serversData[0].id);
       }
     } catch (err) {
-      console.error('Ошибка загрузки серверов:', err);
+      console.error('Ошибка загрузки данных:', err);
     } finally {
       setLoading(false);
     }
@@ -49,34 +90,48 @@ export const App: React.FC = () => {
   };
 
   useEffect(() => {
-    loadServers();
-  }, []);
+    if (user) {
+      loadData();
+    }
+  }, [user]);
 
   useEffect(() => {
-    if (selectedServerId !== null) {
+    if (selectedServerId !== null && user) {
       loadClients(selectedServerId);
     } else {
       setClients([]);
     }
-  }, [selectedServerId]);
+  }, [selectedServerId, user]);
 
-  // Periodic polling
+  // Periodic polling (every 15 seconds)
   useEffect(() => {
+    if (!user) return;
     const interval = setInterval(() => {
-      loadServers();
+      loadData();
       if (selectedServerId !== null) {
         loadClients(selectedServerId);
       }
     }, 15000);
     return () => clearInterval(interval);
-  }, [selectedServerId]);
+  }, [selectedServerId, user]);
+
+  if (authChecking) {
+    return (
+      <div className="min-h-screen bg-[#090a0f] flex items-center justify-center text-zinc-500 text-sm">
+        Загрузка панели...
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginView onLoginSuccess={(loggedInUser) => setUser(loggedInUser)} />;
+  }
 
   const selectedServer = servers.find((s) => s.id === selectedServerId) || null;
 
   const handleServerAdded = (newServer: Server) => {
     setServers((prev) => [newServer, ...prev]);
     setSelectedServerId(newServer.id);
-    // Suggest installing right away
     setInstallModalServer(newServer);
   };
 
@@ -99,7 +154,6 @@ export const App: React.FC = () => {
           : s
       )
     );
-    // Immediately open QR code for newly created client!
     handleShowQr(newClient.id);
   };
 
@@ -126,15 +180,50 @@ export const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#090a0f] text-zinc-100 flex flex-col font-sans selection:bg-emerald-500/30 selection:text-emerald-200">
-      <Navbar servers={servers} onAddServer={() => setIsAddServerOpen(true)} />
+      <Navbar
+        servers={servers}
+        user={user}
+        activeTab={activeTab}
+        onSelectTab={(tab) => setActiveTab(tab)}
+        onAddServer={() => setIsAddServerOpen(true)}
+        onAddSubscriber={() => {
+          setEditingSubscriber(null);
+          setIsAddSubscriberOpen(true);
+        }}
+        onChangePassword={() => setIsChangePasswordOpen(true)}
+        onLogout={async () => {
+          await api.logout();
+          setUser(null);
+        }}
+      />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {loading ? (
           <div className="flex items-center justify-center py-24 text-zinc-500 text-sm">
-            Загрузка данных панели...
+            Загрузка данных...
           </div>
+        ) : activeTab === 'subscribers' ? (
+          /* Subscribers & Multi-Node Subscriptions Tab */
+          <SubscribersList
+            subscribers={subscribers}
+            onAddSubscriber={() => {
+              setEditingSubscriber(null);
+              setIsAddSubscriberOpen(true);
+            }}
+            onEditSubscriber={(sub) => {
+              setEditingSubscriber(sub);
+              setIsAddSubscriberOpen(true);
+            }}
+            onShowSubscription={(sub) => setSubscriptionModalSub(sub)}
+            onSubscriberUpdated={(updated) => {
+              setSubscribers((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+            }}
+            onSubscriberDeleted={(id) => {
+              setSubscribers((prev) => prev.filter((s) => s.id !== id));
+            }}
+          />
         ) : servers.length === 0 ? (
-          /* Empty State / Welcome Screen */
+          /* Empty Servers Screen */
           <div className="max-w-2xl mx-auto text-center py-16 px-6 bg-zinc-900/50 border border-zinc-800/80 rounded-3xl shadow-2xl space-y-6">
             <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-emerald-600 to-teal-400 mx-auto flex items-center justify-center shadow-xl shadow-emerald-500/20">
               <ShieldCheck className="w-9 h-9 text-zinc-950 stroke-[2.5]" />
@@ -145,7 +234,7 @@ export const App: React.FC = () => {
                 Добро пожаловать в Demension Panel
               </h2>
               <p className="text-sm text-zinc-400 max-w-lg mx-auto">
-                Специализированная панель управления для протокола <strong className="text-emerald-400">AmneziaWG</strong>. Добавляйте удаленные серверы по SSH, и панель автоматически развернет изолированный Docker-контейнер и настроит маскировку от DPI.
+                Добавляйте удаленные серверы по SSH, и панель автоматически развернет изолированный Docker-контейнер с AmneziaWG и сгенерирует подписки для клиентов.
               </p>
             </div>
 
@@ -164,8 +253,8 @@ export const App: React.FC = () => {
 
               <div className="p-4 bg-zinc-950/70 border border-zinc-800/80 rounded-2xl">
                 <Zap className="w-5 h-5 text-amber-400 mb-2" />
-                <h4 className="text-xs font-semibold text-white">Горячий Syncconf</h4>
-                <p className="text-[11px] text-zinc-400 mt-1">Добавление и удаление клиентов без разрыва сессий.</p>
+                <h4 className="text-xs font-semibold text-white">Подписки HAPP / Incy</h4>
+                <p className="text-[11px] text-zinc-400 mt-1">Автообновление списка серверов без ручной настройки.</p>
               </div>
             </div>
 
@@ -180,7 +269,7 @@ export const App: React.FC = () => {
             </div>
           </div>
         ) : (
-          /* Main Workspace */
+          /* Servers & Clients View */
           <>
             <ServerCards
               servers={servers}
@@ -217,7 +306,7 @@ export const App: React.FC = () => {
         isOpen={!!installModalServer}
         server={installModalServer}
         onClose={() => setInstallModalServer(null)}
-        onFinished={loadServers}
+        onFinished={loadData}
       />
 
       <AwgParamsModal
@@ -235,6 +324,29 @@ export const App: React.FC = () => {
         serverName={selectedServer?.name || ''}
         onClose={() => setIsAddClientOpen(false)}
         onClientAdded={handleClientAdded}
+      />
+
+      <AddSubscriberModal
+        isOpen={isAddSubscriberOpen}
+        servers={servers}
+        editingSubscriber={editingSubscriber}
+        onClose={() => setIsAddSubscriberOpen(false)}
+        onSaved={() => loadData()}
+      />
+
+      <SubscriptionModal
+        isOpen={!!subscriptionModalSub}
+        subscriber={subscriptionModalSub}
+        onClose={() => setSubscriptionModalSub(null)}
+        onTokenReset={(updated) => {
+          setSubscriptionModalSub(updated);
+          setSubscribers((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+        }}
+      />
+
+      <ChangePasswordModal
+        isOpen={isChangePasswordOpen}
+        onClose={() => setIsChangePasswordOpen(false)}
       />
 
       <QrCodeModal
