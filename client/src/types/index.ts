@@ -71,3 +71,28 @@ export interface QrCodeData {
   config: string;
   clientName: string;
 }
+
+export interface SslStatus {
+  enabled: boolean;
+  hasCert: boolean;
+  domain: string | null;
+  mode: 'letsencrypt_cf' | 'letsencrypt_http' | 'selfsigned_ip' | 'custom' | null;
+  expiresAt: string | null;
+}
+
+export interface Fail2banStatus {
+  installed: boolean;
+  active: boolean;
+  jail: string;
+  totalFailed: number;
+  totalBanned: number;
+  currentlyBanned: string[];
+  maxRetry: number;
+  banTime: number;
+  findTime: number;
+}
+
+export interface CloudflareZone {
+  id: string;
+  name: string;
+}

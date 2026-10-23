@@ -10,9 +10,11 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
+    "acme-client": "^5.4.0",
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "qrcode": "^1.5.4",
+    "selfsigned": "^5.5.0",
     "ssh2": "^1.16.0",
     "ws": "^8.18.0"
   },

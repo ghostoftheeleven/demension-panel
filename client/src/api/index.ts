@@ -1,4 +1,4 @@
-import type { Server, Client, QrCodeData, Subscriber, AdminUser } from '../types';
+import type { Server, Client, QrCodeData, Subscriber, AdminUser, SslStatus, Fail2banStatus, CloudflareZone } from '../types';
 
 const API_BASE = '/api';
 
@@ -175,7 +175,7 @@ export const api = {
     return `${API_BASE}/clients/${id}/config${token ? `?token=${token}` : ''}`;
   },
 
-  // Subscribers (Users with multi-node access and HAPP/Incy subscriptions)
+  // Subscribers
   async getSubscribers(): Promise<Subscriber[]> {
     const res = await fetchWithAuth(`${API_BASE}/subscribers`);
     if (!res.ok) throw new Error('Ошибка загрузки подписчиков');
@@ -219,5 +219,143 @@ export const api = {
   getSubscriptionUrl(token: string): string {
     const origin = window.location.origin;
     return `${origin}/sub/${token}`;
+  },
+
+  // Security: SSL & Fail2ban
+  async getSslStatus(): Promise<SslStatus> {
+    const res = await fetchWithAuth(`${API_BASE}/security/ssl`);
+    if (!res.ok) throw new Error('Ошибка получения статуса SSL');
+    return res.json();
+  },
+
+  async verifyCloudflareToken(token: string): Promise<{ valid: boolean; message: string }> {
+    const res = await fetchWithAuth(`${API_BASE}/security/ssl/verify-cf`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    if (!res.ok) throw new Error('Ошибка верификации Cloudflare');
+    return res.json();
+  },
+
+  async getCloudflareZones(token: string): Promise<CloudflareZone[]> {
+    const res = await fetchWithAuth(`${API_BASE}/security/ssl/cf-zones`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Ошибка загрузки зон Cloudflare');
+    }
+    return res.json();
+  },
+
+  async issueLetsEncryptCf(data: { domain: string; email: string; token: string; createARecord: boolean }): Promise<{ success: boolean }> {
+    const res = await fetchWithAuth(`${API_BASE}/security/ssl/issue-cf`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Ошибка выпуска сертификата через Cloudflare');
+    }
+    return res.json();
+  },
+
+  async issueLetsEncryptHttp(data: { domain: string; email: string }): Promise<{ success: boolean }> {
+    const res = await fetchWithAuth(`${API_BASE}/security/ssl/issue-http`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Ошибка выпуска сертификата через HTTP-01');
+    }
+    return res.json();
+  },
+
+  async issueSelfSignedIp(ip: string): Promise<{ success: boolean }> {
+    const res = await fetchWithAuth(`${API_BASE}/security/ssl/issue-ip`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ip }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Ошибка генерации IP-сертификата');
+    }
+    return res.json();
+  },
+
+  async saveCustomCert(data: { cert: string; key: string; domain?: string }): Promise<{ success: boolean }> {
+    const res = await fetchWithAuth(`${API_BASE}/security/ssl/custom`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Ошибка сохранения сертификата');
+    }
+    return res.json();
+  },
+
+  async toggleSsl(enabled: boolean): Promise<{ success: boolean; enabled: boolean }> {
+    const res = await fetchWithAuth(`${API_BASE}/security/ssl/toggle`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Ошибка переключения SSL');
+    }
+    return res.json();
+  },
+
+  async getFail2banStatus(): Promise<Fail2banStatus> {
+    const res = await fetchWithAuth(`${API_BASE}/security/fail2ban`);
+    if (!res.ok) throw new Error('Ошибка загрузки статуса Fail2ban');
+    return res.json();
+  },
+
+  async unbanIp(ip: string): Promise<{ success: boolean; message: string }> {
+    const res = await fetchWithAuth(`${API_BASE}/security/fail2ban/unban`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ip }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Ошибка разблокировки IP');
+    }
+    return res.json();
+  },
+
+  async banIp(ip: string): Promise<{ success: boolean; message: string }> {
+    const res = await fetchWithAuth(`${API_BASE}/security/fail2ban/ban`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ip }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Ошибка блокировки IP');
+    }
+    return res.json();
+  },
+
+  async setupFail2ban(): Promise<{ success: boolean; message: string }> {
+    const res = await fetchWithAuth(`${API_BASE}/security/fail2ban/setup`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Ошибка установки Fail2ban');
+    }
+    return res.json();
   },
 };

@@ -3,6 +3,7 @@ import { Navbar } from './components/Navbar';
 import { ServerCards } from './components/ServerCards';
 import { ClientList } from './components/ClientList';
 import { SubscribersList } from './components/SubscribersList';
+import { SecurityView } from './components/SecurityView';
 import { AddServerModal } from './components/AddServerModal';
 import { InstallLogsModal } from './components/InstallLogsModal';
 import { AwgParamsModal } from './components/AwgParamsModal';
@@ -20,7 +21,7 @@ export const App: React.FC = () => {
   const [user, setUser] = useState<AdminUser | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
 
-  const [activeTab, setActiveTab] = useState<'servers' | 'subscribers'>('servers');
+  const [activeTab, setActiveTab] = useState<'servers' | 'subscribers' | 'security'>('servers');
   const [servers, setServers] = useState<Server[]>([]);
   const [selectedServerId, setSelectedServerId] = useState<number | null>(null);
   const [clients, setClients] = useState<Client[]>([]);
@@ -202,6 +203,9 @@ export const App: React.FC = () => {
           <div className="flex items-center justify-center py-24 text-zinc-500 text-sm">
             Загрузка данных...
           </div>
+        ) : activeTab === 'security' ? (
+          /* Security: HTTPS & Fail2ban Tab */
+          <SecurityView />
         ) : activeTab === 'subscribers' ? (
           /* Subscribers & Multi-Node Subscriptions Tab */
           <SubscribersList

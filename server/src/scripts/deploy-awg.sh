@@ -169,6 +169,31 @@ docker run -d \
 
 sleep 2
 
+echo "[7/7] Настройка защиты SSH от перебора паролей (fail2ban)..."
+if ! command -v fail2ban-client >/dev/null 2>&1; then
+  if [ "$PM" = "apt" ]; then
+    apt-get install -y fail2ban || true
+  elif [ "$PM" = "dnf" ] || [ "$PM" = "yum" ]; then
+    $PM install -y fail2ban || true
+  fi
+fi
+
+if command -v fail2ban-client >/dev/null 2>&1; then
+  mkdir -p /etc/fail2ban/jail.d
+  cat > /etc/fail2ban/jail.d/demension-sshd.local <<'EOF'
+[sshd]
+enabled = true
+port = ssh
+filter = sshd
+maxretry = 4
+findtime = 600
+bantime = 86400
+EOF
+  systemctl enable fail2ban >/dev/null 2>&1 || true
+  systemctl restart fail2ban >/dev/null 2>&1 || true
+  echo "✓ Защита SSH (fail2ban) успешно активирована (maxretry=4, bantime=24h)!"
+fi
+
 # Verify awg status inside container
 if docker exec $CONTAINER_NAME awg show awg0 >/dev/null 2>&1; then
   echo "================================================================="

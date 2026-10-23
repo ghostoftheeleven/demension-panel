@@ -1,12 +1,12 @@
 import React from 'react';
-import { ShieldCheck, Plus, Server as ServerIcon, Users, Activity, LogOut, KeyRound } from 'lucide-react';
+import { ShieldCheck, Plus, Server as ServerIcon, Users, Activity, LogOut, KeyRound, Lock } from 'lucide-react';
 import type { Server, AdminUser } from '../types';
 
 interface NavbarProps {
   servers: Server[];
   user: AdminUser | null;
-  activeTab: 'servers' | 'subscribers';
-  onSelectTab: (tab: 'servers' | 'subscribers') => void;
+  activeTab: 'servers' | 'subscribers' | 'security';
+  onSelectTab: (tab: 'servers' | 'subscribers' | 'security') => void;
   onAddServer: () => void;
   onAddSubscriber: () => void;
   onChangePassword: () => void;
@@ -69,7 +69,19 @@ export const Navbar: React.FC<NavbarProps> = ({
               }`}
             >
               <Users className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Пользователи & Подписки (HAPP / Incy)</span>
+              <span>Пользователи & Подписки</span>
+            </button>
+
+            <button
+              onClick={() => onSelectTab('security')}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                activeTab === 'security'
+                  ? 'bg-zinc-800 text-white shadow-sm'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Lock className="w-3.5 h-3.5 text-amber-400" />
+              <span>Безопасность (HTTPS & SSH)</span>
             </button>
           </nav>
         </div>
@@ -90,7 +102,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Actions & User Menu */}
         <div className="flex items-center gap-3">
-          {activeTab === 'servers' ? (
+          {activeTab === 'servers' && (
             <button
               onClick={onAddServer}
               className="flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-medium text-xs px-3.5 py-2 rounded-xl transition shadow-lg shadow-emerald-600/20 active:scale-[0.98]"
@@ -98,7 +110,9 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Plus className="w-3.5 h-3.5" />
               <span>Добавить сервер</span>
             </button>
-          ) : (
+          )}
+
+          {activeTab === 'subscribers' && (
             <button
               onClick={onAddSubscriber}
               className="flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-medium text-xs px-3.5 py-2 rounded-xl transition shadow-lg shadow-emerald-600/20 active:scale-[0.98]"

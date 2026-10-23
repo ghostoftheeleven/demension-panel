@@ -147,10 +147,38 @@ systemctl enable demension.service
 systemctl restart demension.service
 
 # 6. Firewall Configuration
-echo -e "\n${CYAN}[6/6] Настройка сетевого экрана (Firewall)...${NC}"
+echo -e "\n${CYAN}[6/7] Настройка сетевого экрана (Firewall)...${NC}"
 if command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then
   ufw allow ${PANEL_PORT}/tcp >/dev/null 2>&1 || true
-  echo -e "${GREEN}✓ Порт ${PANEL_PORT}/tcp открыт в UFW.${NC}"
+  ufw allow 80/tcp >/dev/null 2>&1 || true
+  ufw allow 443/tcp >/dev/null 2>&1 || true
+  echo -e "${GREEN}✓ Порты ${PANEL_PORT}, 80, 443 открыты в UFW.${NC}"
+fi
+
+# 7. Fail2ban SSH Protection
+echo -e "\n${CYAN}[7/7] Настройка защиты SSH от перебора (Fail2ban)...${NC}"
+if ! command -v fail2ban-client >/dev/null 2>&1; then
+  if command -v apt-get >/dev/null 2>&1; then
+    apt-get install -y fail2ban || true
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf install -y fail2ban || true
+  fi
+fi
+
+if command -v fail2ban-client >/dev/null 2>&1; then
+  mkdir -p /etc/fail2ban/jail.d
+  cat > /etc/fail2ban/jail.d/demension-sshd.local <<'EOF'
+[sshd]
+enabled = true
+port = ssh
+filter = sshd
+maxretry = 4
+findtime = 600
+bantime = 86400
+EOF
+  systemctl enable fail2ban >/dev/null 2>&1 || true
+  systemctl restart fail2ban >/dev/null 2>&1 || true
+  echo -e "${GREEN}✓ Защита SSH (Fail2ban) успешно активирована (maxretry=4, bantime=24ч).${NC}"
 fi
 
 # Detect Public IP
