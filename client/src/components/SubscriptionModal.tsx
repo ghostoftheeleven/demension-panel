@@ -172,7 +172,8 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
             </div>
             <p>
               При добавлении или удалении серверов в панели список в приложении <strong>Incy</strong> обновится автоматически.
-              HAPP не поддерживает AmneziaWG — для него подписка работать не будет.
+              Та же ссылка работает в Clash Verge Rev, FlClash и других клиентах на ядре mihomo (формат подбирается автоматически).
+              HAPP не поддерживает AmneziaWG.
             </p>
           </div>
         </div>

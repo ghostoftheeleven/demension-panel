@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   QrCode,
   Download,
@@ -34,11 +34,17 @@ export const ClientList: React.FC<ClientListProps> = ({
   onClientDeleted,
 }) => {
   const [search, setSearch] = useState('');
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 15000);
+    return () => clearInterval(timer);
+  }, []);
 
   const formatLastHandshake = (dateStr: string | null) => {
     if (!dateStr) return 'Никогда';
     const date = new Date(dateStr);
-    const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
+    const diffSec = Math.max(0, Math.floor((now - date.getTime()) / 1000));
 
     if (diffSec < 60) return `${diffSec} сек назад`;
     if (diffSec < 3600) return `${Math.floor(diffSec / 60)} мин назад`;
@@ -48,7 +54,7 @@ export const ClientList: React.FC<ClientListProps> = ({
 
   const isOnline = (dateStr: string | null) => {
     if (!dateStr) return false;
-    const diffSec = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+    const diffSec = Math.floor((now - new Date(dateStr).getTime()) / 1000);
     return diffSec < 180; // active within last 3 minutes
   };
 

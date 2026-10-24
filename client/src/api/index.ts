@@ -9,6 +9,8 @@ import type {
   Fail2banStatus,
   CloudflareZone,
   PanelSettings,
+  SubscriptionSettings,
+  SubscriptionServer,
 } from '../types';
 
 const API_BASE = '/api';
@@ -238,6 +240,18 @@ export const api = {
 
   updateSettings(data: Partial<PanelSettings>): Promise<PanelSettings> {
     return request(`${API_BASE}/settings`, { method: 'PUT', ...json(data) }, 'Ошибка сохранения настроек');
+  },
+
+  // Subscription appearance (Incy headers, server names)
+  getSubscriptionSettings(): Promise<{ settings: SubscriptionSettings; servers: SubscriptionServer[] }> {
+    return request(`${API_BASE}/subscription-settings`, {}, 'Ошибка загрузки настроек подписки');
+  },
+
+  updateSubscriptionSettings(data: {
+    settings?: Partial<SubscriptionSettings>;
+    servers?: { id: number; sub_name: string; sub_order: number }[];
+  }): Promise<{ settings: SubscriptionSettings; servers: SubscriptionServer[] }> {
+    return request(`${API_BASE}/subscription-settings`, { method: 'PUT', ...json(data) }, 'Ошибка сохранения настроек подписки');
   },
 
   // Security: SSL & Fail2ban

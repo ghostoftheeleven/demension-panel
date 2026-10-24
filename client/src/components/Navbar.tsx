@@ -1,12 +1,14 @@
 import React from 'react';
-import { ShieldCheck, Plus, Server as ServerIcon, Users, Activity, LogOut, KeyRound, Lock } from 'lucide-react';
+import { ShieldCheck, Plus, Server as ServerIcon, Users, Activity, LogOut, KeyRound, Lock, Palette } from 'lucide-react';
 import type { Server, AdminUser } from '../types';
+
+export type AppTab = 'servers' | 'subscribers' | 'subscription' | 'security';
 
 interface NavbarProps {
   servers: Server[];
   user: AdminUser | null;
-  activeTab: 'servers' | 'subscribers' | 'security';
-  onSelectTab: (tab: 'servers' | 'subscribers' | 'security') => void;
+  activeTab: AppTab;
+  onSelectTab: (tab: AppTab) => void;
   onAddServer: () => void;
   onAddSubscriber: () => void;
   onChangePassword: () => void;
@@ -70,6 +72,18 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <Users className="w-3.5 h-3.5 text-cyan-400" />
               <span>Пользователи & Подписки</span>
+            </button>
+
+            <button
+              onClick={() => onSelectTab('subscription')}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                activeTab === 'subscription'
+                  ? 'bg-zinc-800 text-white shadow-sm'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Palette className="w-3.5 h-3.5 text-purple-400" />
+              <span>Оформление подписки</span>
             </button>
 
             <button

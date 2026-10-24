@@ -141,7 +141,26 @@ export interface PanelSettings {
   public_url: string;
   client_dns: string;
   client_mtu: number;
-  sub_update_interval: number;
-  sub_title: string;
-  awg_image: string;
+}
+
+export interface SubscriptionSettings {
+  title: string;
+  description: string;
+  update_interval: number;
+  announce: string;
+  announce_url: string;
+  support_url: string;
+  support_email: string;
+  web_page_url: string;
+  sort_order: '' | 'ping' | 'name' | 'none';
+  hide_url: boolean;
+}
+
+export interface SubscriptionServer {
+  id: number;
+  name: string;
+  host: string;
+  status: ServerStatus;
+  sub_name: string | null;
+  sub_order: number;
 }

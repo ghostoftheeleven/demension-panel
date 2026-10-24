@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Navbar } from './components/Navbar';
+import { Navbar, type AppTab } from './components/Navbar';
+import { SubscriptionSettingsView } from './components/SubscriptionSettingsView';
 import { ServerCards } from './components/ServerCards';
 import { ClientList } from './components/ClientList';
 import { SubscribersList } from './components/SubscribersList';
@@ -21,7 +22,7 @@ export const App: React.FC = () => {
   const [user, setUser] = useState<AdminUser | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
 
-  const [activeTab, setActiveTab] = useState<'servers' | 'subscribers' | 'security'>('servers');
+  const [activeTab, setActiveTab] = useState<AppTab>('servers');
   const [servers, setServers] = useState<Server[]>([]);
   const [selectedServerId, setSelectedServerId] = useState<number | null>(null);
   const [clients, setClients] = useState<Client[]>([]);
@@ -97,16 +98,20 @@ export const App: React.FC = () => {
     }
   };
 
+  const loadersRef = useRef({ loadData, loadClients });
+  useEffect(() => {
+    loadersRef.current = { loadData, loadClients };
+  });
+
   useEffect(() => {
     if (user) {
-      loadData();
+      loadersRef.current.loadData();
     }
   }, [user]);
 
   useEffect(() => {
-    setClients([]);
     if (selectedServerId !== null && user) {
-      loadClients(selectedServerId);
+      loadersRef.current.loadClients(selectedServerId);
     }
   }, [selectedServerId, user]);
 
@@ -114,9 +119,9 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (!user) return;
     const interval = setInterval(() => {
-      loadData();
+      loadersRef.current.loadData();
       if (selectedServerId !== null) {
-        loadClients(selectedServerId);
+        loadersRef.current.loadClients(selectedServerId);
       }
     }, 15000);
     return () => clearInterval(interval);
@@ -216,6 +221,8 @@ export const App: React.FC = () => {
           <div className="flex items-center justify-center py-24 text-zinc-500 text-sm">
             Загрузка данных...
           </div>
+        ) : activeTab === 'subscription' ? (
+          <SubscriptionSettingsView subscribers={subscribers} publicUrl={publicUrl} />
         ) : activeTab === 'security' ? (
           /* Security: HTTPS & Fail2ban Tab */
           <SecurityView onSettingsSaved={(settings) => setPublicUrl(settings.public_url || null)} />
@@ -291,7 +298,10 @@ export const App: React.FC = () => {
             <ServerCards
               servers={servers}
               selectedServerId={selectedServerId}
-              onSelectServer={(id) => setSelectedServerId(id)}
+              onSelectServer={(id) => {
+                if (id !== selectedServerId) setClients([]);
+                setSelectedServerId(id);
+              }}
               onInstallServer={(s) => setInstallModalServer(s)}
               onEditParams={(s) => setParamsModalServer(s)}
               onServerDeleted={handleServerDeleted}

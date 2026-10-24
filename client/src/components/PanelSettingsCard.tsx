@@ -24,11 +24,7 @@ export const PanelSettingsCard: React.FC<{ onSaved?: (settings: PanelSettings) =
     setSaving(true);
     setMessage(null);
     try {
-      const saved = await api.updateSettings({
-        ...form,
-        client_mtu: Number(form.client_mtu),
-        sub_update_interval: Number(form.sub_update_interval),
-      });
+      const saved = await api.updateSettings({ ...form, client_mtu: Number(form.client_mtu) });
       setForm(saved);
       onSaved?.(saved);
       setMessage({
@@ -93,36 +89,6 @@ export const PanelSettingsCard: React.FC<{ onSaved?: (settings: PanelSettings) =
           />
         </div>
 
-        <div>
-          <label className="block text-xs font-medium text-zinc-400 mb-1">Интервал обновления подписки, ч</label>
-          <input
-            type="number"
-            min={1}
-            max={168}
-            value={form.sub_update_interval}
-            onChange={(e) => update('sub_update_interval', Number(e.target.value))}
-            className={inputClass}
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs font-medium text-zinc-400 mb-1">Название подписки (до 25 символов)</label>
-          <input
-            maxLength={25}
-            placeholder="имя пользователя"
-            value={form.sub_title}
-            onChange={(e) => update('sub_title', e.target.value)}
-            className={inputClass}
-          />
-        </div>
-
-        <div className="md:col-span-2">
-          <label className="block text-xs font-medium text-zinc-400 mb-1">Docker-образ AmneziaWG для новых установок</label>
-          <input value={form.awg_image} onChange={(e) => update('awg_image', e.target.value)} className={`${inputClass} font-mono text-xs`} />
-          <p className="text-[11px] text-zinc-500 mt-1">
-            По умолчанию зафиксирована проверенная версия. Образ собран только для amd64.
-          </p>
-        </div>
       </div>
 
       <div className="flex justify-end">

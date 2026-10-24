@@ -20,7 +20,7 @@ umask 077
 : "${AWG_CONF_B64:?AWG_CONF_B64 не задан}"
 
 CONTAINER_NAME="amnezia-awg"
-IMAGE_NAME="${AWG_IMAGE:-amneziavpn/amneziawg-go:0.2.19}"
+IMAGE_NAME="${AWG_IMAGE:-amneziavpn/amneziawg-go:latest}"
 PANEL_IP="${PANEL_IP:-}"
 AWG_DIR="/opt/amnezia/awg"
 

@@ -1,28 +1,89 @@
 import { Router } from 'express';
-import { db, getSetting } from '../db/index.js';
+import { db } from '../db/index.js';
 import { AwgService } from '../services/awg.service.js';
 import { SubscriptionService } from '../services/subscription.service.js';
-import { base64HeaderValue, contentDisposition } from '../utils/http.js';
+import { buildSubscriptionHeaders, readSubscriptionSettings } from '../services/subscription-settings.service.js';
+import { contentDisposition } from '../utils/http.js';
 
 export const subscriptionRouter = Router();
 
-const TITLE_MAX = 25;
+type Format = 'awg' | 'json' | 'clash';
 
-function truncate(value: string, max: number): string {
-  const chars = [...value];
-  return chars.length > max ? chars.slice(0, max - 1).join('') + '…' : value;
+/**
+ * Формат по ?format= или по User-Agent: клиенты на ядре mihomo (Clash Verge Rev, FlClash, Mihomo Party,
+ * Clash Meta for Android) понимают AmneziaWG только в собственном YAML-формате с amnezia-wg-option.
+ */
+export function detectFormat(query: unknown, userAgent: string | undefined): Format {
+  if (query === 'json') return 'json';
+  if (query === 'clash' || query === 'mihomo') return 'clash';
+  if (query === 'awg' || query === 'incy') return 'awg';
+  if (userAgent && /mihomo|clash[\s.-]?meta|clash[\s-]?verge|flclash|clashmi|clash\.party/i.test(userAgent)) return 'clash';
+  return 'awg';
 }
 
 /**
- * GET /sub/:token — публичная подписка для Incy и других клиентов с поддержкой AmneziaWG.
+ * Конфигурация mihomo в виде JSON (валидный YAML 1.2): прокси, группа выбора и правило по умолчанию
+ */
+export function buildClashConfig(entries: { name: string; server: any; client: any }[], dns: string[], mtu: number): string {
+  const used = new Set<string>();
+  const proxies = entries.map(({ name, server, client }) => {
+    let unique = name;
+    for (let i = 2; used.has(unique); i++) unique = `${name} ${i}`;
+    used.add(unique);
+    return {
+      name: unique,
+      type: 'wireguard',
+      server: server.host,
+      port: server.awg_port,
+      ip: `${client.client_ip}/32`,
+      'private-key': client.client_private_key,
+      'public-key': server.server_public_key,
+      'pre-shared-key': client.preshared_key || server.preshared_key,
+      'allowed-ips': ['0.0.0.0/0', '::/0'],
+      mtu,
+      udp: true,
+      dns,
+      'remote-dns-resolve': true,
+      'amnezia-wg-option': {
+        jc: server.jc,
+        jmin: server.jmin,
+        jmax: server.jmax,
+        s1: server.s1,
+        s2: server.s2,
+        h1: String(server.h1),
+        h2: String(server.h2),
+        h3: String(server.h3),
+        h4: String(server.h4),
+      },
+    };
+  });
+
+  const group = 'Demension';
+  return JSON.stringify(
+    {
+      'mixed-port': 7890,
+      'allow-lan': false,
+      mode: 'rule',
+      'log-level': 'warning',
+      proxies,
+      'proxy-groups': [{ name: group, type: 'select', proxies: proxies.length ? proxies.map((p) => p.name) : ['DIRECT'] }],
+      rules: [`MATCH,${group}`],
+    },
+    null,
+    2
+  );
+}
+
+/**
+ * GET /sub/:token — публичная подписка.
  *
- * Формат (https://docs.incy.cc/en/subscription-format/): по одной ссылке на сервер
- * `awg://<base64url(.conf)>#<имя>`, весь список дополнительно кодируется в base64.
- * `?format=json` — JSON-контейнер Incy `{type: "amneziawg", servers: [{name, config}]}`.
+ * - по умолчанию: формат Incy (https://docs.incy.cc/en/subscription-format/) — `awg://<base64url(.conf)>#<имя>`, список в base64;
+ * - `?format=json`: JSON-контейнер Incy `{type: "amneziawg", servers: [{name, config}]}`;
+ * - `?format=clash` или User-Agent клиента mihomo: YAML-конфигурация mihomo с amnezia-wg-option.
  */
 subscriptionRouter.get('/:token', (req, res) => {
   const { token } = req.params;
-  const format = typeof req.query.format === 'string' ? req.query.format : undefined;
+  const format = detectFormat(req.query.format, req.get('user-agent'));
 
   res.setHeader('Cache-Control', 'no-store');
 
@@ -38,38 +99,44 @@ subscriptionRouter.get('/:token', (req, res) => {
   const usage = SubscriptionService.getUsage(subscriber.id);
   const active = !SubscriptionService.isExpired(subscriber) && !SubscriptionService.isOverLimit(subscriber, usage);
   const expire = subscriber.expire_at ? Math.floor(new Date(subscriber.expire_at).getTime() / 1000) : 0;
-  const updateInterval = Number(getSetting('sub_update_interval')) || 12;
-  const title = truncate(getSetting('sub_title') || subscriber.name, TITLE_MAX);
 
-  // Set subscription headers consumed by Incy, Streisand, etc.
   res.setHeader(
     'Subscription-Userinfo',
     `upload=${usage.upload}; download=${usage.download}; total=${subscriber.traffic_limit || 0}; expire=${expire}`
   );
-  res.setHeader('Profile-Update-Interval', String(updateInterval));
-  res.setHeader('Profile-Title', base64HeaderValue(title));
-  res.setHeader('Content-Disposition', contentDisposition('inline', `${subscriber.name}.txt`));
+  for (const [name, value] of Object.entries(buildSubscriptionHeaders(readSubscriptionSettings(), subscriber.name))) {
+    res.setHeader(name, value);
+  }
+  res.setHeader('Content-Disposition', contentDisposition('inline', `${subscriber.name}.${format === 'clash' ? 'yaml' : 'txt'}`));
 
   // Все установленные ноды пользователя: временно недоступная нода не должна пропадать из приложения
   const peers = active
     ? (db.prepare(`
-        SELECT c.*, s.name AS server_name, s.host, s.awg_port, s.server_public_key, s.preshared_key AS server_psk,
+        SELECT c.*, s.name AS server_name, s.sub_name, s.host, s.awg_port, s.server_public_key, s.preshared_key AS server_psk,
           s.jc, s.jmin, s.jmax, s.s1, s.s2, s.h1, s.h2, s.h3, s.h4
         FROM clients c
         JOIN servers s ON c.server_id = s.id
         WHERE c.subscriber_id = ? AND c.enabled = 1 AND s.status != 'uninstalled' AND s.server_public_key IS NOT NULL
-        ORDER BY s.id
+        ORDER BY s.sub_order, s.id
       `).all(subscriber.id) as any[])
     : [];
 
   const settings = AwgService.getClientNetworkSettings();
-  const servers = peers.map((p) => {
-    const server = { ...p, preshared_key: p.server_psk };
-    return {
-      name: p.server_name,
-      config: Buffer.from(AwgService.generateClientConfig(server, p, settings)).toString('base64url'),
-    };
-  });
+  const entries = peers.map((p) => ({
+    name: p.sub_name || p.server_name,
+    server: { ...p, preshared_key: p.server_psk },
+    client: p,
+  }));
+
+  if (format === 'clash') {
+    const dns = settings.dns.split(',').map((s) => s.trim()).filter(Boolean);
+    return res.type('text/yaml; charset=utf-8').send(buildClashConfig(entries, dns, settings.mtu));
+  }
+
+  const servers = entries.map((e) => ({
+    name: e.name,
+    config: Buffer.from(AwgService.generateClientConfig(e.server, e.client, settings)).toString('base64url'),
+  }));
 
   if (format === 'json') {
     return res.json({ type: 'amneziawg', version: 1, servers });

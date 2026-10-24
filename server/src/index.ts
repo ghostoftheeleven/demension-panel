@@ -17,6 +17,7 @@ import { subscribersRouter } from './routes/subscribers.js';
 import { subscriptionRouter } from './routes/subscription.js';
 import { securityRouter } from './routes/security.js';
 import { settingsRouter } from './routes/settings.js';
+import { subscriptionSettingsRouter } from './routes/subscription-settings.js';
 import { ProvisionService } from './services/provision.service.js';
 import { SubscriptionService } from './services/subscription.service.js';
 import { SslService, http01Challenges } from './services/ssl.service.js';
@@ -88,6 +89,7 @@ app.use('/api/servers', requireAuth, serversRouter);
 app.use('/api/subscribers', subscribersRouter);
 app.use('/api/security', securityRouter);
 app.use('/api/settings', settingsRouter);
+app.use('/api/subscription-settings', subscriptionSettingsRouter);
 app.use('/api', requireAuth, clientsRouter);
 
 // Unknown API routes must not fall through to the SPA

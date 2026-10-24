@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { db, getSetting } from '../db/index.js';
+import { db } from '../db/index.js';
 import { SshService, SshCredentials, HostKeyMismatchError } from './ssh.service.js';
 import { AwgService } from './awg.service.js';
 import { decryptSecret } from './secrets.service.js';
@@ -11,8 +11,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const CONTAINER = 'amnezia-awg';
-/** Протестированная версия образа (ветка AmneziaWG 1.x). Тег latest меняется без предупреждения. */
-export const DEFAULT_AWG_IMAGE = 'amneziavpn/amneziawg-go:0.2.19';
+/** На ноды всегда ставится актуальный образ AmneziaWG (docker pull при каждой установке/переустановке) */
+export const AWG_IMAGE = 'amneziavpn/amneziawg-go:latest';
 const AWG_DIR = '/opt/amnezia/awg';
 /** Сколько неудачных опросов подряд переводят сервер в offline */
 const OFFLINE_THRESHOLD = 3;
@@ -147,7 +147,7 @@ export class ProvisionService {
         `export AWG_PORT=${shellQuote(server.awg_port)}`,
         `export AWG_NETWORK=${shellQuote(AwgService.getTunnelNetwork(server.subnet))}`,
         `export AWG_CONF_B64=${shellQuote(Buffer.from(conf).toString('base64'))}`,
-        `export AWG_IMAGE=${shellQuote(getSetting('awg_image') || DEFAULT_AWG_IMAGE)}`,
+        `export AWG_IMAGE=${shellQuote(AWG_IMAGE)}`,
         readDeployScript(),
       ].join('\n');
 

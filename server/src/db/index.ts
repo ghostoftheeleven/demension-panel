@@ -188,6 +188,13 @@ const migrations: Array<() => void> = [
     // Токены сессий теперь хранятся в виде SHA-256 — старые сессии недействительны
     db.exec('DELETE FROM sessions;');
   },
+
+  // v3: отображаемые имена и порядок серверов в подписке, образ AmneziaWG больше не настраивается
+  () => {
+    addColumn('servers', 'sub_name TEXT');
+    addColumn('servers', 'sub_order INTEGER NOT NULL DEFAULT 0');
+    db.exec("DELETE FROM settings WHERE key = 'awg_image'");
+  },
 ];
 
 export function initDatabase() {

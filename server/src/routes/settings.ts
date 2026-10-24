@@ -3,7 +3,6 @@ import net from 'node:net';
 import { getSetting, setSetting } from '../db/index.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
 import { HttpError } from '../utils/http.js';
-import { DEFAULT_AWG_IMAGE } from '../services/provision.service.js';
 
 export const settingsRouter = Router();
 
@@ -13,9 +12,6 @@ export interface PanelSettings {
   public_url: string;
   client_dns: string;
   client_mtu: number;
-  sub_update_interval: number;
-  sub_title: string;
-  awg_image: string;
 }
 
 function readSettings(): PanelSettings {
@@ -23,9 +19,6 @@ function readSettings(): PanelSettings {
     public_url: getSetting('public_url') || '',
     client_dns: getSetting('client_dns') || '1.1.1.1, 8.8.8.8',
     client_mtu: Number(getSetting('client_mtu')) || 1280,
-    sub_update_interval: Number(getSetting('sub_update_interval')) || 12,
-    sub_title: getSetting('sub_title') || '',
-    awg_image: getSetting('awg_image') || DEFAULT_AWG_IMAGE,
   };
 }
 
@@ -62,26 +55,6 @@ settingsRouter.put('/', (req, res) => {
     const mtu = Number(body.client_mtu);
     if (!Number.isInteger(mtu) || mtu < 576 || mtu > 1500) throw new HttpError(400, 'MTU должен быть от 576 до 1500');
     setSetting('client_mtu', String(mtu));
-  }
-
-  if (body.sub_update_interval !== undefined) {
-    const hours = Number(body.sub_update_interval);
-    if (!Number.isInteger(hours) || hours < 1 || hours > 168) throw new HttpError(400, 'Интервал обновления: от 1 до 168 часов');
-    setSetting('sub_update_interval', String(hours));
-  }
-
-  if (body.sub_title !== undefined) {
-    const title = String(body.sub_title).trim();
-    if (title.length > 25) throw new HttpError(400, 'Название подписки не длиннее 25 символов');
-    setSetting('sub_title', title || null);
-  }
-
-  if (body.awg_image !== undefined) {
-    const image = String(body.awg_image).trim();
-    if (image && !/^[a-z0-9][a-z0-9._\/-]*(:[\w.-]+)?(@sha256:[a-f0-9]{64})?$/i.test(image)) {
-      throw new HttpError(400, 'Некорректное имя Docker-образа');
-    }
-    setSetting('awg_image', image || null);
   }
 
   res.json(readSettings());
