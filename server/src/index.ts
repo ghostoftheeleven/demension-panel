@@ -4,7 +4,7 @@ import net from 'node:net';
 import path from 'node:path';
 import fs from 'node:fs';
 import type { TLSSocket } from 'node:tls';
-import express, { NextFunction, Request, Response } from 'express';
+import express, { Request } from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
 import { initDatabase, db } from './db/index.js';
 import { AuthService } from './services/auth.service.js';
@@ -26,7 +26,8 @@ import { FederationClient } from './services/federation-client.service.js';
 import { ProvisionService } from './services/provision.service.js';
 import { SubscriptionService } from './services/subscription.service.js';
 import { SslService, http01Challenges } from './services/ssl.service.js';
-import { HttpError } from './utils/http.js';
+import { errorHandler } from './middleware/error-handler.js';
+import { securityHeaders } from './middleware/security-headers.js';
 import { httpsRedirectLocation } from './utils/net.js';
 
 process.on('unhandledRejection', (reason) => {
@@ -45,13 +46,7 @@ if (process.env.TRUST_PROXY) app.set('trust proxy', process.env.TRUST_PROXY);
 
 const isEncrypted = (req: Request) => Boolean((req.socket as TLSSocket).encrypted);
 
-app.use((req, res, next) => {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Referrer-Policy', 'no-referrer');
-  if (isEncrypted(req)) res.setHeader('Strict-Transport-Security', 'max-age=15552000');
-  next();
-});
+app.use(securityHeaders);
 
 // Let's Encrypt HTTP-01 challenge responder (когда панель сама слушает 80 порт)
 app.get('/.well-known/acme-challenge/:token', (req, res) => {
@@ -125,20 +120,7 @@ if (clientDistPath) {
 }
 
 // JSON error handler (в т.ч. некорректный JSON в теле запроса)
-app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
-  if (res.headersSent) return;
-  if (err instanceof HttpError) {
-    return res.status(err.status).json({ error: err.message });
-  }
-  if (err?.type === 'entity.parse.failed') {
-    return res.status(400).json({ error: 'Некорректный JSON в теле запроса' });
-  }
-  if (err?.type === 'entity.too.large') {
-    return res.status(413).json({ error: 'Слишком большой запрос' });
-  }
-  console.error(`[HTTP] ${req.method} ${req.originalUrl}:`, err);
-  res.status(500).json({ error: 'Внутренняя ошибка сервера' });
-});
+app.use(errorHandler);
 
 // ==============================================================================
 // HTTP и HTTPS на одном порту: первый байт 0x16 — TLS ClientHello

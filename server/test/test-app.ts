@@ -1,5 +1,5 @@
 import http from 'node:http';
-import express, { Request, Response, NextFunction } from 'express';
+import express from 'express';
 import { authRouter } from '../src/routes/auth.js';
 import { serversRouter } from '../src/routes/servers.js';
 import { clientsRouter } from '../src/routes/clients.js';
@@ -12,10 +12,12 @@ import { federationRouter } from '../src/routes/federation.js';
 import { partnersRouter } from '../src/routes/partners.js';
 import { remotePanelsRouter } from '../src/routes/remote-panels.js';
 import { requireAuth } from '../src/middleware/auth.middleware.js';
-import { HttpError } from '../src/utils/http.js';
+import { errorHandler } from '../src/middleware/error-handler.js';
+import { securityHeaders } from '../src/middleware/security-headers.js';
 
 export function createTestApp() {
   const app = express();
+  app.use(securityHeaders);
   app.use(express.json({ limit: '1mb' }));
 
   // Public subscription
@@ -37,14 +39,8 @@ export function createTestApp() {
   app.use('/api/remote-panels', remotePanelsRouter);
   app.use('/api', requireAuth, clientsRouter);
 
-  // Error handler
-  app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
-    if (res.headersSent) return;
-    if (err instanceof HttpError) {
-      return res.status(err.status).json({ error: err.message });
-    }
-    res.status(500).json({ error: err?.message || 'Internal Server Error' });
-  });
+  // Тот же обработчик ошибок, что и в index.ts
+  app.use(errorHandler);
 
   return app;
 }

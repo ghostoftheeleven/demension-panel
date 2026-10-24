@@ -146,7 +146,8 @@ export function generateAwgParams(version: AwgVersion = LATEST_AWG_VERSION): Awg
 export function isValidSignature(value: string): boolean {
   const tag = /<b 0x(?:[0-9a-fA-F]{2})+>|<r \d{1,4}>|<rd \d{1,4}>|<rc \d{1,4}>|<t>/y;
   const text = value.trim();
-  if (!text) return false;
+  // Значение подставляется в одну строку .conf: перевод строки позволил бы дописать в конфиг клиента любые директивы
+  if (!text || /[\r\n]/.test(text)) return false;
   let pos = 0;
   while (pos < text.length) {
     if (/\s/.test(text[pos])) {
@@ -161,8 +162,77 @@ export function isValidSignature(value: string): boolean {
   return true;
 }
 
-function isBase64Key(value: string): boolean {
-  return /^[A-Za-z0-9+/]{43}=$/.test(value) && Buffer.from(value, 'base64').length === 32;
+/** Ключ WireGuard/AmneziaWG: 32 байта в base64 */
+export function isWireGuardKey(value: unknown): value is string {
+  return typeof value === 'string' && /^[A-Za-z0-9+/]{43}=$/.test(value) && Buffer.from(value, 'base64').length === 32;
+}
+
+const isBase64Key = isWireGuardKey;
+
+/**
+ * Параметры ноды, полученные от чужой панели. Они подставляются в .conf клиентов как есть, поэтому проверяется формат
+ * каждого значения (перевод строки в значении позволил бы дописать в конфиг клиента, например, PostUp), а смысловые
+ * ограничения AWG (непересечение H, S1 + 56 ≠ S2…) не навязываются — их отвечает владелец ноды.
+ * Неизвестные дополнительные параметры отбрасываются. При некорректных данных бросает Error.
+ */
+export function sanitizeRemoteParams(raw: any): AwgParams {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('нет параметров обфускации');
+
+  const integer = (key: string, nullable: boolean): number | null => {
+    const value = raw[key];
+    if ((value === null || value === undefined || value === '') && nullable) return null;
+    if (typeof value === 'number' ? Number.isInteger(value) && value >= 0 && value <= 65535 : false) return value;
+    if (typeof value === 'string' && /^\d{1,5}$/.test(value) && Number(value) <= 65535) return Number(value);
+    throw new Error(`некорректный параметр ${key}`);
+  };
+  const header = (key: string): string => {
+    const range = parseHeaderRange(raw[key]);
+    if (!range) throw new Error(`некорректный параметр ${key}`);
+    return range.min === range.max ? String(range.min) : `${range.min}-${range.max}`;
+  };
+  const signature = (key: string): string | null => {
+    const value = raw[key];
+    if (value === null || value === undefined || value === '') return null;
+    if (typeof value !== 'string' || !isValidSignature(value)) throw new Error(`некорректный параметр ${key}`);
+    return value.trim();
+  };
+
+  const key = raw.header_protection_key;
+  if (key !== null && key !== undefined && key !== '' && !isWireGuardKey(key)) throw new Error('некорректный параметр header_protection_key');
+
+  const extra: Record<string, string> = {};
+  if (raw.extra_params !== null && raw.extra_params !== undefined) {
+    if (typeof raw.extra_params !== 'object' || Array.isArray(raw.extra_params)) throw new Error('некорректные extra_params');
+    for (const name of EXTRA_PARAM_KEYS) {
+      const value = (raw.extra_params as Record<string, unknown>)[name];
+      if (value === undefined || value === null) continue;
+      const text = String(value);
+      if (!/^[\w.,:-]{1,64}$/.test(text)) throw new Error(`некорректное значение параметра ${name}`);
+      extra[name] = text;
+    }
+  }
+
+  return {
+    awg_version: Number(raw.awg_version) === 3 ? 3 : 1,
+    jc: integer('jc', false) as number,
+    jmin: integer('jmin', false) as number,
+    jmax: integer('jmax', false) as number,
+    s1: integer('s1', false) as number,
+    s2: integer('s2', false) as number,
+    s3: integer('s3', true),
+    s4: integer('s4', true),
+    h1: header('h1'),
+    h2: header('h2'),
+    h3: header('h3'),
+    h4: header('h4'),
+    i1: signature('i1'),
+    i2: signature('i2'),
+    i3: signature('i3'),
+    i4: signature('i4'),
+    i5: signature('i5'),
+    header_protection_key: key ? key : null,
+    extra_params: extra,
+  };
 }
 
 /**

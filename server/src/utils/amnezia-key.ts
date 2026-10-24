@@ -24,6 +24,9 @@ export interface AmneziaAccess {
 
 export class AmneziaKeyError extends Error {}
 
+/** Ключ — это настройки сервера, их размер измеряется килобайтами; больший распакованный размер — признак «бомбы» */
+const MAX_KEY_JSON_BYTES = 1024 * 1024;
+
 function decodePayload(raw: string): any {
   const data = raw.trim().replace(/^vpn:\/\//i, '').replace(/\s+/g, '');
   if (!data) throw new AmneziaKeyError('Пустой ключ');
@@ -31,9 +34,9 @@ function decodePayload(raw: string): any {
 
   // Основной вариант — qCompress; на всякий случай поддерживаем и несжатый JSON
   const candidates: (() => string)[] = [
-    () => zlib.inflateSync(bytes.subarray(4)).toString('utf-8'),
-    () => zlib.inflateSync(bytes).toString('utf-8'),
-    () => bytes.toString('utf-8'),
+    () => zlib.inflateSync(bytes.subarray(4), { maxOutputLength: MAX_KEY_JSON_BYTES }).toString('utf-8'),
+    () => zlib.inflateSync(bytes, { maxOutputLength: MAX_KEY_JSON_BYTES }).toString('utf-8'),
+    () => (bytes.length <= MAX_KEY_JSON_BYTES ? bytes.toString('utf-8') : ''),
   ];
   for (const attempt of candidates) {
     try {

@@ -29,7 +29,8 @@ authRouter.post('/login', (req, res) => {
   if (!result) {
     loginIpLimiter.registerFailure(ipKey);
     loginUserLimiter.registerFailure(userKey);
-    console.warn(`[AUTH] Неудачная попытка входа для "${username}" с ${ipKey}`);
+    // Логин задаёт посторонний: JSON.stringify экранирует переводы строк и не даёт подделать записи журнала
+    console.warn(`[AUTH] Неудачная попытка входа для ${JSON.stringify(username.slice(0, 64))} с ${ipKey}`);
     return res.status(401).json({ error: 'Неверное имя пользователя или пароль' });
   }
 
