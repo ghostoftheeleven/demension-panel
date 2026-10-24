@@ -163,6 +163,14 @@ export const ClientList: React.FC<ClientListProps> = ({
                     <td className="py-3 font-medium text-white flex items-center gap-2">
                       <span className={`w-2 h-2 rounded-full flex-shrink-0 ${disabled ? 'bg-zinc-600' : online ? 'bg-emerald-400' : 'bg-zinc-500'}`} />
                       <span>{client.name}</span>
+                      {client.external && (
+                        <span
+                          className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-zinc-800 text-zinc-400 border border-zinc-700"
+                          title="Импортирован из существующей установки: конфигурация и QR-код недоступны"
+                        >
+                          импорт
+                        </span>
+                      )}
                     </td>
 
                     {/* IP */}
@@ -215,7 +223,8 @@ export const ClientList: React.FC<ClientListProps> = ({
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           onClick={() => onShowQr(client.id)}
-                          title="Показать QR-код"
+                          disabled={client.external}
+                          title={client.external ? 'Недоступно для импортированного клиента' : 'Показать QR-код'}
                           className="p-1.5 text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 rounded-lg transition"
                         >
                           <QrCode className="w-4 h-4" />
@@ -223,7 +232,8 @@ export const ClientList: React.FC<ClientListProps> = ({
 
                         <button
                           onClick={() => handleDownload(client)}
-                          title="Скачать .conf"
+                          disabled={client.external}
+                          title={client.external ? 'Недоступно для импортированного клиента' : 'Скачать .conf'}
                           className="p-1.5 text-zinc-400 hover:text-cyan-400 hover:bg-zinc-800 rounded-lg transition"
                         >
                           <Download className="w-4 h-4" />

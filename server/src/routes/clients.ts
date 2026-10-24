@@ -13,7 +13,7 @@ export const clientsRouter = Router();
 export function serializeClient(c: any) {
   if (!c) return c;
   const { client_private_key, rx_counter, tx_counter, ...rest } = c;
-  return rest;
+  return { ...rest, external: Boolean(c.external) };
 }
 
 function getClientOr404(id: number): any {
@@ -99,6 +99,9 @@ clientsRouter.delete('/clients/:id', (req, res) => {
 
 function loadClientWithServer(id: number) {
   const client = getClientOr404(id);
+  if (client.external) {
+    throw new HttpError(409, 'Клиент импортирован из существующей установки — его приватный ключ панели неизвестен. Создайте нового клиента, чтобы получить конфигурацию.');
+  }
   const server = db.prepare('SELECT * FROM servers WHERE id = ?').get(client.server_id) as any;
   if (!server) throw new HttpError(404, 'Сервер не найден');
   return { client, server };

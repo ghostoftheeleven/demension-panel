@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { X, Dna, Shuffle, Save, Info } from 'lucide-react';
+import { X, Dna, Shuffle, Save, Info, KeyRound, ArrowUpCircle } from 'lucide-react';
 import { api } from '../api';
-import type { Server } from '../types';
+import type { Server, ServerUpdate } from '../types';
 
 interface AwgParamsModalProps {
   isOpen: boolean;
@@ -21,38 +21,119 @@ const CHANGE_WARNING =
   'Сервер AmneziaWG будет перезапущен с новыми параметрами. Все текущие подключения оборвутся, ' +
   'а клиентам нужно будет обновить подписку или заново импортировать конфигурацию. Продолжить?';
 
+const inputBase =
+  'w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-white text-sm focus:outline-none font-mono';
+
+type FormState = {
+  jc: string;
+  jmin: string;
+  jmax: string;
+  s1: string;
+  s2: string;
+  s3: string;
+  s4: string;
+  h1: string;
+  h2: string;
+  h3: string;
+  h4: string;
+  i1: string;
+  i2: string;
+  i3: string;
+  i4: string;
+  i5: string;
+  header_protection_key: string;
+};
+
+function toForm(server: Server): FormState {
+  const str = (v: unknown) => (v === null || v === undefined ? '' : String(v));
+  return {
+    jc: str(server.jc),
+    jmin: str(server.jmin),
+    jmax: str(server.jmax),
+    s1: str(server.s1),
+    s2: str(server.s2),
+    s3: str(server.s3),
+    s4: str(server.s4),
+    h1: str(server.h1),
+    h2: str(server.h2),
+    h3: str(server.h3),
+    h4: str(server.h4),
+    i1: str(server.i1),
+    i2: str(server.i2),
+    i3: str(server.i3),
+    i4: str(server.i4),
+    i5: str(server.i5),
+    header_protection_key: str(server.header_protection_key),
+  };
+}
+
+function generateKey(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes));
+}
+
+const Field: React.FC<{
+  label: string;
+  hint?: string;
+  value: string;
+  onChange: (v: string) => void;
+  accent: string;
+  numeric?: boolean;
+}> = ({ label, hint, value, onChange, accent, numeric }) => (
+  <div>
+    <label className="block text-xs font-medium text-zinc-400 mb-1" title={hint}>
+      {label}
+    </label>
+    <input
+      type={numeric ? 'number' : 'text'}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={`${inputBase} ${accent}`}
+    />
+  </div>
+);
+
 const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: (server: Server) => void }> = ({
   server,
   onClose,
   onUpdated,
 }) => {
   const installed = server.status !== 'uninstalled';
-  const [jc, setJc] = useState(server.jc);
-  const [jmin, setJmin] = useState(server.jmin);
-  const [jmax, setJmax] = useState(server.jmax);
-  const [s1, setS1] = useState(server.s1);
-  const [s2, setS2] = useState(server.s2);
-  const [h1, setH1] = useState(server.h1);
-  const [h2, setH2] = useState(server.h2);
-  const [h3, setH3] = useState(server.h3);
-  const [h4, setH4] = useState(server.h4);
+  const modern = server.awg_version >= 3;
+  const outdated = server.awg_version < server.latest_awg_version;
+  const [form, setForm] = useState<FormState>(() => toForm(server));
   const [loading, setLoading] = useState(false);
+
+  const set = (key: keyof FormState) => (value: string) => setForm((prev) => ({ ...prev, [key]: value }));
 
   const handleRandomize = async () => {
     if (installed && !confirm(CHANGE_WARNING)) return;
     try {
       setLoading(true);
       const updated = await api.randomizeParams(server.id);
-      setJc(updated.jc);
-      setJmin(updated.jmin);
-      setJmax(updated.jmax);
-      setS1(updated.s1);
-      setS2(updated.s2);
-      setH1(updated.h1);
-      setH2(updated.h2);
-      setH3(updated.h3);
-      setH4(updated.h4);
+      setForm(toForm(updated));
       onUpdated(updated);
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpgrade = async () => {
+    const message =
+      `Перевести сервер на AmneziaWG ${server.latest_awg_version}.x?\n\n` +
+      'Будут сгенерированы параметры актуальной версии (S3, S4, диапазоны H1–H4, защита заголовков), ' +
+      (installed ? 'а AmneziaWG переустановлен с последним образом. ' : '') +
+      'Все клиенты должны обновить подписку или конфигурацию, приложения должны поддерживать AmneziaWG 3.x.';
+    if (!confirm(message)) return;
+    try {
+      setLoading(true);
+      const res = await api.upgradeProtocol(server.id);
+      onUpdated(res.server);
+      if (!res.success) alert(`Параметры обновлены, но переустановка не удалась: ${res.error}`);
+      onClose();
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -63,19 +144,30 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (installed && !confirm(CHANGE_WARNING)) return;
+    const update: ServerUpdate = {
+      jc: Number(form.jc),
+      jmin: Number(form.jmin),
+      jmax: Number(form.jmax),
+      s1: Number(form.s1),
+      s2: Number(form.s2),
+      h1: form.h1.trim(),
+      h2: form.h2.trim(),
+      h3: form.h3.trim(),
+      h4: form.h4.trim(),
+      i1: form.i1.trim() || null,
+      i2: form.i2.trim() || null,
+      i3: form.i3.trim() || null,
+      i4: form.i4.trim() || null,
+      i5: form.i5.trim() || null,
+    };
+    if (modern) {
+      update.s3 = Number(form.s3);
+      update.s4 = Number(form.s4);
+      update.header_protection_key = form.header_protection_key.trim() || null;
+    }
     try {
       setLoading(true);
-      const updated = await api.updateServer(server.id, {
-        jc: Number(jc),
-        jmin: Number(jmin),
-        jmax: Number(jmax),
-        s1: Number(s1),
-        s2: Number(s2),
-        h1: Number(h1),
-        h2: Number(h2),
-        h3: Number(h3),
-        h4: Number(h4),
-      });
+      const updated = await api.updateServer(server.id, update);
       onUpdated(updated);
       onClose();
     } catch (err: any) {
@@ -85,161 +177,136 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
     }
   };
 
+  const extras = Object.entries(server.extra_params || {});
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-zinc-900/50">
           <div className="flex items-center gap-2">
             <Dna className="w-5 h-5 text-emerald-400" />
             <div>
-              <h2 className="text-base font-semibold text-white">Параметры обфускации AmneziaWG</h2>
+              <h2 className="text-base font-semibold text-white">
+                Параметры обфускации AmneziaWG {modern ? '3.x' : '1.x'}
+              </h2>
               <p className="text-xs text-zinc-400">{server.name} ({server.host})</p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="text-zinc-400 hover:text-white transition p-1 rounded-lg hover:bg-zinc-800"
-          >
+          <button onClick={onClose} className="text-zinc-400 hover:text-white transition p-1 rounded-lg hover:bg-zinc-800">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSave} className="p-6 space-y-5 overflow-y-auto">
+          {outdated && (
+            <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs text-amber-200">
+              <span>
+                Сервер использует устаревший формат AmneziaWG 1.x (одиночные H, без S3/S4 и защиты заголовков).
+              </span>
+              <button
+                type="button"
+                onClick={handleUpgrade}
+                disabled={loading}
+                className="flex items-center gap-1.5 bg-amber-500/20 hover:bg-amber-500/30 font-medium px-3 py-1.5 rounded-lg transition"
+              >
+                <ArrowUpCircle className="w-3.5 h-3.5" />
+                <span>Перейти на {server.latest_awg_version}.x</span>
+              </button>
+            </div>
+          )}
+
           <div className="p-3 bg-zinc-950/60 border border-zinc-800 rounded-xl flex items-start gap-3 text-xs text-zinc-400">
             <Info className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
             <span>
-              Эти параметры изменяют структуру пакетов WireGuard, маскируя протокол от систем глубокого анализа трафика (DPI/ТСПУ).
+              S1–S4, H1–H4 и ключ защиты заголовков должны совпадать на сервере и клиентах; Jc/Jmin/Jmax и I1–I5 — только у клиента.
               {installed && ' После сохранения AmneziaWG на сервере будет перезапущен, а клиентам потребуется обновить конфигурацию.'}
             </span>
           </div>
 
-          {/* Junk Packets (Jc, Jmin, Jmax) */}
           <div className="space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
-              Мусорные пакеты (Junk Packets)
-            </h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-emerald-400">Мусорные пакеты</h3>
             <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1">
-                  Jc (Кол-во)
-                </label>
-                <input
-                  type="number"
-                  value={jc}
-                  onChange={(e) => setJc(Number(e.target.value))}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-white text-sm focus:outline-none focus:border-emerald-500 font-mono"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1">
-                  Jmin (Мин. байт)
-                </label>
-                <input
-                  type="number"
-                  value={jmin}
-                  onChange={(e) => setJmin(Number(e.target.value))}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-white text-sm focus:outline-none focus:border-emerald-500 font-mono"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1">
-                  Jmax (Макс. байт)
-                </label>
-                <input
-                  type="number"
-                  value={jmax}
-                  onChange={(e) => setJmax(Number(e.target.value))}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-white text-sm focus:outline-none focus:border-emerald-500 font-mono"
-                />
-              </div>
+              <Field label="Jc (кол-во)" value={form.jc} onChange={set('jc')} accent="focus:border-emerald-500" numeric />
+              <Field label="Jmin (байт)" value={form.jmin} onChange={set('jmin')} accent="focus:border-emerald-500" numeric />
+              <Field label="Jmax (байт)" value={form.jmax} onChange={set('jmax')} accent="focus:border-emerald-500" numeric />
             </div>
           </div>
 
-          {/* Junk Padding Sizes (S1, S2) */}
           <div className="space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-cyan-400">
-              Смещение размеров (Padding Sizes)
-            </h3>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1">
-                  S1 (Init Padding, байт)
-                </label>
-                <input
-                  type="number"
-                  value={s1}
-                  onChange={(e) => setS1(Number(e.target.value))}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-white text-sm focus:outline-none focus:border-cyan-500 font-mono"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1">
-                  S2 (Response Padding, байт)
-                </label>
-                <input
-                  type="number"
-                  value={s2}
-                  onChange={(e) => setS2(Number(e.target.value))}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-white text-sm focus:outline-none focus:border-cyan-500 font-mono"
-                />
-              </div>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-cyan-400">Дополнение пакетов (padding)</h3>
+            <div className={`grid gap-3 ${modern ? 'grid-cols-4' : 'grid-cols-2'}`}>
+              <Field label="S1 (init)" value={form.s1} onChange={set('s1')} accent="focus:border-cyan-500" numeric />
+              <Field label="S2 (response)" value={form.s2} onChange={set('s2')} accent="focus:border-cyan-500" numeric />
+              {modern && <Field label="S3 (cookie)" value={form.s3} onChange={set('s3')} accent="focus:border-cyan-500" numeric />}
+              {modern && <Field label="S4 (transport, ≤32)" value={form.s4} onChange={set('s4')} accent="focus:border-cyan-500" numeric />}
             </div>
           </div>
 
-          {/* Magic Headers (H1, H2, H3, H4) */}
           <div className="space-y-3">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-purple-400">
-              Магические заголовки (Magic Headers)
+              Заголовки {modern ? '(диапазоны без пересечений, например 100000-200000)' : ''}
             </h3>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1">
-                  H1 (Initiation)
-                </label>
-                <input
-                  type="number"
-                  value={h1}
-                  onChange={(e) => setH1(Number(e.target.value))}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-white text-sm focus:outline-none focus:border-purple-500 font-mono"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1">
-                  H2 (Response)
-                </label>
-                <input
-                  type="number"
-                  value={h2}
-                  onChange={(e) => setH2(Number(e.target.value))}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-white text-sm focus:outline-none focus:border-purple-500 font-mono"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1">
-                  H3 (Cookie Reply)
-                </label>
-                <input
-                  type="number"
-                  value={h3}
-                  onChange={(e) => setH3(Number(e.target.value))}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-white text-sm focus:outline-none focus:border-purple-500 font-mono"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-zinc-400 mb-1">
-                  H4 (Transport Data)
-                </label>
-                <input
-                  type="number"
-                  value={h4}
-                  onChange={(e) => setH4(Number(e.target.value))}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-white text-sm focus:outline-none focus:border-purple-500 font-mono"
-                />
-              </div>
+              <Field label="H1 (initiation)" value={form.h1} onChange={set('h1')} accent="focus:border-purple-500" />
+              <Field label="H2 (response)" value={form.h2} onChange={set('h2')} accent="focus:border-purple-500" />
+              <Field label="H3 (cookie reply)" value={form.h3} onChange={set('h3')} accent="focus:border-purple-500" />
+              <Field label="H4 (transport)" value={form.h4} onChange={set('h4')} accent="focus:border-purple-500" />
             </div>
           </div>
+
+          {modern && (
+            <div className="space-y-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-amber-400">Защита заголовков</h3>
+              <div className="flex items-center gap-2">
+                <input
+                  value={form.header_protection_key}
+                  onChange={(e) => set('header_protection_key')(e.target.value)}
+                  placeholder="выключена"
+                  className={`${inputBase} focus:border-amber-500 text-xs`}
+                />
+                <button
+                  type="button"
+                  onClick={() => set('header_protection_key')(generateKey())}
+                  className="flex items-center gap-1.5 flex-shrink-0 px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl transition"
+                  title="Сгенерировать новый ключ"
+                >
+                  <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Новый</span>
+                </button>
+              </div>
+              <p className="text-[11px] text-zinc-500">HeaderProtectionKey шифрует заголовки пакетов. Требует S1–S4 не меньше 12.</p>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-300">Сигнатурные пакеты I1–I5 (необязательно)</h3>
+            <p className="text-[11px] text-zinc-500">
+              Отправляются клиентом перед рукопожатием. Теги: <code>&lt;b 0x…&gt;</code>, <code>&lt;r N&gt;</code>, <code>&lt;rd N&gt;</code>,{' '}
+              <code>&lt;rc N&gt;</code>, <code>&lt;t&gt;</code>.
+            </p>
+            {(['i1', 'i2', 'i3', 'i4', 'i5'] as const).map((key) => (
+              <input
+                key={key}
+                value={form[key]}
+                onChange={(e) => set(key)(e.target.value)}
+                placeholder={key.toUpperCase()}
+                className={`${inputBase} focus:border-zinc-500 text-xs`}
+              />
+            ))}
+          </div>
+
+          {extras.length > 0 && (
+            <div className="text-[11px] text-zinc-500 space-y-1">
+              <p className="font-medium text-zinc-400">Дополнительные параметры (импортированы, сохраняются как есть):</p>
+              {extras.map(([key, value]) => (
+                <p key={key} className="font-mono">
+                  {key} = {value}
+                </p>
+              ))}
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div className="flex items-center justify-between pt-4 border-t border-zinc-800">
@@ -254,11 +321,7 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
             </button>
 
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition"
-              >
+              <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition">
                 Отмена
               </button>
               <button

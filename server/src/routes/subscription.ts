@@ -4,6 +4,43 @@ import { AwgService } from '../services/awg.service.js';
 import { SubscriptionService } from '../services/subscription.service.js';
 import { buildSubscriptionHeaders, readSubscriptionSettings } from '../services/subscription-settings.service.js';
 import { contentDisposition } from '../utils/http.js';
+import { paramsFromRow } from '../utils/awg-params.js';
+
+/** Названия доп. параметров AWG 3.x в amnezia-wg-option mihomo */
+const MIHOMO_EXTRA_KEYS: Record<string, string> = {
+  ContentPaddingAddition: 'content-padding-addition',
+  RekeyAfterTime: 'rekey-after-time',
+  RekeyTimeout: 'rekey-timeout',
+  RejectAfterTime: 'reject-after-time',
+  KeepaliveTimeout: 'keepalive-timeout',
+  MaxHandshakeAttempts: 'max-handshake-attempts',
+  RandomTrailers: 'random-trailers',
+  DisableCookies: 'disable-cookies',
+};
+
+function mihomoValue(value: string): string | number | boolean {
+  if (/^(on|true)$/i.test(value)) return true;
+  if (/^(off|false)$/i.test(value)) return false;
+  return /^\d+$/.test(value) ? Number(value) : value;
+}
+
+/**
+ * amnezia-wg-option для mihomo: version 3 включает параметры AWG 3.x (S3/S4, диапазоны H, защиту заголовков)
+ */
+export function mihomoAmneziaOption(server: any): Record<string, unknown> {
+  const p = paramsFromRow(server);
+  const option: Record<string, unknown> = { jc: p.jc, jmin: p.jmin, jmax: p.jmax, s1: p.s1, s2: p.s2 };
+  if (p.awg_version === 3) option.version = 3;
+  if (p.s3 !== null) option.s3 = p.s3;
+  if (p.s4 !== null) option.s4 = p.s4;
+  Object.assign(option, { h1: p.h1, h2: p.h2, h3: p.h3, h4: p.h4 });
+  for (const key of ['i1', 'i2', 'i3', 'i4', 'i5'] as const) if (p[key]) option[key] = p[key];
+  if (p.header_protection_key) option['header-protection-key'] = p.header_protection_key;
+  for (const [key, value] of Object.entries(p.extra_params)) {
+    if (MIHOMO_EXTRA_KEYS[key]) option[MIHOMO_EXTRA_KEYS[key]] = mihomoValue(value);
+  }
+  return option;
+}
 
 export const subscriptionRouter = Router();
 
@@ -44,17 +81,7 @@ export function buildClashConfig(entries: { name: string; server: any; client: a
       udp: true,
       dns,
       'remote-dns-resolve': true,
-      'amnezia-wg-option': {
-        jc: server.jc,
-        jmin: server.jmin,
-        jmax: server.jmax,
-        s1: server.s1,
-        s2: server.s2,
-        h1: String(server.h1),
-        h2: String(server.h2),
-        h3: String(server.h3),
-        h4: String(server.h4),
-      },
+      'amnezia-wg-option': mihomoAmneziaOption(server),
     };
   });
 
@@ -113,10 +140,11 @@ subscriptionRouter.get('/:token', (req, res) => {
   const peers = active
     ? (db.prepare(`
         SELECT c.*, s.name AS server_name, s.sub_name, s.host, s.awg_port, s.server_public_key, s.preshared_key AS server_psk,
-          s.jc, s.jmin, s.jmax, s.s1, s.s2, s.h1, s.h2, s.h3, s.h4
+          s.awg_version, s.jc, s.jmin, s.jmax, s.s1, s.s2, s.s3, s.s4, s.h1, s.h2, s.h3, s.h4,
+          s.i1, s.i2, s.i3, s.i4, s.i5, s.header_protection_key, s.extra_params
         FROM clients c
         JOIN servers s ON c.server_id = s.id
-        WHERE c.subscriber_id = ? AND c.enabled = 1 AND s.status != 'uninstalled' AND s.server_public_key IS NOT NULL
+        WHERE c.subscriber_id = ? AND c.enabled = 1 AND c.external = 0 AND s.status != 'uninstalled' AND s.server_public_key IS NOT NULL
         ORDER BY s.sub_order, s.id
       `).all(subscriber.id) as any[])
     : [];

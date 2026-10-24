@@ -10,6 +10,8 @@ import {
   Pencil,
   AlertTriangle,
   Zap,
+  ScanSearch,
+  ArrowUpCircle,
 } from 'lucide-react';
 import type { Server } from '../types';
 import { api } from '../api';
@@ -44,6 +46,39 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
   onServerChanged,
 }) => {
   const [applying, setApplying] = useState<number | null>(null);
+  const [scanning, setScanning] = useState<number | null>(null);
+  const [upgrading, setUpgrading] = useState<number | null>(null);
+
+  const handleScan = async (server: Server) => {
+    setScanning(server.id);
+    try {
+      const res = await api.scanServer(server.id);
+      alert(res.message);
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setScanning(null);
+      onServerChanged();
+    }
+  };
+
+  const handleUpgrade = async (server: Server) => {
+    const message =
+      `Перевести «${server.name}» на AmneziaWG ${server.latest_awg_version}.x?\n\n` +
+      'Будут сгенерированы параметры актуальной версии, AmneziaWG переустановлен с последним образом (клиенты сохраняются). ' +
+      'Все пользователи должны обновить подписку или конфигурацию.';
+    if (!confirm(message)) return;
+    setUpgrading(server.id);
+    try {
+      const res = await api.upgradeProtocol(server.id);
+      alert(res.success ? 'Сервер переведён на актуальную версию AmneziaWG.' : `Ошибка переустановки: ${res.error}`);
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setUpgrading(null);
+      onServerChanged();
+    }
+  };
   const [testingSsh, setTestingSsh] = useState<number | null>(null);
   const [syncing, setSyncing] = useState<number | null>(null);
 
@@ -222,6 +257,18 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
                 <span>{testingSsh === selectedServer.id ? 'Тест...' : 'Тест SSH'}</span>
               </button>
 
+              {(selectedServer.status === 'uninstalled' || selectedServer.status === 'error') && (
+                <button
+                  onClick={() => handleScan(selectedServer)}
+                  disabled={scanning === selectedServer.id}
+                  className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium px-3.5 py-2.5 rounded-xl border border-zinc-700/60 transition"
+                  title="Найти уже установленный AmneziaWG и подключить без переустановки"
+                >
+                  <ScanSearch className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>{scanning === selectedServer.id ? 'Сканирование...' : 'Сканировать'}</span>
+                </button>
+              )}
+
               <button
                 onClick={() => onEditServer(selectedServer)}
                 className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium px-3.5 py-2.5 rounded-xl border border-zinc-700/60 transition"
@@ -278,6 +325,31 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
             </div>
           )}
 
+          {selectedServer.awg_version < selectedServer.latest_awg_version && (
+            <div className="bg-cyan-500/5 border border-cyan-500/20 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <span className="text-cyan-200">
+                Используются параметры обфускации устаревшего AmneziaWG 1.x. Актуальная версия — {selectedServer.latest_awg_version}.x
+                (S3/S4, диапазоны заголовков, защита заголовков).
+              </span>
+              <button
+                onClick={() => handleUpgrade(selectedServer)}
+                disabled={upgrading === selectedServer.id}
+                className="flex items-center gap-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-100 font-medium px-3 py-1.5 rounded-lg transition"
+              >
+                <ArrowUpCircle className="w-3.5 h-3.5" />
+                <span>{upgrading === selectedServer.id ? 'Обновление...' : `Перейти на ${selectedServer.latest_awg_version}.x`}</span>
+              </button>
+            </div>
+          )}
+
+          {selectedServer.managed_by === 'amnezia' && (
+            <div className="bg-zinc-950/70 border border-zinc-800 rounded-xl p-3.5 text-xs text-zinc-400">
+              Подключён контейнер приложения Amnezia (<span className="font-mono">{selectedServer.container_name}</span>).
+              Управляйте клиентами только из панели: изменения в приложении Amnezia будут перезаписаны при синхронизации.
+              Смена порта или «Переустановить AWG» заменит его контейнером панели с теми же ключами и клиентами.
+            </div>
+          )}
+
           {/* Obfuscation Badges Banner */}
           <div className="bg-zinc-950/70 border border-zinc-800/80 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2 text-zinc-400">
@@ -292,11 +364,22 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
                 Junk: <strong className="text-emerald-400">{selectedServer.jmin}-{selectedServer.jmax}B</strong>
               </span>
               <span className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-300">
-                S1/S2: <strong className="text-cyan-400">{selectedServer.s1}/{selectedServer.s2}B</strong>
+                AWG: <strong className="text-emerald-400">{selectedServer.awg_version >= 3 ? '3.x' : '1.x'}</strong>
               </span>
               <span className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-300">
-                H1-H4: <strong className="text-purple-400">Спец. заголовки</strong>
+                S1–S{selectedServer.s3 !== null ? 4 : 2}:{' '}
+                <strong className="text-cyan-400">
+                  {[selectedServer.s1, selectedServer.s2, selectedServer.s3, selectedServer.s4].filter((v) => v !== null).join('/')}B
+                </strong>
               </span>
+              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-300">
+                H1-H4: <strong className="text-purple-400">{selectedServer.h1.includes('-') ? 'диапазоны' : 'значения'}</strong>
+              </span>
+              {selectedServer.header_protection_key && (
+                <span className="px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-300">
+                  <strong className="text-amber-400">Защита заголовков</strong>
+                </span>
+              )}
             </div>
           </div>
         </div>

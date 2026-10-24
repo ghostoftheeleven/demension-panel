@@ -6,19 +6,25 @@ import { ProvisionService } from '../services/provision.service.js';
 import { encryptSecret } from '../services/secrets.service.js';
 import { asyncHandler, HttpError, parseId } from '../utils/http.js';
 import { isValidHost, isValidPort, parseSubnet } from '../utils/net.js';
+import { LATEST_AWG_VERSION, paramsFromRow, paramsToColumns } from '../utils/awg-params.js';
 
 export const serversRouter = Router();
 
-const PARAM_KEYS: (keyof AwgParams)[] = ['jc', 'jmin', 'jmax', 's1', 's2', 'h1', 'h2', 'h3', 'h4'];
+/** Параметры обфускации, редактируемые через PUT (версия протокола меняется отдельным действием) */
+const INT_PARAM_KEYS = ['jc', 'jmin', 'jmax', 's1', 's2', 's3', 's4'] as const;
+const TEXT_PARAM_KEYS = ['h1', 'h2', 'h3', 'h4', 'i1', 'i2', 'i3', 'i4', 'i5', 'header_protection_key'] as const;
 
 /**
  * Представление сервера для фронтенда — без паролей и приватных ключей
  */
 export function serializeServer(s: any) {
   if (!s) return s;
-  const { ssh_password, ssh_key, server_private_key, preshared_key, ...rest } = s;
+  const { ssh_password, ssh_key, server_private_key, preshared_key, extra_params, ...rest } = s;
+  const params = paramsFromRow(s);
   return {
     ...rest,
+    ...params,
+    latest_awg_version: LATEST_AWG_VERSION,
     has_ssh_password: Boolean(ssh_password),
     has_ssh_key: Boolean(ssh_key),
     needs_sync: Boolean(s.needs_sync),
@@ -115,17 +121,17 @@ serversRouter.post('/', (req, res) => {
   const keyPair = AwgService.generateKeyPair();
   const psk = AwgService.generatePresharedKey();
 
+  const columns = paramsToColumns(params);
   const result = db.prepare(`
     INSERT INTO servers (
       name, host, ssh_port, ssh_user, ssh_password, ssh_key,
-      awg_port, subnet, server_public_key, server_private_key, preshared_key,
-      jc, jmin, jmax, s1, s2, h1, h2, h3, h4, status
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'uninstalled')
+      awg_port, subnet, server_public_key, server_private_key, preshared_key, status,
+      ${Object.keys(columns).join(', ')}
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'uninstalled', ${Object.keys(columns).map(() => '?').join(', ')})
   `).run(
     name, host, sshPort, sshUser, encryptSecret(sshPassword), encryptSecret(sshKey),
     awgPort, subnet, keyPair.publicKey, keyPair.privateKey, psk,
-    params.jc, params.jmin, params.jmax, params.s1, params.s2,
-    params.h1, params.h2, params.h3, params.h4
+    ...(Object.values(columns) as any[])
   );
 
   res.status(201).json(serializeServer(selectServerWithCounts(Number(result.lastInsertRowid))));
@@ -172,20 +178,31 @@ serversRouter.put('/:id', (req, res) => {
     }
   }
 
-  const params = Object.fromEntries(PARAM_KEYS.map((k) => [k, server[k]])) as unknown as AwgParams;
+  const current = paramsFromRow(server);
+  const params: AwgParams = { ...current };
   let paramsTouched = false;
-  for (const key of PARAM_KEYS) {
+  for (const key of INT_PARAM_KEYS) {
     if (body[key] !== undefined) {
-      params[key] = Number(body[key]);
+      const value = body[key] === null || body[key] === '' ? null : Number(body[key]);
+      (params as any)[key] = key === 's3' || key === 's4' ? value : Number(value);
+      paramsTouched = true;
+    }
+  }
+  for (const key of TEXT_PARAM_KEYS) {
+    if (body[key] !== undefined) {
+      const value = body[key] === null ? '' : String(body[key]).trim();
+      (params as any)[key] = key.startsWith('h') && key.length === 2 ? value : value || null;
       paramsTouched = true;
     }
   }
   if (paramsTouched) {
     const error = AwgService.validateParams(params);
     if (error) throw new HttpError(400, error);
-    for (const key of PARAM_KEYS) {
-      if (params[key] !== server[key]) {
-        updates[key] = params[key];
+    const before = paramsToColumns(current);
+    const after = paramsToColumns(params);
+    for (const [key, value] of Object.entries(after)) {
+      if (value !== before[key]) {
+        updates[key] = value;
         interfaceChanged = true;
       }
     }
@@ -239,15 +256,17 @@ serversRouter.post('/:id/randomize-params', (req, res) => {
   const id = parseId(req.params.id);
   const server = getServerOr404(id);
 
-  const params = AwgService.generateRandomParams();
-  db.prepare(`
-    UPDATE servers SET
-      jc = ?, jmin = ?, jmax = ?, s1 = ?, s2 = ?,
-      h1 = ?, h2 = ?, h3 = ?, h4 = ?
-    WHERE id = ?
-  `).run(
-    params.jc, params.jmin, params.jmax, params.s1, params.s2,
-    params.h1, params.h2, params.h3, params.h4,
+  // Новые случайные значения в рамках текущей версии протокола; I1–I5 и доп. параметры сохраняются
+  const current = paramsFromRow(server);
+  const generated = AwgService.generateRandomParams(current.awg_version);
+  const params: AwgParams = {
+    ...generated,
+    i1: current.i1, i2: current.i2, i3: current.i3, i4: current.i4, i5: current.i5,
+    extra_params: current.extra_params,
+  };
+  const columns = paramsToColumns(params);
+  db.prepare(`UPDATE servers SET ${Object.keys(columns).map((k) => `${k} = ?`).join(', ')} WHERE id = ?`).run(
+    ...(Object.values(columns) as any[]),
     id
   );
 
@@ -272,4 +291,50 @@ serversRouter.post('/:id/apply', asyncHandler(async (req, res) => {
   getServerOr404(id);
   const result = await ProvisionService.requestApply(id);
   res.status(result.success ? 200 : 502).json(result);
+}));
+
+// POST scan — поиск уже установленного AmneziaWG (контейнера панели или приложения Amnezia) и подключение без установки
+serversRouter.post('/:id/scan', asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  getServerOr404(id);
+  if (ProvisionService.isInstalling(id)) throw new HttpError(409, 'Дождитесь окончания установки');
+  try {
+    const result = await ProvisionService.scanAndAdopt(id);
+    res.json({ ...result, server: serializeServer(selectServerWithCounts(id)) });
+  } catch (err: any) {
+    throw new HttpError(502, err.message);
+  }
+}));
+
+// POST upgrade-protocol — переход на актуальную версию AmneziaWG: новые параметры и переустановка с latest-образом
+serversRouter.post('/:id/upgrade-protocol', asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  const server = getServerOr404(id);
+  const current = paramsFromRow(server);
+  if (current.awg_version === LATEST_AWG_VERSION) throw new HttpError(400, 'Сервер уже использует актуальную версию протокола');
+
+  const params: AwgParams = {
+    ...AwgService.generateRandomParams(LATEST_AWG_VERSION),
+    i1: current.i1, i2: current.i2, i3: current.i3, i4: current.i4, i5: current.i5,
+  };
+  const columns = paramsToColumns(params);
+  db.prepare(`UPDATE servers SET ${Object.keys(columns).map((k) => `${k} = ?`).join(', ')} WHERE id = ?`).run(
+    ...(Object.values(columns) as any[]),
+    id
+  );
+
+  if (server.status === 'uninstalled') {
+    return res.json({ success: true, server: serializeServer(selectServerWithCounts(id)) });
+  }
+  const result = await ProvisionService.requestReinstall(id);
+  if (!result.success) {
+    // Нода осталась на прежних параметрах — возвращаем их, чтобы подписки не раздавали несовместимые конфиги
+    const previous = paramsToColumns(current);
+    db.prepare(`UPDATE servers SET ${Object.keys(previous).map((k) => `${k} = ?`).join(', ')} WHERE id = ?`).run(
+      ...(Object.values(previous) as any[]),
+      id
+    );
+    result.error = `${result.error}. Параметры возвращены к прежним (AmneziaWG ${current.awg_version}.x).`;
+  }
+  res.status(result.success ? 200 : 502).json({ ...result, server: serializeServer(selectServerWithCounts(id)) });
 }));

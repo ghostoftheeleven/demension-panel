@@ -10,6 +10,7 @@ set -euo pipefail
 #   AWG_CONF_B64  - полный awg0.conf (интерфейс + пиры) в base64
 #   AWG_IMAGE     - Docker-образ AmneziaWG
 #   PANEL_IP      - IP панели (исключается из блокировок fail2ban)
+#   REPLACE_CONTAINER - имя ранее подключённого контейнера, который заменяется контейнером панели
 # ==============================================================================
 
 export DEBIAN_FRONTEND=noninteractive
@@ -137,6 +138,12 @@ chmod 700 "$AWG_DIR/start.sh"
 if docker ps -a --format '{{.Names}}' | grep -Eq "^${CONTAINER_NAME}\$"; then
   echo "Остановка и удаление старого контейнера $CONTAINER_NAME..."
   docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+fi
+
+# Ранее подключённый контейнер другого имени (например, amnezia-awg2 приложения Amnezia) занимает тот же порт
+if [ -n "${REPLACE_CONTAINER:-}" ] && [ "$REPLACE_CONTAINER" != "$CONTAINER_NAME" ]; then
+  echo "Удаление заменяемого контейнера $REPLACE_CONTAINER..."
+  docker rm -f "$REPLACE_CONTAINER" >/dev/null 2>&1 || true
 fi
 
 echo "[6/7] Запуск контейнера $CONTAINER_NAME..."

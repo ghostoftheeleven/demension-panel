@@ -195,6 +195,25 @@ const migrations: Array<() => void> = [
     addColumn('servers', 'sub_order INTEGER NOT NULL DEFAULT 0');
     db.exec("DELETE FROM settings WHERE key = 'awg_image'");
   },
+
+  // v4: параметры AmneziaWG 3.x и работа с уже установленными контейнерами (в т.ч. приложения Amnezia)
+  () => {
+    addColumn('servers', 'awg_version INTEGER NOT NULL DEFAULT 1');
+    addColumn('servers', 's3 INTEGER');
+    addColumn('servers', 's4 INTEGER');
+    for (const key of ['i1', 'i2', 'i3', 'i4', 'i5']) addColumn('servers', `${key} TEXT`);
+    addColumn('servers', 'header_protection_key TEXT');
+    addColumn('servers', 'extra_params TEXT');
+    // Где живёт AmneziaWG на ноде: имя контейнера, интерфейс, путь к конфигу внутри контейнера, утилита (awg/wg)
+    addColumn('servers', "container_name TEXT NOT NULL DEFAULT 'amnezia-awg'");
+    addColumn('servers', "iface TEXT NOT NULL DEFAULT 'awg0'");
+    addColumn('servers', "conf_path TEXT NOT NULL DEFAULT '/opt/amnezia/awg/awg0.conf'");
+    addColumn('servers', "awg_tool TEXT NOT NULL DEFAULT 'awg'");
+    // demension — контейнер, развёрнутый панелью; amnezia — найденный контейнер приложения Amnezia
+    addColumn('servers', "managed_by TEXT NOT NULL DEFAULT 'demension'");
+    // Пиры, импортированные из существующей установки: приватный ключ клиента панели неизвестен
+    addColumn('clients', 'external INTEGER NOT NULL DEFAULT 0');
+  },
 ];
 
 export function initDatabase() {

@@ -11,6 +11,7 @@ import type {
   PanelSettings,
   SubscriptionSettings,
   SubscriptionServer,
+  ScanResult,
 } from '../types';
 
 const API_BASE = '/api';
@@ -151,6 +152,17 @@ export const api = {
     const res = await fetchWithAuth(`${API_BASE}/servers/${id}/sync`, { method: 'POST' });
     if (res.ok) return res.json();
     return { success: false, error: await errorMessage(res, 'Ошибка синхронизации') };
+  },
+
+  scanServer(id: number): Promise<ScanResult> {
+    return request(`${API_BASE}/servers/${id}/scan`, { method: 'POST' }, 'Ошибка сканирования сервера');
+  },
+
+  async upgradeProtocol(id: number): Promise<{ success: boolean; error?: string; server: Server }> {
+    const res = await fetchWithAuth(`${API_BASE}/servers/${id}/upgrade-protocol`, { method: 'POST' });
+    const data = await res.json().catch(() => null);
+    if (data?.server) return data;
+    throw new Error(data?.error || `Ошибка перехода на новую версию протокола (HTTP ${res.status})`);
   },
 
   async applyServer(id: number): Promise<{ success: boolean; error?: string }> {

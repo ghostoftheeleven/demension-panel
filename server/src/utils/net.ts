@@ -23,7 +23,7 @@ export function intToIp(value: number): string {
  * Разбирает подсеть вида "10.8.0.1/24", где адрес — IP сервера в туннеле.
  * Допустимы маски /16../30, адрес сервера должен быть хостовым адресом подсети.
  */
-export function parseSubnet(subnet: string): ParsedSubnet {
+export function parseSubnet(subnet: string, strict = true): ParsedSubnet {
   const match = /^(\d{1,3}(?:\.\d{1,3}){3})\/(\d{1,2})$/.exec(String(subnet).trim());
   if (!match || net.isIPv4(match[1]) === false) {
     throw new Error('Подсеть должна быть в формате 10.8.0.1/24');
@@ -36,7 +36,8 @@ export function parseSubnet(subnet: string): ParsedSubnet {
   const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0;
   const networkInt = (serverInt & mask) >>> 0;
   const broadcastInt = (networkInt | (~mask >>> 0)) >>> 0;
-  if (serverInt === networkInt || serverInt === broadcastInt) {
+  // Приложение Amnezia указывает адрес сети (10.8.1.0/24) — такие подсети принимаются при импорте (strict = false)
+  if (strict && (serverInt === networkInt || serverInt === broadcastInt)) {
     throw new Error('Адрес сервера не может быть адресом сети или широковещательным адресом');
   }
   return {
@@ -52,7 +53,7 @@ export function parseSubnet(subnet: string): ParsedSubnet {
  * Возвращает первый свободный хостовый адрес подсети (без адреса сервера).
  */
 export function allocateIp(subnet: string, usedIps: Iterable<string>): string {
-  const parsed = parseSubnet(subnet);
+  const parsed = parseSubnet(subnet, false);
   const used = new Set<number>();
   for (const ip of usedIps) {
     if (net.isIPv4(ip)) used.add(ipToInt(ip));

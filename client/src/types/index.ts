@@ -46,15 +46,31 @@ export interface Server {
   deployed_port: number | null;
   subnet: string;
   server_public_key: string | null;
+  /** 1 — устаревший формат AmneziaWG 1.x, 3 — актуальный 3.x */
+  awg_version: number;
+  latest_awg_version: number;
   jc: number;
   jmin: number;
   jmax: number;
   s1: number;
   s2: number;
-  h1: number;
-  h2: number;
-  h3: number;
-  h4: number;
+  s3: number | null;
+  s4: number | null;
+  /** Число или диапазон «a-b» */
+  h1: string;
+  h2: string;
+  h3: string;
+  h4: string;
+  i1: string | null;
+  i2: string | null;
+  i3: string | null;
+  i4: string | null;
+  i5: string | null;
+  header_protection_key: string | null;
+  extra_params: Record<string, string>;
+  /** Контейнер на ноде: панели (demension) или найденный контейнер приложения Amnezia */
+  container_name: string;
+  managed_by: 'demension' | 'amnezia';
   status: ServerStatus;
   needs_sync: boolean;
   needs_apply: boolean;
@@ -82,10 +98,34 @@ export interface ServerUpdate {
   jmax?: number;
   s1?: number;
   s2?: number;
-  h1?: number;
-  h2?: number;
-  h3?: number;
-  h4?: number;
+  s3?: number | null;
+  s4?: number | null;
+  h1?: string;
+  h2?: string;
+  h3?: string;
+  h4?: string;
+  i1?: string | null;
+  i2?: string | null;
+  i3?: string | null;
+  i4?: string | null;
+  i5?: string | null;
+  header_protection_key?: string | null;
+}
+
+export interface ScanResult {
+  found: boolean;
+  message: string;
+  containers: { name: string; image: string; running: boolean; managedBy: string }[];
+  adopted?: {
+    container: string;
+    managedBy: string;
+    awgVersion: number;
+    port: number;
+    subnet: string;
+    importedPeers: number;
+    skippedPeers: number;
+  };
+  server: Server;
 }
 
 export interface Client {
@@ -97,6 +137,8 @@ export interface Client {
   client_public_key: string;
   preshared_key: string;
   enabled: number;
+  /** Импортирован из существующей установки: приватный ключ неизвестен, конфиг недоступен */
+  external: boolean;
   /** Отправлено клиентом (upload) */
   total_rx: number;
   /** Получено клиентом (download) */

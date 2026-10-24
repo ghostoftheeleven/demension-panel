@@ -1,25 +1,55 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { db } from '../db/index.js';
+import { db, transaction } from '../db/index.js';
 import { SshService, SshCredentials, HostKeyMismatchError } from './ssh.service.js';
 import { AwgService } from './awg.service.js';
 import { decryptSecret } from './secrets.service.js';
-import { shellQuote } from '../utils/net.js';
+import { shellQuote, parseSubnet } from '../utils/net.js';
+import { parseServerConfig, paramsToColumns, ParsedServerConfig } from '../utils/awg-params.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const CONTAINER = 'amnezia-awg';
+/** Контейнер, разворачиваемый панелью */
+const PANEL_CONTAINER = 'amnezia-awg';
 /** На ноды всегда ставится актуальный образ AmneziaWG (docker pull при каждой установке/переустановке) */
 export const AWG_IMAGE = 'amneziavpn/amneziawg-go:latest';
 const AWG_DIR = '/opt/amnezia/awg';
+const PANEL_CONF = `${AWG_DIR}/awg0.conf`;
 /** Сколько неудачных опросов подряд переводят сервер в offline */
 const OFFLINE_THRESHOLD = 3;
 
 export interface OperationResult {
   success: boolean;
   error?: string;
+}
+
+export interface DetectedContainer {
+  name: string;
+  image: string;
+  running: boolean;
+  confPath: string | null;
+  tool: 'awg' | 'wg';
+  managedBy: 'demension' | 'amnezia';
+  config: string | null;
+  clientNames: Record<string, string>;
+}
+
+export interface ScanResult {
+  /** Найден работающий контейнер с конфигурацией, который можно подключить без установки */
+  found: boolean;
+  containers: { name: string; image: string; running: boolean; managedBy: string }[];
+  message: string;
+  adopted?: {
+    container: string;
+    managedBy: string;
+    awgVersion: number;
+    port: number;
+    subnet: string;
+    importedPeers: number;
+    skippedPeers: number;
+  };
 }
 
 // Все операции с одной нодой выполняются последовательно
@@ -55,6 +85,65 @@ function readDeployScript(): string {
     if (fs.existsSync(candidate)) return fs.readFileSync(candidate, 'utf-8');
   }
   throw new Error('Установочный скрипт deploy-awg.sh не найден');
+}
+
+/**
+ * Разбор вывода скрипта сканирования (маркеры ---CONTAINER / ---CONF / ---TOOL / ---CLIENTS / ---DEMENSION)
+ */
+export function parseScanOutput(output: string): DetectedContainer[] {
+  const containers: DetectedContainer[] = [];
+  let current: DetectedContainer | null = null;
+  let mode: 'conf' | 'clients' | null = null;
+  let buffer: string[] = [];
+
+  for (const line of output.split(/\r?\n/)) {
+    if (mode) {
+      if ((mode === 'conf' && line === '---ENDCONF') || (mode === 'clients' && line === '---ENDCLIENTS')) {
+        if (current && mode === 'conf') current.config = buffer.join('\n');
+        if (current && mode === 'clients') {
+          try {
+            const table = JSON.parse(buffer.join('\n'));
+            for (const entry of Array.isArray(table) ? table : []) {
+              const name = entry?.userData?.clientName;
+              if (entry?.clientId && typeof name === 'string' && name.trim()) current.clientNames[entry.clientId] = name.trim();
+            }
+          } catch {
+            // clientsTable не JSON — имена не импортируются
+          }
+        }
+        mode = null;
+        buffer = [];
+      } else {
+        buffer.push(line);
+      }
+      continue;
+    }
+
+    if (line.startsWith('---CONTAINER ')) {
+      const [name, image, running] = line.slice('---CONTAINER '.length).split('|');
+      current = {
+        name,
+        image: image || '',
+        running: running === 'true',
+        confPath: null,
+        tool: 'awg',
+        managedBy: 'amnezia',
+        config: null,
+        clientNames: {},
+      };
+      containers.push(current);
+    } else if (current && line.startsWith('---CONF ')) {
+      current.confPath = line.slice('---CONF '.length).trim();
+      mode = 'conf';
+    } else if (current && line.startsWith('---TOOL ')) {
+      current.tool = line.includes('awg') ? 'awg' : 'wg';
+    } else if (current && line === '---CLIENTS') {
+      mode = 'clients';
+    } else if (current && line === '---DEMENSION') {
+      current.managedBy = 'demension';
+    }
+  }
+  return containers;
 }
 
 export class ProvisionService {
@@ -93,10 +182,28 @@ export class ProvisionService {
     return installing.has(serverId);
   }
 
+  private static container(server: any) {
+    const tool = server.awg_tool === 'wg' ? 'wg' : 'awg';
+    return {
+      name: String(server.container_name || PANEL_CONTAINER),
+      iface: String(server.iface || 'awg0'),
+      confPath: String(server.conf_path || PANEL_CONF),
+      tool,
+      quick: `${tool}-quick`,
+    };
+  }
+
   /**
-   * Команда, атомарно записывающая содержимое stdin в файл на ноде с правами 600
+   * Команда, атомарно записывающая stdin в конфиг внутри контейнера.
+   * Для контейнера панели /opt/amnezia/awg смонтирован с хоста, для контейнера Amnezia — живёт внутри.
    */
-  private static writeFileCommand(credentials: SshCredentials, remotePath: string): string {
+  private static writeConfigCommand(credentials: SshCredentials, server: any): string {
+    const c = this.container(server);
+    const inner = `umask 077 && cat > ${c.confPath}.new && mv -f ${c.confPath}.new ${c.confPath}`;
+    return `${SshService.sudo(credentials)}docker exec -i ${shellQuote(c.name)} sh -c ${shellQuote(inner)}`;
+  }
+
+  private static writeHostFileCommand(credentials: SshCredentials, remotePath: string): string {
     const tmp = `${remotePath}.new`;
     return `${SshService.sudo(credentials)}sh -c ${shellQuote(`umask 077 && mkdir -p ${AWG_DIR} && cat > ${tmp} && mv -f ${tmp} ${remotePath}`)}`;
   }
@@ -104,6 +211,147 @@ export class ProvisionService {
   private static envFileContent(server: any): string {
     return `AWG_NETWORK=${AwgService.getTunnelNetwork(server.subnet)}\nAWG_PORT=${server.awg_port}\n`;
   }
+
+  // ==============================================================================
+  // Сканирование ноды и подключение уже установленного AmneziaWG
+  // ==============================================================================
+
+  /**
+   * Ищет на ноде контейнеры AmneziaWG (панели или приложения Amnezia) и читает их конфигурацию
+   */
+  static async detectContainers(server: any): Promise<DetectedContainer[]> {
+    const script = [
+      'command -v docker >/dev/null 2>&1 || exit 0',
+      'for c in $(docker ps -a --format "{{.Names}}"); do',
+      '  img=$(docker inspect -f "{{.Config.Image}}" "$c" 2>/dev/null)',
+      '  case "$c|$img" in *amnezia-awg*|*amneziawg*) ;; *) continue ;; esac',
+      '  running=$(docker inspect -f "{{.State.Running}}" "$c" 2>/dev/null)',
+      '  echo "---CONTAINER $c|$img|$running"',
+      '  [ "$running" = "true" ] || continue',
+      `  for f in ${AWG_DIR}/awg0.conf ${AWG_DIR}/wg0.conf; do`,
+      '    if docker exec "$c" test -f "$f"; then echo "---CONF $f"; docker exec "$c" cat "$f"; echo; echo "---ENDCONF"; break; fi',
+      '  done',
+      '  if docker exec "$c" sh -c "command -v awg" >/dev/null 2>&1; then echo "---TOOL awg"; else echo "---TOOL wg"; fi',
+      `  if docker exec "$c" test -f ${AWG_DIR}/clientsTable; then echo "---CLIENTS"; docker exec "$c" cat ${AWG_DIR}/clientsTable; echo; echo "---ENDCLIENTS"; fi`,
+      `  if [ "$c" = "${PANEL_CONTAINER}" ] && [ -f ${AWG_DIR}/demension.env ]; then echo "---DEMENSION"; fi`,
+      'done',
+    ].join('\n');
+
+    const credentials = this.getCredentials(server);
+    const result = await SshService.executeCommand(credentials, `${SshService.sudo(credentials)}sh -c ${shellQuote(script)}`, {
+      timeoutMs: 60000,
+    });
+    if (result.code !== 0) {
+      const hint = /sudo: a (terminal|password) is required/.test(result.stderr) ? ' (нужен sudo без пароля)' : '';
+      throw new Error(`Не удалось просканировать сервер${hint}: ${result.stderr.trim() || `код ${result.code}`}`);
+    }
+    return parseScanOutput(result.stdout);
+  }
+
+  /**
+   * Сканирует ноду и, если AmneziaWG уже установлен, подключает его к панели без переустановки
+   */
+  static async scanAndAdopt(serverId: number): Promise<ScanResult> {
+    return runExclusive(serverId, async () => {
+      const server = loadServer(serverId);
+      const detected = await this.detectContainers(server);
+      const containers = detected.map((d) => ({ name: d.name, image: d.image, running: d.running, managedBy: d.managedBy }));
+
+      // Предпочтение — контейнеру панели, затем любому работающему с конфигурацией
+      const candidates = detected.filter((d) => d.running && d.config);
+      const target = candidates.find((d) => d.managedBy === 'demension') || candidates[0];
+      if (!target) {
+        const stopped = detected.filter((d) => !d.running).map((d) => d.name);
+        return {
+          found: false,
+          containers,
+          message: stopped.length
+            ? `Найдены остановленные контейнеры AmneziaWG (${stopped.join(', ')}) — требуется установка`
+            : 'AmneziaWG на сервере не найден — требуется установка',
+        };
+      }
+
+      let parsed: ParsedServerConfig;
+      try {
+        parsed = parseServerConfig(target.config as string);
+      } catch (err: any) {
+        return { found: false, containers, message: `Контейнер ${target.name} найден, но его конфигурацию не удалось разобрать: ${err.message}` };
+      }
+
+      const adopted = this.adoptConfig(server, target, parsed);
+      const others = candidates.filter((c) => c !== target).map((c) => c.name);
+      const owner = target.managedBy === 'amnezia' ? 'приложения Amnezia' : 'панели';
+      return {
+        found: true,
+        containers,
+        adopted,
+        message:
+          `Найден работающий AmneziaWG ${owner} (контейнер ${target.name}). Сервер подключён без переустановки, ` +
+          `импортировано клиентов: ${adopted.importedPeers}.` +
+          (others.length ? ` Другие контейнеры AmneziaWG на сервере: ${others.join(', ')}.` : ''),
+      };
+    });
+  }
+
+  private static adoptConfig(server: any, target: DetectedContainer, parsed: ParsedServerConfig): NonNullable<ScanResult['adopted']> {
+    // Подсеть Amnezia задаётся адресом сети (10.8.1.0/24) — проверяем мягко
+    parseSubnet(parsed.address, false);
+    const iface = path.basename(target.confPath as string, '.conf');
+    const publicKey = AwgService.derivePublicKey(parsed.privateKey);
+    const serverPsk = parsed.peers.find((p) => p.presharedKey)?.presharedKey || server.preshared_key;
+    const columns = paramsToColumns(parsed.params);
+
+    let imported = 0;
+    let skipped = 0;
+    transaction(() => {
+      const assignments = Object.keys(columns).map((k) => `${k} = ?`).join(', ');
+      db.prepare(`
+        UPDATE servers SET ${assignments},
+          awg_port = ?, deployed_port = ?, subnet = ?, server_private_key = ?, server_public_key = ?, preshared_key = ?,
+          container_name = ?, iface = ?, conf_path = ?, awg_tool = ?, managed_by = ?,
+          status = 'online', needs_sync = 0, needs_apply = 0, fail_count = 0, last_error = NULL, last_seen = datetime('now')
+        WHERE id = ?
+      `).run(
+        ...(Object.values(columns) as any[]),
+        parsed.listenPort, parsed.listenPort, parsed.address, parsed.privateKey, publicKey, serverPsk,
+        target.name, iface, target.confPath, target.tool, target.managedBy,
+        server.id
+      );
+
+      const existing = db.prepare('SELECT client_public_key, client_ip FROM clients WHERE server_id = ?').all(server.id) as any[];
+      const knownKeys = new Set(existing.map((c) => c.client_public_key));
+      const usedIps = new Set(existing.map((c) => c.client_ip));
+      const insert = db.prepare(`
+        INSERT INTO clients (server_id, name, client_ip, client_public_key, client_private_key, preshared_key, enabled, external)
+        VALUES (?, ?, ?, ?, '', ?, 1, 1)
+      `);
+      for (const peer of parsed.peers) {
+        if (knownKeys.has(peer.publicKey)) continue;
+        if (!peer.ip || usedIps.has(peer.ip)) {
+          skipped++;
+          continue;
+        }
+        const name = target.clientNames[peer.publicKey] || `Импорт ${peer.ip}`;
+        insert.run(server.id, name.slice(0, 64), peer.ip, peer.publicKey, peer.presharedKey);
+        usedIps.add(peer.ip);
+        imported++;
+      }
+    });
+
+    return {
+      container: target.name,
+      managedBy: target.managedBy,
+      awgVersion: parsed.params.awg_version,
+      port: parsed.listenPort,
+      subnet: parsed.address,
+      importedPeers: imported,
+      skippedPeers: skipped,
+    };
+  }
+
+  // ==============================================================================
+  // Установка
+  // ==============================================================================
 
   /**
    * Run remote AmneziaWG installation via Docker and configure firewall & interface
@@ -142,12 +390,19 @@ export class ProvisionService {
       const pubKey = AwgService.derivePublicKey(privKey);
       const fullServer = { ...server, server_private_key: privKey, server_public_key: pubKey, preshared_key: psk };
 
+      // Ранее подключённый чужой контейнер (например, приложения Amnezia) заменяется контейнером панели —
+      // ключи, параметры и клиенты переносятся из БД, поэтому выданные конфигурации продолжают работать
+      const replaceContainer =
+        server.container_name && server.container_name !== PANEL_CONTAINER ? String(server.container_name) : '';
+      if (replaceContainer) log(`Контейнер ${replaceContainer} будет заменён контейнером панели ${PANEL_CONTAINER}\r\n`);
+
       const conf = AwgService.generateServerConfig(fullServer, this.getServerClients(serverId));
       const script = [
         `export AWG_PORT=${shellQuote(server.awg_port)}`,
         `export AWG_NETWORK=${shellQuote(AwgService.getTunnelNetwork(server.subnet))}`,
         `export AWG_CONF_B64=${shellQuote(Buffer.from(conf).toString('base64'))}`,
         `export AWG_IMAGE=${shellQuote(AWG_IMAGE)}`,
+        `export REPLACE_CONTAINER=${shellQuote(replaceContainer)}`,
         readDeployScript(),
       ].join('\n');
 
@@ -180,13 +435,18 @@ export class ProvisionService {
             server_private_key = ?,
             preshared_key = ?,
             deployed_port = awg_port,
+            container_name = ?,
+            iface = 'awg0',
+            conf_path = ?,
+            awg_tool = 'awg',
+            managed_by = 'demension',
             needs_sync = 0,
             needs_apply = 0,
             fail_count = 0,
             last_error = NULL,
             last_seen = datetime('now')
         WHERE id = ?
-      `).run(pubKey, privKey, psk, serverId);
+      `).run(pubKey, privKey, psk, PANEL_CONTAINER, PANEL_CONF, serverId);
 
       log('\r\n=== AmneziaWG успешно установлен и готов к работе! ===\r\n');
       return { success: true };
@@ -196,6 +456,10 @@ export class ProvisionService {
       return { success: false, error: err.message };
     }
   }
+
+  // ==============================================================================
+  // Синхронизация пиров и применение параметров
+  // ==============================================================================
 
   /**
    * Запросить синхронизацию пиров. Повторные запросы до начала выполнения объединяются.
@@ -234,11 +498,11 @@ export class ProvisionService {
     try {
       const conf = AwgService.generateServerConfig(server, this.getServerClients(serverId));
       const credentials = this.getCredentials(server);
-      const sudo = SshService.sudo(credentials);
+      const c = this.container(server);
       const command = [
-        this.writeFileCommand(credentials, `${AWG_DIR}/awg0.conf`),
-        `${sudo}docker exec ${CONTAINER} sh -c ${shellQuote(
-          `umask 077; awg-quick strip ${AWG_DIR}/awg0.conf > /tmp/awg0.stripped && awg syncconf awg0 /tmp/awg0.stripped; rc=$?; rm -f /tmp/awg0.stripped; exit $rc`
+        this.writeConfigCommand(credentials, server),
+        `${SshService.sudo(credentials)}docker exec ${shellQuote(c.name)} sh -c ${shellQuote(
+          `umask 077; ${c.quick} strip ${c.confPath} > /tmp/awg.stripped && ${c.tool} syncconf ${c.iface} /tmp/awg.stripped; rc=$?; rm -f /tmp/awg.stripped; exit $rc`
         )}`,
       ].join(' && ');
 
@@ -255,12 +519,21 @@ export class ProvisionService {
   }
 
   /**
-   * Применить параметры интерфейса (обфускация, подсеть) — требует перезапуска интерфейса.
-   * Смена порта требует пересоздания контейнера (полная переустановка).
+   * Применить параметры интерфейса (обфускация) — требует перезапуска интерфейса.
+   * Смена порта или подсети требует пересоздания контейнера (переустановка контейнером панели).
    */
   static requestApply(serverId: number): Promise<OperationResult> {
     db.prepare('UPDATE servers SET needs_apply = 1 WHERE id = ?').run(serverId);
     return runExclusive(serverId, () => this.doApply(serverId));
+  }
+
+  /**
+   * Переустановка с актуальным образом (обновление AmneziaWG или переход на новую версию протокола)
+   */
+  static requestReinstall(serverId: number): Promise<OperationResult> {
+    if (installing.has(serverId)) return Promise.resolve({ success: false, error: 'Установка уже выполняется' });
+    installing.add(serverId);
+    return runExclusive(serverId, () => this.doInstall(serverId)).finally(() => installing.delete(serverId));
   }
 
   private static async doApply(serverId: number): Promise<OperationResult> {
@@ -270,6 +543,7 @@ export class ProvisionService {
       return { success: false, error: 'Сервер не установлен' };
     }
 
+    // Порт проброшен при создании контейнера; NAT контейнера Amnezia настроен на исходную подсеть
     if (server.deployed_port !== server.awg_port) {
       return this.doInstall(serverId);
     }
@@ -277,19 +551,21 @@ export class ProvisionService {
     try {
       const conf = AwgService.generateServerConfig(server, this.getServerClients(serverId));
       const credentials = this.getCredentials(server);
-      const sudo = SshService.sudo(credentials);
+      const c = this.container(server);
 
-      let result = await SshService.executeCommand(credentials, this.writeFileCommand(credentials, `${AWG_DIR}/demension.env`), {
-        input: this.envFileContent(server),
-        timeoutMs: 60000,
-      });
-      if (result.code === 0) {
-        result = await SshService.executeCommand(
-          credentials,
-          `${this.writeFileCommand(credentials, `${AWG_DIR}/awg0.conf`)} && ${sudo}docker restart ${CONTAINER}`,
-          { input: conf, timeoutMs: 120000 }
-        );
+      if (server.managed_by === 'demension') {
+        const env = await SshService.executeCommand(credentials, this.writeHostFileCommand(credentials, `${AWG_DIR}/demension.env`), {
+          input: this.envFileContent(server),
+          timeoutMs: 60000,
+        });
+        if (env.code !== 0) throw new Error(env.stderr.trim() || `код ${env.code}`);
       }
+
+      const result = await SshService.executeCommand(
+        credentials,
+        `${this.writeConfigCommand(credentials, server)} && ${SshService.sudo(credentials)}docker restart ${shellQuote(c.name)}`,
+        { input: conf, timeoutMs: 120000 }
+      );
       if (result.code !== 0) {
         throw new Error(`Ошибка применения параметров: ${result.stderr.trim() || `код ${result.code}`}`);
       }
@@ -309,10 +585,11 @@ export class ProvisionService {
       const server = loadServer(serverId);
       try {
         const credentials = this.getCredentials(server);
-        const sudo = SshService.sudo(credentials);
+        const c = this.container(server);
+        const cleanup = server.managed_by === 'demension' ? `; rm -rf ${AWG_DIR}` : '';
         const result = await SshService.executeCommand(
           credentials,
-          `${sudo}sh -c ${shellQuote(`docker rm -f ${CONTAINER} >/dev/null 2>&1; rm -rf ${AWG_DIR}; echo done`)}`,
+          `${SshService.sudo(credentials)}sh -c ${shellQuote(`docker rm -f ${c.name} >/dev/null 2>&1${cleanup}; echo done`)}`,
           { timeoutMs: 120000 }
         );
         if (result.code !== 0) throw new Error(result.stderr.trim() || `код ${result.code}`);
@@ -323,6 +600,10 @@ export class ProvisionService {
     });
   }
 
+  // ==============================================================================
+  // Мониторинг
+  // ==============================================================================
+
   /**
    * Poll live interface stats (rx/tx, handshake), accumulate traffic and update server status
    */
@@ -332,13 +613,14 @@ export class ProvisionService {
 
     try {
       const credentials = this.getCredentials(server);
+      const c = this.container(server);
       const result = await SshService.executeCommand(
         credentials,
-        `${SshService.sudo(credentials)}docker exec ${CONTAINER} awg show awg0 dump`,
+        `${SshService.sudo(credentials)}docker exec ${shellQuote(c.name)} ${c.tool} show ${c.iface} dump`,
         { timeoutMs: 30000 }
       );
       if (result.code !== 0) {
-        throw new Error(`Интерфейс awg0 недоступен: ${result.stderr.trim() || `код ${result.code}`}`);
+        throw new Error(`Интерфейс ${c.iface} недоступен: ${result.stderr.trim() || `код ${result.code}`}`);
       }
 
       this.applyDump(serverId, result.stdout);
@@ -370,7 +652,7 @@ export class ProvisionService {
   }
 
   /**
-   * Разбор `awg show awg0 dump` с накоплением трафика: счётчики интерфейса сбрасываются
+   * Разбор `awg show <iface> dump` с накоплением трафика: счётчики интерфейса сбрасываются
    * при перезапуске, поэтому к итогу прибавляется только прирост.
    * rx/tx — с точки зрения сервера: rx = отправлено клиентом (upload), tx = получено клиентом (download).
    */

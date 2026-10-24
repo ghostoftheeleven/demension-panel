@@ -142,9 +142,27 @@ export const App: React.FC = () => {
   const selectedServer = servers.find((s) => s.id === selectedServerId) || null;
   const subscriptionModalSub = subscribers.find((s) => s.id === subscriptionModalSubId) || null;
 
-  const handleServerAdded = (newServer: Server) => {
+  // Перед установкой сервер сканируется: если AmneziaWG уже стоит (панели или приложения Amnezia),
+  // он подключается без переустановки
+  const handleServerAdded = async (newServer: Server) => {
     setServers((prev) => [newServer, ...prev]);
     setSelectedServerId(newServer.id);
+    try {
+      const scan = await api.scanServer(newServer.id);
+      if (scan.found) {
+        handleServerUpdated(scan.server);
+        loadData();
+        const amneziaNote =
+          scan.adopted?.managedBy === 'amnezia'
+            ? '\n\nЭто контейнер приложения Amnezia: не меняйте клиентов этого сервера в приложении Amnezia — панель перезапишет конфигурацию.'
+            : '';
+        alert(scan.message + amneziaNote);
+        return;
+      }
+    } catch (err: any) {
+      alert(`Не удалось просканировать сервер: ${err.message}\n\nПроверьте SSH-доступ («Тест SSH») и запустите установку вручную.`);
+      return;
+    }
     setInstallModalServer(newServer);
   };
 

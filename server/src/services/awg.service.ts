@@ -1,18 +1,16 @@
 import crypto from 'node:crypto';
 import { db, getSetting } from '../db/index.js';
 import { allocateIp, formatEndpointHost, parseSubnet } from '../utils/net.js';
+import {
+  AwgParams,
+  AwgVersion,
+  generateAwgParams,
+  paramsFromRow,
+  renderAwgLines,
+  validateAwgParams,
+} from '../utils/awg-params.js';
 
-export interface AwgParams {
-  jc: number;
-  jmin: number;
-  jmax: number;
-  s1: number;
-  s2: number;
-  h1: number;
-  h2: number;
-  h3: number;
-  h4: number;
-}
+export type { AwgParams } from '../utils/awg-params.js';
 
 export interface KeyPair {
   publicKey: string;
@@ -23,8 +21,6 @@ export interface ClientNetworkSettings {
   dns: string;
   mtu: number;
 }
-
-const MAX_HEADER = 0xffffffff;
 
 export class AwgService {
   /**
@@ -65,43 +61,17 @@ export class AwgService {
   }
 
   /**
-   * Generate randomized AmneziaWG obfuscation parameters that satisfy protocol constraints
+   * Randomized AmneziaWG obfuscation parameters (по умолчанию — актуальной версии протокола)
    */
-  static generateRandomParams(): AwgParams {
-    const randomInt = (min: number, max: number) => crypto.randomInt(min, max + 1);
-
-    const jmin = randomInt(30, 60);
-    const jmax = randomInt(jmin + 20, jmin + 60);
-    const s1 = randomInt(15, 120);
-    let s2 = randomInt(15, 120);
-    while (s1 + 56 === s2) s2 = randomInt(15, 120);
-
-    // H1-H4: попарно различные 32-битные значения, не пересекающиеся со стандартными типами WireGuard (1-4)
-    const headers = new Set<number>();
-    while (headers.size < 4) headers.add(randomInt(100000000, 2147483647));
-    const [h1, h2, h3, h4] = [...headers];
-
-    return { jc: randomInt(3, 10), jmin, jmax, s1, s2, h1, h2, h3, h4 };
+  static generateRandomParams(version?: AwgVersion): AwgParams {
+    return generateAwgParams(version);
   }
 
   /**
    * Validate obfuscation parameters; returns error message or null
    */
   static validateParams(p: AwgParams): string | null {
-    const ints = Object.entries(p);
-    for (const [key, value] of ints) {
-      if (!Number.isInteger(value) || value < 0) return `Параметр ${key.toUpperCase()} должен быть целым неотрицательным числом`;
-    }
-    if (p.jc < 1 || p.jc > 128) return 'Jc должен быть в диапазоне 1–128';
-    if (p.jmin >= p.jmax) return 'Jmin должен быть меньше Jmax';
-    if (p.jmax > 1280) return 'Jmax не может превышать 1280';
-    if (p.s1 > 1132) return 'S1 не может превышать 1132';
-    if (p.s2 > 1188) return 'S2 не может превышать 1188';
-    if (p.s1 + 56 === p.s2) return 'S1 + 56 не должно быть равно S2 (пакеты станут неразличимы)';
-    const headers = [p.h1, p.h2, p.h3, p.h4];
-    if (headers.some((h) => h < 5 || h > MAX_HEADER)) return `H1–H4 должны быть в диапазоне 5–${MAX_HEADER}`;
-    if (new Set(headers).size !== 4) return 'H1–H4 должны быть попарно различными';
-    return null;
+    return validateAwgParams(p);
   }
 
   /**
@@ -129,15 +99,7 @@ Address = ${client.client_ip}/32
 DNS = ${settings.dns}
 MTU = ${settings.mtu}
 PrivateKey = ${client.client_private_key}
-Jc = ${server.jc}
-Jmin = ${server.jmin}
-Jmax = ${server.jmax}
-S1 = ${server.s1}
-S2 = ${server.s2}
-H1 = ${server.h1}
-H2 = ${server.h2}
-H3 = ${server.h3}
-H4 = ${server.h4}
+${renderAwgLines(paramsFromRow(server), 'client')}
 
 [Peer]
 PublicKey = ${server.server_public_key}
@@ -149,7 +111,7 @@ PersistentKeepalive = 25
   }
 
   /**
-   * Generate full server awg0.conf containing interface and all active peers.
+   * Generate full server config containing interface and all active peers.
    * Peer is active when the client is enabled and (if it belongs to a subscriber) the subscriber is active.
    */
   static generateServerConfig(server: any, clients: any[]): string {
@@ -157,24 +119,16 @@ PersistentKeepalive = 25
 PrivateKey = ${server.server_private_key}
 Address = ${server.subnet}
 ListenPort = ${server.awg_port}
-Jc = ${server.jc}
-Jmin = ${server.jmin}
-Jmax = ${server.jmax}
-S1 = ${server.s1}
-S2 = ${server.s2}
-H1 = ${server.h1}
-H2 = ${server.h2}
-H3 = ${server.h3}
-H4 = ${server.h4}
+${renderAwgLines(paramsFromRow(server), 'server')}
 `;
 
     for (const client of clients) {
       if (client.enabled && client.subscriber_active !== 0) {
+        const psk = client.preshared_key || server.preshared_key;
         conf += `
 [Peer]
 PublicKey = ${client.client_public_key}
-PresharedKey = ${client.preshared_key || server.preshared_key}
-AllowedIPs = ${client.client_ip}/32
+${psk ? `PresharedKey = ${psk}\n` : ''}AllowedIPs = ${client.client_ip}/32
 `;
       }
     }
@@ -186,6 +140,6 @@ AllowedIPs = ${client.client_ip}/32
    * Network address of the tunnel subnet (used for NAT inside the container)
    */
   static getTunnelNetwork(subnet: string): string {
-    return parseSubnet(subnet).network;
+    return parseSubnet(subnet, false).network;
   }
 }

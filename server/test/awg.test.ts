@@ -20,7 +20,7 @@ describe('AwgService', () => {
     const base = AwgService.generateRandomParams();
     expect(AwgService.validateParams({ ...base, s1: 20, s2: 76 })).toMatch(/S1 \+ 56/);
     expect(AwgService.validateParams({ ...base, jmin: 80, jmax: 50 })).toMatch(/Jmin/);
-    expect(AwgService.validateParams({ ...base, h2: base.h1 })).toMatch(/различными/);
+    expect(AwgService.validateParams({ ...base, h2: base.h1 })).toMatch(/пересекаться/);
   });
 
   it('derivePublicKey совпадает с ключом из generateKeyPair', () => {
