@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { X, Server, Key, Lock, Shield } from 'lucide-react';
 import { api } from '../api';
+import { AmneziaImportPanel } from './AmneziaImportPanel';
 import type { Server as ServerType, ServerUpdate } from '../types';
 
 interface AddServerModalProps {
@@ -10,6 +11,8 @@ interface AddServerModalProps {
   /** Если задан — окно работает в режиме редактирования */
   editingServer?: ServerType | null;
   onServerUpdated?: (server: ServerType) => void;
+  /** Серверы импортированы из AmneziaVPN — список нужно перезагрузить */
+  onImported?: () => void;
 }
 
 export const AddServerModal: React.FC<AddServerModalProps> = ({
@@ -18,7 +21,9 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
   onServerAdded,
   editingServer = null,
   onServerUpdated,
+  onImported,
 }) => {
+  const [mode, setMode] = useState<'manual' | 'amnezia'>('manual');
   const [name, setName] = useState('');
   const [host, setHost] = useState('');
   const [sshPort, setSshPort] = useState('22');
@@ -49,6 +54,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
     setSubnet(editingServer?.subnet ?? '10.8.0.1/24');
     setResetHostKey(false);
     setError(null);
+    setMode('manual');
   }, [isOpen, editingServer]);
 
   if (!isOpen) return null;
@@ -128,6 +134,26 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
         </div>
 
         {/* Form */}
+        {!editing && (
+          <div className="px-6 pt-4">
+            <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-950 border border-zinc-800 rounded-xl">
+              {(['manual', 'amnezia'] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setMode(m)}
+                  className={`py-1.5 text-xs font-medium rounded-lg transition ${mode === m ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white'}`}
+                >
+                  {m === 'manual' ? 'Вручную (SSH)' : 'Из AmneziaVPN (ключ)'}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!editing && mode === 'amnezia' ? (
+          <AmneziaImportPanel onImported={() => onImported?.()} onClose={onClose} />
+        ) : (
         <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
           {error && (
             <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">
@@ -315,6 +341,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
             </button>
           </div>
         </form>
+        )}
       </div>
     </div>
   );

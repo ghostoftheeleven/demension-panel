@@ -278,3 +278,12 @@ export interface RemotePanel {
   node_count: number;
   client_count: number;
 }
+
+export interface AmneziaImportResult {
+  key: string;
+  name?: string;
+  serverId?: number;
+  status: 'adopted' | 'needs_install' | 'ssh_error' | 'exists' | 'invalid';
+  message: string;
+  importedPeers?: number;
+}

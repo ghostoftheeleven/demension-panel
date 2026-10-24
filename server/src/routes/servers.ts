@@ -7,6 +7,7 @@ import { encryptSecret } from '../services/secrets.service.js';
 import { asyncHandler, HttpError, parseId } from '../utils/http.js';
 import { isValidHost, isValidPort, parseSubnet } from '../utils/net.js';
 import { LATEST_AWG_VERSION, paramsFromRow, paramsToColumns } from '../utils/awg-params.js';
+import { AmneziaKeyError, decodeAmneziaKey, splitAmneziaKeys } from '../utils/amnezia-key.js';
 
 export const serversRouter = Router();
 
@@ -132,11 +133,29 @@ serversRouter.post('/', (req, res) => {
   const sshPassword = typeof body.ssh_password === 'string' && body.ssh_password ? body.ssh_password : null;
   if (!sshKey && !sshPassword) throw new HttpError(400, 'Укажите SSH-пароль или приватный ключ');
 
-  // Generate randomized AmneziaWG obfuscation parameters
+  const id = insertServer({ name, host, sshPort, sshUser, sshPassword, sshKey, awgPort, subnet });
+  res.status(201).json(serializeServer(selectServerWithCounts(id)));
+});
+
+interface NewServer {
+  name: string;
+  host: string;
+  sshPort: number;
+  sshUser: string;
+  sshPassword: string | null;
+  sshKey: string | null;
+  awgPort: number;
+  subnet: string;
+}
+
+/**
+ * Запись нового (ещё не установленного) сервера с ключами и параметрами актуальной версии AmneziaWG.
+ * При подключении уже установленного AmneziaWG сканер заменит их фактическими значениями с ноды.
+ */
+function insertServer(s: NewServer): number {
   const params = AwgService.generateRandomParams();
   const keyPair = AwgService.generateKeyPair();
   const psk = AwgService.generatePresharedKey();
-
   const columns = paramsToColumns(params);
   const result = db.prepare(`
     INSERT INTO servers (
@@ -145,13 +164,87 @@ serversRouter.post('/', (req, res) => {
       ${Object.keys(columns).join(', ')}
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'uninstalled', ${Object.keys(columns).map(() => '?').join(', ')})
   `).run(
-    name, host, sshPort, sshUser, encryptSecret(sshPassword), encryptSecret(sshKey),
-    awgPort, subnet, keyPair.publicKey, keyPair.privateKey, psk,
+    s.name, s.host, s.sshPort, s.sshUser, encryptSecret(s.sshPassword), encryptSecret(s.sshKey),
+    s.awgPort, s.subnet, keyPair.publicKey, keyPair.privateKey, psk,
     ...(Object.values(columns) as any[])
   );
+  return Number(result.lastInsertRowid);
+}
 
-  res.status(201).json(serializeServer(selectServerWithCounts(Number(result.lastInsertRowid))));
-});
+const MAX_IMPORT_KEYS = 50;
+
+/**
+ * POST /import-amnezia { keys: "vpn://… vpn://…" } — перенос серверов из AmneziaVPN по ключам «полного доступа».
+ * Для каждого ключа: SSH-доступ из ключа → новый сервер → сканирование → подключение работающего
+ * AmneziaWG без переустановки (ключи, параметры, клиенты). Если AmneziaWG не найден, сервер остаётся
+ * неустановленным, и его можно установить из панели.
+ */
+serversRouter.post('/import-amnezia', asyncHandler(async (req, res) => {
+  const keys = splitAmneziaKeys(String(req.body?.keys ?? ''));
+  if (keys.length === 0) throw new HttpError(400, 'Вставьте один или несколько ключей AmneziaVPN (vpn://…)');
+  if (keys.length > MAX_IMPORT_KEYS) throw new HttpError(400, `Не больше ${MAX_IMPORT_KEYS} ключей за раз`);
+
+  const results: any[] = [];
+  for (const [index, key] of keys.entries()) {
+    const label = `Ключ ${index + 1}`;
+    let access;
+    try {
+      access = decodeAmneziaKey(key);
+    } catch (err: any) {
+      results.push({ key: label, status: 'invalid', message: err instanceof AmneziaKeyError ? err.message : 'Не удалось прочитать ключ' });
+      continue;
+    }
+
+    const name = access.description || access.host;
+    if (!isValidHost(access.host) || !isValidPort(access.port)) {
+      results.push({ key: label, name, status: 'invalid', message: 'В ключе некорректный адрес или SSH-порт сервера' });
+      continue;
+    }
+    const existing = db.prepare('SELECT id FROM servers WHERE host = ? AND remote_panel_id IS NULL').get(access.host) as any;
+    if (existing) {
+      results.push({ key: label, name, status: 'exists', serverId: existing.id, message: 'Сервер с этим адресом уже есть в панели' });
+      continue;
+    }
+
+    let sshUser: string;
+    try {
+      sshUser = validateSshUser(access.username);
+    } catch {
+      results.push({ key: label, name, status: 'invalid', message: 'В ключе некорректное имя SSH-пользователя' });
+      continue;
+    }
+
+    const id = insertServer({
+      name: validateName(name),
+      host: access.host,
+      sshPort: access.port,
+      sshUser,
+      sshPassword: access.password,
+      sshKey: access.privateKey,
+      awgPort: 51820,
+      subnet: '10.8.0.1/24',
+    });
+
+    try {
+      const scan = await ProvisionService.scanAndAdopt(id);
+      results.push({
+        key: label,
+        name,
+        serverId: id,
+        status: scan.found ? 'adopted' : 'needs_install',
+        message: scan.found
+          ? scan.message
+          : `${scan.message}.${access.containers.length ? ` Протоколы в AmneziaVPN: ${access.containers.join(', ')}.` : ''}`,
+        importedPeers: scan.adopted?.importedPeers ?? 0,
+      });
+    } catch (err: any) {
+      db.prepare("UPDATE servers SET last_error = ? WHERE id = ?").run(err.message, id);
+      results.push({ key: label, name, serverId: id, status: 'ssh_error', message: `Сервер добавлен, но подключиться по SSH не удалось: ${err.message}` });
+    }
+  }
+
+  res.json({ results });
+}));
 
 // PUT update server
 serversRouter.put('/:id', (req, res) => {

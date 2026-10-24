@@ -355,6 +355,7 @@ export const App: React.FC = () => {
         }}
         onServerAdded={handleServerAdded}
         onServerUpdated={handleServerUpdated}
+        onImported={loadData}
       />
 
       <InstallLogsModal

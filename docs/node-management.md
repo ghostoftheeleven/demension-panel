@@ -1,0 +1,87 @@
+# Управление нодами
+
+Весь код — `server/src/services/provision.service.ts`, SSH — `ssh.service.ts`, скрипт развёртывания —
+`server/src/scripts/deploy-awg.sh`.
+
+## Модель контейнера
+
+Нода описывается полями сервера `container_name`, `iface`, `conf_path`, `awg_tool`, `managed_by`.
+
+| Тип | container_name | iface | conf_path | awg_tool | Где конфиг |
+|---|---|---|---|---|---|
+| Контейнер панели (`demension`) | `amnezia-awg` | `awg0` | `/opt/amnezia/awg/awg0.conf` | `awg` | На хосте, смонтирован в контейнер |
+| Приложение Amnezia, AWG (`amnezia`) | `amnezia-awg2` или `amnezia-awg` | `awg0` | `/opt/amnezia/awg/awg0.conf` | `awg` | Внутри контейнера |
+| Приложение Amnezia, legacy (`amnezia`) | `amnezia-awg` | `wg0` | `/opt/amnezia/awg/wg0.conf` | `wg` | Внутри контейнера |
+
+Конфиг всегда пишется через `docker exec -i <container> sh -c 'cat > conf.new && mv conf.new conf'` — это работает
+для обоих случаев. Не используйте SFTP и `/tmp` на хосте (раньше там оставались приватные ключи).
+
+Для не-root SSH-пользователя команды выполняются через `sudo -n` (нужен NOPASSWD).
+
+## Очередь операций
+
+`runExclusive(serverId, fn)` — все операции одной ноды выполняются последовательно. `requestSync` объединяет
+повторные запросы, пока синхронизация не началась (`pendingSync`). Установка помечается в `installing` и не может
+запускаться параллельно.
+
+## Установка (`installServer` → `doInstall`)
+
+1. Генерируются (если нет) ключ сервера и PSK; публичный ключ вычисляется локально (`derivePublicKey`).
+2. Полный конфиг (интерфейс + все активные пиры из БД) кодируется в base64 и передаётся в `deploy-awg.sh` вместе с
+   `AWG_PORT`, `AWG_NETWORK` (адрес сети для NAT), `AWG_IMAGE` (`amneziavpn/amneziawg-go:latest`),
+   `REPLACE_CONTAINER` (имя чужого контейнера, который нужно удалить), `PANEL_IP` (из `SSH_CLIENT`, для `ignoreip`).
+3. Скрипт передаётся **через stdin** (`bash -c 'script=$(cat); exec bash -c "$script"'`) и не сохраняется на диске.
+4. Скрипт: проверка x86_64 → Docker (apt / репозиторий Docker CE для EL / get.docker.com) → `ip_forward` →
+   `docker pull` → `awg0.conf` и `demension.env` → `start.sh` (POSIX sh, идемпотентные правила iptables, NAT по
+   `AWG_NETWORK`, корректная обработка SIGTERM) → контейнер с `--cap-add NET_ADMIN --device /dev/net/tun` →
+   открытие UDP-порта в ufw/firewalld → fail2ban (порт из `sshd -T`, backend auto/systemd, `ignoreip` с IP панели) →
+   ожидание интерфейса до 20 с.
+5. Успех определяется по маркеру `---DEMENSION_OK---` и коду 0. После успеха сервер становится `managed_by =
+   demension`, `deployed_port = awg_port`.
+
+Переустановка **сохраняет клиентов** (они есть в конфиге из БД). Подключённый ранее контейнер Amnezia заменяется
+контейнером панели с теми же ключами — выданные конфиги продолжают работать.
+
+## Синхронизация пиров (`requestSync` → `doSync`)
+
+Пишет полный конфиг и выполняет `awg-quick strip … | awg syncconf <iface>` внутри контейнера (без разрыва соединений).
+Если на сервере `needs_apply`, вместо этого выполняется применение. При ошибке `needs_sync` остаётся, и фоновый опрос
+повторит попытку, когда нода ответит. Для нод партнёра `requestSync` вызывает `FederationClient.requestSync`.
+
+## Применение параметров (`requestApply` → `doApply`)
+
+`syncconf` не меняет обфускацию, поэтому: конфиг + `docker restart <container>`. Для контейнера панели также
+перезаписывается `demension.env`. Если `deployed_port !== awg_port` — полная переустановка. Вызывается при изменении
+параметров (PUT, randomize).
+
+Переход 1.x → 3.x (`POST /servers/:id/upgrade-protocol`): новые параметры + `requestReinstall` (свежий образ).
+При неудаче параметры откатываются, чтобы подписки не раздавали несовместимые конфиги.
+
+## Сканирование и подключение без переустановки (`scanAndAdopt`)
+
+Вызывается автоматически после добавления сервера (клиент `App.handleServerAdded`), кнопкой «Сканировать» и при
+импорте ключей AmneziaVPN.
+
+1. `detectContainers`: одной SSH-командой перебирает `docker ps -a`, берёт контейнеры, у которых имя или образ
+   содержит `amnezia-awg`/`amneziawg`; для работающих читает `awg0.conf` или `wg0.conf`, определяет утилиту
+   (`awg`/`wg`), читает `clientsTable` (имена клиентов Amnezia), отмечает контейнер панели (есть `demension.env`).
+   Вывод размечен маркерами `---CONTAINER/---CONF/---TOOL/---CLIENTS/---DEMENSION` (`parseScanOutput`).
+2. Выбирается контейнер панели, иначе первый работающий с конфигом.
+3. `parseServerConfig` извлекает ключ, адрес, порт, параметры (версия 3, если есть S3/S4/HPK/диапазоны H) и пиры.
+4. `adoptConfig` в транзакции: обновляет сервер фактическими значениями (порт, подсеть, ключи, параметры, поля
+   контейнера, `deployed_port`, статус `online`) и добавляет пиры как клиентов `external = 1` (пропуская известные
+   ключи и занятые IP).
+
+**Важно:** после подключения контейнера Amnezia клиентами нужно управлять только из панели — изменения, сделанные в
+приложении Amnezia, будут перезаписаны при синхронизации (инвариант 10 в AGENTS.md).
+
+## Мониторинг (`fetchServerStats`, `applyDump`)
+
+`docker exec <container> <tool> show <iface> dump` раз в 30 с. Ненулевой код или ошибка SSH → `fail_count + 1`,
+после 3 подряд — `offline`. Несовпадение ключа хоста → `error` без повторов. При успехе — `online`, и если были
+`needs_sync`/`needs_apply` или нода вернулась из offline, запускается досинхронизация. Трафик накапливается дельтами.
+
+## Удаление
+
+`DELETE /servers/:id?teardown=1` удаляет контейнер на ноде (и `/opt/amnezia/awg` для контейнера панели).
+При ошибке — 502, если не передан `force=1`. Без teardown VPN на ноде продолжает работать.

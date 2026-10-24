@@ -16,6 +16,7 @@ import type {
   PartnerClient,
   PartnerAuditEntry,
   RemotePanel,
+  AmneziaImportResult,
 } from '../types';
 
 const API_BASE = '/api';
@@ -156,6 +157,13 @@ export const api = {
     const res = await fetchWithAuth(`${API_BASE}/servers/${id}/sync`, { method: 'POST' });
     if (res.ok) return res.json();
     return { success: false, error: await errorMessage(res, 'Ошибка синхронизации') };
+  },
+
+  /**
+   * Импорт серверов из AmneziaVPN по ключам полного доступа (vpn://…)
+   */
+  importAmneziaKeys(keys: string): Promise<{ results: AmneziaImportResult[] }> {
+    return request(`${API_BASE}/servers/import-amnezia`, { method: 'POST', ...json({ keys }) }, 'Ошибка импорта из AmneziaVPN');
   },
 
   scanServer(id: number): Promise<ScanResult> {
