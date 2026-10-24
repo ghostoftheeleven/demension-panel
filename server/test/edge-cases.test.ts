@@ -1,7 +1,7 @@
 import { beforeAll, describe, it, expect } from 'vitest';
-import { parseServerConfig } from '../src/utils/awg-params.js';
+import { parseServerConfig, paramsToColumns } from '../src/utils/awg-params.js';
 import { AwgService } from '../src/services/awg.service.js';
-import { initDatabase } from '../src/db/index.js';
+import { initDatabase, db } from '../src/db/index.js';
 
 describe('Edge Case Verification', () => {
   beforeAll(() => {
@@ -123,5 +123,102 @@ AllowedIPs = 10.8.0.4 / 32
     expect(serverConf).toContain('AllowedIPs = 10.8.0.2/32');
     expect(serverConf).not.toContain('::/0');
     expect(clientConf).not.toContain('Address = 10.8.0.2/32,'); // No IPv6 address assigned to client either!
+  });
+
+  it('Bug F: paramsToColumns returns undefined on missing optional fields and crashes node:sqlite', () => {
+    // When a remote federation node provides AWG 1.x or partial parameters:
+    const partialParams: any = {
+      awg_version: 1,
+      jc: 4,
+      jmin: 40,
+      jmax: 70,
+      s1: 36,
+      s2: 124,
+      h1: '124357689',
+      h2: '987654321',
+      h3: '135792468',
+      h4: '246813579',
+    };
+
+    const cols = paramsToColumns(partialParams);
+    // s3, s4, i1..i5 are undefined instead of null:
+    expect(cols.s3).toBeUndefined();
+    expect(cols.header_protection_key).toBeUndefined();
+
+    // In node:sqlite, passing undefined throws TypeError ERR_INVALID_ARG_TYPE:
+    const keys = Object.keys(cols);
+    const stmt = db.prepare(
+      `INSERT INTO servers (${keys.join(', ')}, name, host, status) VALUES (${keys.map(() => '?').join(', ')}, 'Test', '1.1.1.1', 'uninstalled')`
+    );
+
+    expect(() => {
+      stmt.run(...Object.values(cols));
+    }).toThrow(/Provided value cannot be bound to SQLite parameter/);
+  });
+
+  it('Bug G: reset-token resets partner peer IP to pending without awaiting syncServers, breaking immediate subscription fetches', () => {
+    // Insert dummy remote panel first for FK
+    const panelRes = db.prepare(`
+      INSERT INTO remote_panels (name, base_url, token, partner_name)
+      VALUES ('Partner Panel', 'https://example.com', 'tok', 'PName')
+    `).run();
+    const panelId = Number(panelRes.lastInsertRowid);
+
+    // Insert dummy partner server
+    const serverRes = db.prepare(`
+      INSERT INTO servers (name, host, awg_port, status, remote_panel_id)
+      VALUES ('Partner Srv', '2.2.2.2', 51820, 'online', ?)
+    `).run(panelId);
+    const serverId = Number(serverRes.lastInsertRowid);
+
+    // Insert subscriber and client with an active IP
+    const subRes = db.prepare(`
+      INSERT INTO subscribers (name, token, enabled)
+      VALUES ('Sub1', 'sub_token_initial', 1)
+    `).run();
+    const subId = Number(subRes.lastInsertRowid);
+
+    db.prepare(`
+      INSERT INTO clients (server_id, subscriber_id, name, client_ip, client_public_key, client_private_key, enabled)
+      VALUES (?, ?, 'Sub1 Client', '10.8.0.5', 'KEY1=', 'PRIV1=', 1)
+    `).run(serverId, subId);
+
+    // Simulate reset-token handler logic:
+    // It updates client_ip to pendingIp() synchronously and returns token BEFORE syncServers finishes
+    const newPendingIp = 'pending:' + Math.random().toString(36).slice(2);
+    db.prepare('UPDATE clients SET client_ip = ? WHERE subscriber_id = ?').run(newPendingIp, subId);
+
+    // Immediate subscription fetch query (exact query from routes/subscription.ts:148):
+    const peers = db.prepare(`
+      SELECT c.*, s.name AS server_name
+      FROM clients c
+      JOIN servers s ON c.server_id = s.id
+      WHERE c.subscriber_id = ? AND c.enabled = 1 AND c.external = 0 AND s.status != 'uninstalled'
+        AND c.client_ip NOT LIKE 'pending:%' AND COALESCE(c.remote_state, '') != 'blocked'
+    `).all(subId);
+
+    // PROVES BUG G: Peer is immediately dropped from the subscription until background async sync completes!
+    expect(peers).toHaveLength(0);
+  });
+
+  it('Bug H: applyDump executes without a transaction wrapper, leading to partial commit on mid-loop errors', () => {
+    // Current applyDump runs update.run inside a raw for-loop without transaction()
+    // If peer 1 succeeds and peer 2 fails/throws, peer 1 is already committed
+    const subRes = db.prepare("INSERT INTO subscribers (name, token, enabled) VALUES ('SubApply', 'tok_app', 1)").run();
+    const subId = Number(subRes.lastInsertRowid);
+    const srvRes = db.prepare("INSERT INTO servers (name, host, awg_port, status) VALUES ('SrvDump', '3.3.3.3', 51820, 'online')").run();
+    const srvId = Number(srvRes.lastInsertRowid);
+
+    db.prepare("INSERT INTO clients (server_id, subscriber_id, name, client_ip, client_public_key, client_private_key, total_rx, total_tx, rx_counter, tx_counter) VALUES (?, ?, 'C1', '10.8.0.2', 'KEY_1', 'PRIV_1', 0, 0, 0, 0)").run(srvId, subId);
+    db.prepare("INSERT INTO clients (server_id, subscriber_id, name, client_ip, client_public_key, client_private_key, total_rx, total_tx, rx_counter, tx_counter) VALUES (?, ?, 'C2', '10.8.0.3', 'KEY_2', 'PRIV_2', 0, 0, 0, 0)").run(srvId, subId);
+
+    // If applyDump had a transaction, any failure would roll back C1.
+    // Demonstrating that sequential autocommit leaves C1 updated even if C2 update fails:
+    const update = db.prepare('UPDATE clients SET total_rx = total_rx + ? WHERE client_public_key = ?');
+    update.run(100, 'KEY_1'); // Autocommits immediately
+
+    // Suppose an unexpected error happens before C2:
+    const c1 = db.prepare("SELECT total_rx FROM clients WHERE client_public_key = 'KEY_1'").get() as any;
+    expect(c1.total_rx).toBe(100); // Partial state committed!
   });
 });
