@@ -11,6 +11,13 @@ set -euo pipefail
 IMAGE="demension-test-node"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+status() {
+  docker ps --filter name=demension-node --format '{{.Names}}	{{.Ports}}	{{.Status}}'
+  for node in demension-node-1 demension-node-2; do
+    if docker exec "$node" docker info >/dev/null 2>&1; then echo "$node: внутренний Docker готов"; else echo "$node: не готов"; fi
+  done
+}
+
 start() { # start имя ssh-порт udp-порт
   docker rm -f "$1" >/dev/null 2>&1 || true
   docker run -d --privileged --name "$1" -p "$2:22" -p "$3:51820/udp" "$IMAGE" >/dev/null
@@ -28,17 +35,14 @@ case "${1:-}" in
         sleep 1
       done
     done
-    "$0" status
+    status
     ;;
   down)
     docker rm -f demension-node-1 demension-node-2 >/dev/null 2>&1 || true
     echo "Тестовые ноды удалены."
     ;;
   status)
-    docker ps --filter name=demension-node --format '{{.Names}}\t{{.Ports}}\t{{.Status}}'
-    for node in demension-node-1 demension-node-2; do
-      if docker exec "$node" docker info >/dev/null 2>&1; then echo "$node: внутренний Docker готов"; else echo "$node: не готов"; fi
-    done
+    status
     ;;
   *)
     echo "Использование: $0 up|down|status" >&2
