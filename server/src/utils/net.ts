@@ -93,3 +93,30 @@ export function shellQuote(value: string | number): string {
 export function formatEndpointHost(host: string): string {
   return net.isIPv6(host) ? `[${host}]` : host;
 }
+
+/**
+ * Адрес для перенаправления HTTP → HTTPS. Хост берётся из настроенного сертификата, а не из заголовка Host:
+ * иначе запрос с произвольным Host получил бы редирект на сторонний сайт. Порт берётся из Host
+ * (HTTP и HTTPS обслуживаются на одном порту). Если безопасного хоста нет, возвращается null.
+ */
+export function httpsRedirectLocation(hostHeader: string | undefined, originalUrl: string, certDomain: string | null): string | null {
+  const domain = (certDomain || '').trim().toLowerCase();
+  if (!domain) return null;
+
+  const header = String(hostHeader || '').trim().toLowerCase();
+  const portMatch = /:(\d{1,5})$/.exec(header);
+  const port = portMatch && Number(portMatch[1]) >= 1 && Number(portMatch[1]) <= 65535 ? `:${Number(portMatch[1])}` : '';
+  const requested = (portMatch ? header.slice(0, portMatch.index) : header).replace(/^\[|\]$/g, '');
+
+  let host = domain;
+  if (domain.startsWith('*.')) {
+    // Сертификат на поддомены: подходит только имя, которое он действительно покрывает
+    if (!requested.endsWith(domain.slice(1)) || !isValidHost(requested)) return null;
+    host = requested;
+  } else if (!isValidHost(domain)) {
+    return null;
+  }
+
+  const path = originalUrl.startsWith('/') ? originalUrl : '/';
+  return `https://${formatEndpointHost(host)}${port}${path}`;
+}

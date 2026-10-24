@@ -94,6 +94,8 @@ export class AwgService {
    * Generate client .conf file string
    */
   static generateClientConfig(server: any, client: any, settings = AwgService.getClientNetworkSettings()): string {
+    // Без ключа строка PresharedKey не пишется: «PresharedKey = null» клиенты WireGuard/AmneziaWG не принимают
+    const psk = client.preshared_key || server.preshared_key;
     return `[Interface]
 Address = ${client.client_ip}/32
 DNS = ${settings.dns}
@@ -103,8 +105,7 @@ ${renderAwgLines(paramsFromRow(server), 'client')}
 
 [Peer]
 PublicKey = ${server.server_public_key}
-PresharedKey = ${client.preshared_key || server.preshared_key}
-AllowedIPs = 0.0.0.0/0, ::/0
+${psk ? `PresharedKey = ${psk}\n` : ''}AllowedIPs = 0.0.0.0/0, ::/0
 Endpoint = ${formatEndpointHost(server.host)}:${server.awg_port}
 PersistentKeepalive = 25
 `;

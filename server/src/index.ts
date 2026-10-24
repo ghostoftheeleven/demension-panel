@@ -27,6 +27,7 @@ import { ProvisionService } from './services/provision.service.js';
 import { SubscriptionService } from './services/subscription.service.js';
 import { SslService, http01Challenges } from './services/ssl.service.js';
 import { HttpError } from './utils/http.js';
+import { httpsRedirectLocation } from './utils/net.js';
 
 process.on('unhandledRejection', (reason) => {
   console.error('[FATAL?] Необработанное отклонение промиса:', reason);
@@ -71,7 +72,10 @@ app.use((req, res, next) => {
   if (req.path.startsWith('/api/')) {
     return res.status(403).json({ error: 'Панель доступна только по HTTPS', https: true });
   }
-  res.redirect(301, `https://${req.headers.host}${req.originalUrl}`);
+  // Хост редиректа — домен сертификата, а не заголовок Host (его может подставить кто угодно)
+  const location = httpsRedirectLocation(req.headers.host, req.originalUrl, SslService.getStatus().domain);
+  if (!location) return res.status(403).type('text/plain').send('Панель доступна только по HTTPS');
+  res.redirect(302, location);
 });
 
 app.use(express.json({ limit: '1mb' }));

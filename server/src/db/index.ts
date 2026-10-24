@@ -277,6 +277,24 @@ const migrations: Array<() => void> = [
     db.exec('CREATE INDEX IF NOT EXISTS idx_clients_partner ON clients(partner_id);');
     db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_servers_remote ON servers(remote_panel_id, remote_node_id);');
   },
+
+  // v6: уникальность ключа клиента на ноде и IP, с которых администратор входил в панель
+  () => {
+    // Две секции [Peer] с одним ключом перехватывают трафик друг друга. Уже существующие дубли (их ключи
+    // менять нельзя — они известны клиентам) индекс не создаётся, новые дубли отсекает проверка в коде.
+    const duplicate = db.prepare('SELECT 1 FROM clients GROUP BY server_id, client_public_key HAVING COUNT(*) > 1 LIMIT 1').get();
+    if (duplicate) {
+      console.warn('[DB] На нодах есть клиенты с одинаковым публичным ключом — уникальный индекс не создан, устраните дубли вручную');
+    } else {
+      db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_server_pubkey ON clients(server_id, client_public_key);');
+    }
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS trusted_login_ips (
+        ip TEXT PRIMARY KEY,
+        last_login_at TEXT NOT NULL
+      );
+    `);
+  },
 ];
 
 export function initDatabase() {

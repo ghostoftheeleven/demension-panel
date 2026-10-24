@@ -93,6 +93,16 @@ function validateSubnet(value: unknown): string {
   }
 }
 
+/**
+ * Два сервера с одним адресом и портом AmneziaWG управляли бы одним и тем же контейнером на ноде
+ */
+function assertEndpointFree(host: string, awgPort: number, exceptId = 0): void {
+  const duplicate = db.prepare(
+    'SELECT id FROM servers WHERE LOWER(host) = LOWER(?) AND awg_port = ? AND remote_panel_id IS NULL AND id != ?'
+  ).get(host, awgPort, exceptId);
+  if (duplicate) throw new HttpError(409, `Сервер ${host} с портом AmneziaWG ${awgPort} уже добавлен в панель`);
+}
+
 function validateKey(value: unknown): string {
   if (typeof value !== 'string' || !value.includes('PRIVATE KEY')) {
     throw new HttpError(400, 'SSH-ключ должен быть в формате PEM/OpenSSH (-----BEGIN ... PRIVATE KEY-----)');
@@ -132,6 +142,7 @@ serversRouter.post('/', (req, res) => {
   const sshKey = body.ssh_key ? validateKey(body.ssh_key) : null;
   const sshPassword = typeof body.ssh_password === 'string' && body.ssh_password ? body.ssh_password : null;
   if (!sshKey && !sshPassword) throw new HttpError(400, 'Укажите SSH-пароль или приватный ключ');
+  assertEndpointFree(host, awgPort);
 
   const id = insertServer({ name, host, sshPort, sshUser, sshPassword, sshKey, awgPort, subnet });
   res.status(201).json(serializeServer(selectServerWithCounts(id)));
@@ -317,6 +328,13 @@ serversRouter.put('/:id', (req, res) => {
     }
   }
 
+  // Уже существующие дубли не мешают правке других полей — проверяется только смена адреса или порта
+  if (updates.host !== undefined || updates.awg_port !== undefined) {
+    const host = String(updates.host ?? server.host);
+    const awgPort = Number(updates.awg_port ?? server.awg_port);
+    if (host.toLowerCase() !== String(server.host).toLowerCase() || awgPort !== server.awg_port) assertEndpointFree(host, awgPort, id);
+  }
+
   const keys = Object.keys(updates);
   if (keys.length > 0) {
     db.prepare(`UPDATE servers SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`).run(
@@ -425,6 +443,7 @@ serversRouter.post('/:id/upgrade-protocol', asyncHandler(async (req, res) => {
   const params: AwgParams = {
     ...AwgService.generateRandomParams(LATEST_AWG_VERSION),
     i1: current.i1, i2: current.i2, i3: current.i3, i4: current.i4, i5: current.i5,
+    extra_params: current.extra_params,
   };
   const columns = paramsToColumns(params);
   db.prepare(`UPDATE servers SET ${Object.keys(columns).map((k) => `${k} = ?`).join(', ')} WHERE id = ?`).run(

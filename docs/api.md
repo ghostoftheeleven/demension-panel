@@ -20,7 +20,7 @@ HTTP-кодом. Тела — JSON.
 | Метод | Путь | Описание |
 |---|---|---|
 | GET | `/`, `/:id` | Серверы (без секретов; `has_ssh_password`, `has_ssh_key`, параметры AWG, `remote_panel_name`…) |
-| POST | `/` | Создать: `name, host, ssh_port, ssh_user, ssh_password \| ssh_key, awg_port, subnet` |
+| POST | `/` | Создать: `name, host, ssh_port, ssh_user, ssh_password \| ssh_key, awg_port, subnet`. 409, если сервер с таким хостом и портом AmneziaWG уже есть (то же при смене хоста/порта в PUT) |
 | POST | `/import-amnezia` | `{keys}` — импорт по ключам AmneziaVPN, см. [amnezia-import.md](amnezia-import.md) |
 | PUT | `/:id` | Изменить: имя/хост/SSH (`auth_type` + секрет), `reset_host_key`, порт, подсеть, параметры AWG |
 | DELETE | `/:id?teardown=1&force=1` | Удалить (опционально с контейнером на ноде) |

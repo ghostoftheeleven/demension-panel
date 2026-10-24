@@ -18,3 +18,4 @@ if (password.length < MIN_PASSWORD_LENGTH) {
 initDatabase();
 AuthService.resetAdmin(username, password);
 console.log(`Учётные данные администратора "${username}" обновлены, все сессии завершены.`);
+console.log('Если вход заблокирован из-за неудачных попыток, счётчики сбросятся после перезапуска службы: systemctl restart demension');

@@ -67,6 +67,7 @@ export function buildClashConfig(entries: { name: string; server: any; client: a
     let unique = name;
     for (let i = 2; used.has(unique); i++) unique = `${name} ${i}`;
     used.add(unique);
+    const psk = client.preshared_key || server.preshared_key;
     return {
       name: unique,
       type: 'wireguard',
@@ -75,7 +76,9 @@ export function buildClashConfig(entries: { name: string; server: any; client: a
       ip: `${client.client_ip}/32`,
       'private-key': client.client_private_key,
       'public-key': server.server_public_key,
-      'pre-shared-key': client.preshared_key || server.preshared_key,
+      // null в pre-shared-key ломает разбор профиля в mihomo — без ключа поле не добавляется
+      ...(psk ? { 'pre-shared-key': psk } : {}),
+      // ::/0 оставлен намеренно: IPv6-трафик клиента не должен идти мимо туннеля (утечка адреса)
       'allowed-ips': ['0.0.0.0/0', '::/0'],
       mtu,
       udp: true,

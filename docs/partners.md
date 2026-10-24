@@ -34,7 +34,7 @@
 | GET | `/nodes` | `{nodes: [{id, name, host, port, public_key, status, params}], limits}` — `params` как `AwgParams` |
 | GET | `/peers` | `{peers: [{id, node_id, name, remote_ref, public_key, client_ip, preshared_key, enabled, owner_blocked, total_rx, total_tx, last_handshake}]}` |
 | POST | `/peers` | `{node_id, public_key, name, remote_ref?, enabled?}` → `{peer, node}`. Повтор с тем же `remote_ref` возвращает существующего клиента (идемпотентно). Проверки: нода доступна и установлена, партнёр не приостановлен, лимит клиентов, уникальность ключа |
-| PATCH | `/peers/:id` | `{enabled?, name?}` — `owner_blocked` партнёр снять не может |
+| PATCH | `/peers/:id` | `{enabled?, name?}` — `owner_blocked` партнёр снять не может: `enabled` сохраняется как его желание, но заблокированный владельцем клиент остаётся выключенным на ноде (`owner_blocked` в ответе), пока блокировку не снимет владелец |
 | DELETE | `/peers/:id` | Удаление клиента |
 
 `limits = {max_clients, traffic_limit, expire_at, suspended, usage: {clients, upload, download, used}}`.
@@ -54,7 +54,9 @@
 2. Для клиентов без `remote_peer_id` — `POST /peers` с `remote_ref = id клиента`; ответ заполняет `remote_peer_id`,
    `client_ip`, `preshared_key`. Ошибка (например, лимит) → `remote_state = 'error: …'`, повтор в следующий раз.
 3. `GET /peers`: обновление трафика (абсолютные значения владельца), `last_handshake`, `remote_state = 'blocked'`;
-   выравнивание `enabled` (желаемое = клиент включён и подписчик активен) через `PATCH`; пиры, которых нет локально,
+   выравнивание `enabled` (желаемое = клиент включён и подписчик активен) и имени (переименование клиента или пользователя
+   у получателя) через `PATCH`; имя приводится к виду владельца (без переводов строк, до 64 символов — `normalizePeerName`),
+   включение заблокированного владельцем клиента не отправляется; пиры, которых нет локально,
    удаляются (`DELETE`); локальные клиенты, пропавшие у владельца, сбрасываются в `pending:` и будут созданы заново.
 4. 401/403 → панель `revoked`, её ноды `uninstalled`.
 

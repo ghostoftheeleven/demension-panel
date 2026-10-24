@@ -19,6 +19,7 @@ SQLite (`node:sqlite`, Node ≥ 22.13), файл `data/demension.db`, режим
 | v3 | `servers.sub_name`, `sub_order` (имена/порядок в подписке) |
 | v4 | Параметры AWG 3.x, поля контейнера (`container_name`, `iface`, `conf_path`, `awg_tool`, `managed_by`), `clients.external` |
 | v5 | Партнёрский доступ: `partners`, `partner_nodes`, `partner_audit`, `remote_panels`; поля клиентов/серверов для партнёров |
+| v6 | Уникальный индекс `idx_clients_server_pubkey` (ключ клиента на ноде; не создаётся, если дубли уже есть — предупреждение в логе), таблица `trusted_login_ips` |
 
 ## Таблицы
 
@@ -46,7 +47,7 @@ SQLite (`node:sqlite`, Node ≥ 22.13), файл `data/demension.db`, режим
 |---|---|
 | `server_id`, `subscriber_id` | Нода; пользователь-подписчик (NULL — отдельный клиент) |
 | `client_ip` | Уникален в пределах сервера (`idx_clients_server_ip`). `pending:<uuid>` — клиент на ноде партнёра ещё не создан у владельца |
-| `client_public_key`, `client_private_key` | Приватный пуст (`''`) у импортированных и у клиентов партнёра на нашей ноде |
+| `client_public_key`, `client_private_key` | Публичный уникален в пределах сервера (`idx_clients_server_pubkey`). Приватный пуст (`''`) у импортированных и у клиентов партнёра на нашей ноде |
 | `preshared_key` | PSK пира |
 | `enabled` | Включён самим владельцем клиента |
 | `total_rx`, `total_tx`, `rx_counter`, `tx_counter` | Накопленный трафик и последние значения счётчиков интерфейса |
@@ -68,6 +69,7 @@ SQLite (`node:sqlite`, Node ≥ 22.13), файл `data/demension.db`, режим
 (`pending`/`online`/`error`/`revoked`), `limits` (JSON), `last_sync_at`, `last_error`.
 
 ### Прочее
-- `admins` — администратор (scrypt), `sessions` — SHA-256 токенов с `expires_at`.
+- `admins` — администратор (scrypt), `sessions` — SHA-256 токенов с `expires_at`, `trusted_login_ips` — IP успешных входов
+  администратора (исключение из блокировки по логину, см. [security.md](security.md)).
 - `settings` — ключ/значение: `ssl_*`, `cf_token` (**зашифрован**), `public_url`, `client_dns`, `client_mtu`,
   `sub_*` (оформление подписки).

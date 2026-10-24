@@ -292,25 +292,26 @@ export function paramsFromRow(row: any): AwgParams {
  * Значения для записи в таблицу servers
  */
 export function paramsToColumns(p: AwgParams): Record<string, string | number | null> {
+  // Параметры нод партнёра приходят из JSON чужой панели: отсутствующие ключи (undefined) node:sqlite привязать не может
   return {
-    awg_version: p.awg_version,
+    awg_version: p.awg_version ?? 1,
     jc: p.jc,
     jmin: p.jmin,
     jmax: p.jmax,
     s1: p.s1,
     s2: p.s2,
-    s3: p.s3,
-    s4: p.s4,
+    s3: p.s3 ?? null,
+    s4: p.s4 ?? null,
     h1: p.h1,
     h2: p.h2,
     h3: p.h3,
     h4: p.h4,
-    i1: p.i1,
-    i2: p.i2,
-    i3: p.i3,
-    i4: p.i4,
-    i5: p.i5,
-    header_protection_key: p.header_protection_key,
+    i1: p.i1 ?? null,
+    i2: p.i2 ?? null,
+    i3: p.i3 ?? null,
+    i4: p.i4 ?? null,
+    i5: p.i5 ?? null,
+    header_protection_key: p.header_protection_key ?? null,
     extra_params: Object.keys(p.extra_params || {}).length ? JSON.stringify(p.extra_params) : null,
   };
 }
@@ -331,6 +332,18 @@ export interface ParsedServerConfig {
   listenPort: number;
   params: AwgParams;
   peers: ParsedPeer[];
+}
+
+/**
+ * Адрес клиента из AllowedIPs: одиночный IPv4 с маской /32 или без маски (wg-quick считает его /32),
+ * допустимы пробелы вокруг слэша
+ */
+function parsePeerIp(allowedIps: string | undefined): string | null {
+  for (const item of (allowedIps || '').split(',')) {
+    const match = /^(\d{1,3}(?:\.\d{1,3}){3})(?:\s*\/\s*32)?$/.exec(item.trim());
+    if (match && match[1].split('.').every((octet) => Number(octet) <= 255)) return match[1];
+  }
+  return null;
 }
 
 export function parseServerConfig(text: string): ParsedServerConfig {
@@ -400,7 +413,7 @@ export function parseServerConfig(text: string): ParsedServerConfig {
       .map((p: any) => ({
         publicKey: p.publickey,
         presharedKey: p.presharedkey || null,
-        ip: (p.allowedips || '').split(',').map((s: string) => s.trim()).find((s: string) => /^\d+\.\d+\.\d+\.\d+\/32$/.test(s))?.split('/')[0] ?? null,
+        ip: parsePeerIp(p.allowedips),
       }))
       .filter((p) => p.publicKey),
   };

@@ -2,6 +2,8 @@ import crypto from 'node:crypto';
 import { db, transaction } from '../db/index.js';
 
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+/** Сколько помнится IP, с которого администратор входил (исключение из блокировки по логину) */
+const KNOWN_IP_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 export const MIN_PASSWORD_LENGTH = 8;
 
 function hashToken(token: string): string {
@@ -64,7 +66,24 @@ export class AuthService {
         db.prepare('INSERT INTO admins (username, password_hash, salt) VALUES (?, ?, ?)').run(username, hash, salt);
       }
       db.exec('DELETE FROM sessions');
+      db.exec('DELETE FROM trusted_login_ips');
     });
+  }
+
+  /**
+   * Запомнить IP успешного входа: блокировка по логину (защита от распределённого перебора) на него не действует,
+   * иначе любой мог бы закрыть администратору вход, отправив 10 неверных паролей.
+   */
+  static rememberLoginIp(ip: string): void {
+    db.prepare(`
+      INSERT INTO trusted_login_ips (ip, last_login_at) VALUES (?, ?)
+      ON CONFLICT(ip) DO UPDATE SET last_login_at = excluded.last_login_at
+    `).run(ip, new Date().toISOString());
+  }
+
+  static isKnownLoginIp(ip: string): boolean {
+    const row = db.prepare('SELECT last_login_at FROM trusted_login_ips WHERE ip = ?').get(ip) as { last_login_at: string } | undefined;
+    return Boolean(row) && Date.now() - new Date(row!.last_login_at).getTime() < KNOWN_IP_TTL_MS;
   }
 
   private static createSession(adminId: number): string {
@@ -119,6 +138,7 @@ export class AuthService {
 
   static cleanupExpiredSessions(): void {
     db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(new Date().toISOString());
+    db.prepare('DELETE FROM trusted_login_ips WHERE last_login_at <= ?').run(new Date(Date.now() - KNOWN_IP_TTL_MS).toISOString());
   }
 
   /**

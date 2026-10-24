@@ -20,6 +20,10 @@
 | JSON Incy | `?format=json` | `{"type":"amneziawg","version":1,"servers":[{"name","config":"<base64url .conf>"}]}` |
 | mihomo | `?format=clash`/`mihomo` или UA `mihomo`, `clash-meta`, `clash-verge`, `flclash`, `clashmi`, `clash.party` | JSON (валидный YAML): `proxies` (`type: wireguard` + `amnezia-wg-option`), группа `Demension`, `rules: MATCH,Demension` |
 
+В `[Peer]` строка `PresharedKey` (в mihomo — `pre-shared-key`) пишется только если у клиента или сервера есть PSK.
+`AllowedIPs = 0.0.0.0/0, ::/0` — намеренно: у нод нет IPv6, и маршрут `::/0` в туннель не даёт IPv6-трафику клиента идти
+мимо VPN (утечка реального адреса); так же настроены конфиги приложения AmneziaVPN. Не убирайте `::/0`.
+
 Клиенты с поддержкой AmneziaWG из подписки: **Incy** (iOS, Android), клиенты на ядре **mihomo** (Clash Verge Rev,
 FlClash, Mihomo Party, Clash Meta for Android). HAPP, v2rayNG, Karing AmneziaWG не поддерживают; приложения
 AmneziaWG/AmneziaVPN не умеют подписки по ссылке.

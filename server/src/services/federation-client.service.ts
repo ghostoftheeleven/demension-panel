@@ -3,6 +3,7 @@ import { db, transaction } from '../db/index.js';
 import { decryptSecret, encryptSecret } from './secrets.service.js';
 import { paramsToColumns, AwgParams } from '../utils/awg-params.js';
 import { HttpError } from '../utils/http.js';
+import { normalizePeerName } from '../utils/names.js';
 
 /**
  * Партнёрский доступ (сторона получателя): ноды другой панели хранятся как серверы с remote_panel_id,
@@ -34,6 +35,7 @@ interface RemoteNode {
 interface RemotePeer {
   id: number;
   node_id: number;
+  name: string;
   remote_ref: string | null;
   public_key: string;
   client_ip: string;
@@ -189,7 +191,7 @@ export class FederationClient {
             const { peer } = await call<{ peer: RemotePeer }>(panel, 'POST', '/peers', {
               node_id: server.remote_node_id,
               public_key: client.client_public_key,
-              name: client.name,
+              name: normalizePeerName(client.name),
               remote_ref: String(client.id),
               enabled: this.desiredEnabled(client),
             });
@@ -229,9 +231,15 @@ export class FederationClient {
         db.prepare(`
           UPDATE clients SET total_rx = ?, total_tx = ?, last_handshake = ?, client_ip = ?, remote_state = ? WHERE id = ?
         `).run(peer.total_rx, peer.total_tx, peer.last_handshake, peer.client_ip, peer.owner_blocked ? 'blocked' : null, client.id);
+        const patch: { enabled?: boolean; name?: string } = {};
         const desired = this.desiredEnabled(client);
-        if (desired !== peer.enabled) {
-          await call(panel, 'PATCH', `/peers/${peer.id}`, { enabled: desired }).catch((err) => errors.push(err.message));
+        // Заблокированного владельцем клиента включить нельзя — состояние выровняется после снятия блокировки
+        if (desired !== peer.enabled && !(desired && peer.owner_blocked)) patch.enabled = desired;
+        // Переименование у нас (клиента или пользователя) передаётся владельцу, иначе у него остаётся прежнее имя
+        const name = normalizePeerName(client.name);
+        if (name !== peer.name) patch.name = name;
+        if (Object.keys(patch).length > 0) {
+          await call(panel, 'PATCH', `/peers/${peer.id}`, patch).catch((err) => errors.push(err.message));
         }
       }
 

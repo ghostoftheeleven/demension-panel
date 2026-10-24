@@ -14,7 +14,10 @@ authRouter.post('/login', (req, res) => {
 
   const ipKey = req.ip || 'unknown';
   const userKey = username.toLowerCase();
-  const blockedMs = Math.max(loginIpLimiter.blockedFor(ipKey), loginUserLimiter.blockedFor(userKey));
+  // Блокировка по логину защищает от перебора с множества адресов, но не должна закрывать вход самому администратору:
+  // с IP, откуда он уже входил, действует только лимит по IP
+  const userBlockedMs = AuthService.isKnownLoginIp(ipKey) ? 0 : loginUserLimiter.blockedFor(userKey);
+  const blockedMs = Math.max(loginIpLimiter.blockedFor(ipKey), userBlockedMs);
   if (blockedMs > 0) {
     res.setHeader('Retry-After', Math.ceil(blockedMs / 1000));
     return res.status(429).json({
@@ -32,6 +35,7 @@ authRouter.post('/login', (req, res) => {
 
   loginIpLimiter.reset(ipKey);
   loginUserLimiter.reset(userKey);
+  if (ipKey !== 'unknown') AuthService.rememberLoginIp(ipKey);
   res.json(result);
 });
 

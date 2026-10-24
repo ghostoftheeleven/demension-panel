@@ -166,6 +166,13 @@ federationRouter.post('/peers', (req: PartnerRequest, res) => {
       ) as any;
       if (existing) {
         if (existing.client_public_key !== publicKey) {
+          // Ключ другого клиента ноды занять нельзя: две секции [Peer] с одним ключом перехватили бы его трафик
+          const taken = db.prepare('SELECT 1 FROM clients WHERE server_id = ? AND client_public_key = ? AND id != ?').get(
+            nodeId,
+            publicKey,
+            existing.id
+          );
+          if (taken) throw new HttpError(409, 'Клиент с таким ключом уже есть на ноде');
           db.prepare('UPDATE clients SET client_public_key = ?, rx_counter = 0, tx_counter = 0 WHERE id = ?').run(publicKey, existing.id);
         }
         return { client: db.prepare('SELECT * FROM clients WHERE id = ?').get(existing.id) as any, created: false };
@@ -194,7 +201,8 @@ federationRouter.post('/peers', (req: PartnerRequest, res) => {
   res.status(result.created ? 201 : 200).json({ peer: PartnerService.peerPayload(result.client), node: PartnerService.nodePayload(server) });
 });
 
-// PATCH /peers/:id — { enabled?, name? }; включить клиента, заблокированного владельцем, нельзя
+// PATCH /peers/:id — { enabled?, name? }. owner_blocked партнёру недоступен: флаг enabled сохраняется как желание партнёра,
+// но заблокированный владельцем клиент остаётся выключенным на ноде (ProvisionService.getServerClients) до снятия блокировки.
 federationRouter.patch('/peers/:id', (req: PartnerRequest, res) => {
   const client = ownPeer(req.partner, parseId(req.params.id));
   const body = req.body ?? {};

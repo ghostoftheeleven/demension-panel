@@ -7,6 +7,7 @@ import { SubscriptionService } from '../services/subscription.service.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
 import { asyncHandler, HttpError, parseId } from '../utils/http.js';
 import { pendingIp } from '../services/federation-client.service.js';
+import { subscriberPeerName } from '../utils/names.js';
 
 export const subscribersRouter = Router();
 
@@ -82,7 +83,7 @@ function addPeer(subscriberId: number, subscriberName: string, enabled: number, 
     INSERT INTO clients (
       server_id, subscriber_id, name, client_ip, client_public_key, client_private_key, preshared_key, enabled
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(server.id, subscriberId, `${subscriberName} (${server.name})`, clientIp, keyPair.publicKey, keyPair.privateKey, psk, enabled);
+  `).run(server.id, subscriberId, subscriberPeerName(subscriberName, server.name), clientIp, keyPair.publicKey, keyPair.privateKey, psk, enabled);
 }
 
 /**
@@ -172,10 +173,11 @@ subscribersRouter.put('/:id', asyncHandler(async (req, res) => {
     }
 
     if (name !== subscriber.name) {
-      db.prepare(`
-        UPDATE clients SET name = ? || ' (' || (SELECT s.name FROM servers s WHERE s.id = clients.server_id) || ')'
-        WHERE subscriber_id = ?
-      `).run(name, subscriberId);
+      const peers = db.prepare(`
+        SELECT c.id, s.name AS server_name FROM clients c JOIN servers s ON s.id = c.server_id WHERE c.subscriber_id = ?
+      `).all(subscriberId) as { id: number; server_name: string }[];
+      const rename = db.prepare('UPDATE clients SET name = ? WHERE id = ?');
+      for (const peer of peers) rename.run(subscriberPeerName(name, peer.server_name), peer.id);
     }
 
     if (targetIds) {
@@ -215,7 +217,7 @@ subscribersRouter.post('/:id/reset-traffic', (req, res) => {
 });
 
 // DELETE /api/subscribers/:id
-subscribersRouter.delete('/:id', (req, res) => {
+subscribersRouter.delete('/:id', asyncHandler(async (req, res) => {
   const subscriberId = parseId(req.params.id);
   const subscriber = db.prepare('SELECT * FROM subscribers WHERE id = ?').get(subscriberId);
   if (!subscriber) throw new HttpError(404, 'Пользователь не найден');
@@ -225,13 +227,13 @@ subscribersRouter.delete('/:id', (req, res) => {
 
   // Delete subscriber (cascades to clients)
   db.prepare('DELETE FROM subscribers WHERE id = ?').run(subscriberId);
-  syncServers(peers.map((p) => p.server_id));
+  await syncServers(peers.map((p) => p.server_id));
 
   res.json({ success: true, message: 'Пользователь и его пиры удалены' });
-});
+}));
 
 // POST /api/subscribers/:id/reset-token
-subscribersRouter.post('/:id/reset-token', (req, res) => {
+subscribersRouter.post('/:id/reset-token', asyncHandler(async (req, res) => {
   const subscriberId = parseId(req.params.id);
   const subscriber = db.prepare('SELECT * FROM subscribers WHERE id = ?').get(subscriberId);
   if (!subscriber) throw new HttpError(404, 'Пользователь не найден');
@@ -260,7 +262,8 @@ subscribersRouter.post('/:id/reset-token', (req, res) => {
       `).run(keyPair.publicKey, keyPair.privateKey, AwgService.generatePresharedKey(), peer.id);
     }
   });
-  syncServers(new Set(peers.map((p) => p.server_id)));
+  // Ноды партнёров ждём: пока владелец не выдал IP новым ключам, они не попадают в подписку
+  await syncServers(new Set(peers.map((p) => p.server_id)));
 
   res.json({ success: true, token });
-});
+}));

@@ -59,6 +59,8 @@ export interface ScanResult {
 const chains = new Map<number, Promise<unknown>>();
 // Запрошенная, но ещё не начатая синхронизация (повторные запросы объединяются)
 const pendingSync = new Map<number, Promise<OperationResult>>();
+// То же для применения параметров: каждое применение перезапускает контейнер и рвёт туннели всех клиентов
+const pendingApply = new Map<number, Promise<OperationResult>>();
 const installing = new Set<number>();
 
 function runExclusive<T>(serverId: number, fn: () => Promise<T>): Promise<T> {
@@ -356,6 +358,7 @@ export class ProvisionService {
         }
         const name = target.clientNames[peer.publicKey] || `Импорт ${peer.ip}`;
         insert.run(server.id, name.slice(0, 64), peer.ip, peer.publicKey, peer.presharedKey);
+        knownKeys.add(peer.publicKey);
         usedIps.add(peer.ip);
         imported++;
       }
@@ -558,7 +561,16 @@ export class ProvisionService {
   static requestApply(serverId: number): Promise<OperationResult> {
     if (remotePanelOf(serverId)) return Promise.resolve({ success: false, error: REMOTE_NODE_ERROR });
     db.prepare('UPDATE servers SET needs_apply = 1 WHERE id = ?').run(serverId);
-    return runExclusive(serverId, () => this.doApply(serverId));
+    // Повторные запросы до начала применения объединяются: doApply читает актуальные параметры из БД
+    const existing = pendingApply.get(serverId);
+    if (existing) return existing;
+
+    const promise = runExclusive(serverId, async () => {
+      pendingApply.delete(serverId);
+      return this.doApply(serverId);
+    });
+    pendingApply.set(serverId, promise);
+    return promise;
   }
 
   /**
@@ -699,22 +711,26 @@ export class ProvisionService {
       WHERE id = ?
     `);
 
-    // Line 0 is interface info; lines 1..N are peers:
-    // peerPublicKey psk endpoint allowedIPs latestHandshake rxBytes txBytes persistentKeepalive
-    for (let i = 1; i < lines.length; i++) {
-      const parts = lines[i].split('\t');
-      if (parts.length < 7) continue;
-      const client = select.get(serverId, parts[0]) as { id: number; rx_counter: number; tx_counter: number } | undefined;
-      if (!client) continue;
+    // Одна транзакция на весь дамп: иначе каждый UPDATE — отдельный коммит с fsync, а ошибка посреди списка оставляет
+    // часть клиентов обновлённой
+    transaction(() => {
+      // Line 0 is interface info; lines 1..N are peers:
+      // peerPublicKey psk endpoint allowedIPs latestHandshake rxBytes txBytes persistentKeepalive
+      for (let i = 1; i < lines.length; i++) {
+        const parts = lines[i].split('\t');
+        if (parts.length < 7) continue;
+        const client = select.get(serverId, parts[0]) as { id: number; rx_counter: number; tx_counter: number } | undefined;
+        if (!client) continue;
 
-      const rx = parseInt(parts[5], 10) || 0;
-      const tx = parseInt(parts[6], 10) || 0;
-      const deltaRx = rx >= client.rx_counter ? rx - client.rx_counter : rx;
-      const deltaTx = tx >= client.tx_counter ? tx - client.tx_counter : tx;
-      const handshakeEpoch = parseInt(parts[4], 10);
-      const handshake = handshakeEpoch > 0 ? new Date(handshakeEpoch * 1000).toISOString() : null;
+        const rx = parseInt(parts[5], 10) || 0;
+        const tx = parseInt(parts[6], 10) || 0;
+        const deltaRx = rx >= client.rx_counter ? rx - client.rx_counter : rx;
+        const deltaTx = tx >= client.tx_counter ? tx - client.tx_counter : tx;
+        const handshakeEpoch = parseInt(parts[4], 10);
+        const handshake = handshakeEpoch > 0 ? new Date(handshakeEpoch * 1000).toISOString() : null;
 
-      update.run(deltaRx, deltaTx, rx, tx, handshake, client.id);
-    }
+        update.run(deltaRx, deltaTx, rx, tx, handshake, client.id);
+      }
+    });
   }
 }

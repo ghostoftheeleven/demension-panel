@@ -133,6 +133,17 @@ export class SshService {
           return reject(err);
         }
 
+        // Ошибка канала без слушателя завершила бы весь процесс панели (Unhandled 'error' event)
+        const failChannel = (channelErr: Error) => {
+          if (settled) return;
+          settled = true;
+          if (timer) clearTimeout(timer);
+          conn.end();
+          reject(channelErr);
+        };
+        stream.on('error', failChannel);
+        stream.stderr.on('error', failChannel);
+
         stream
           .on('close', (code: number | null) => {
             if (timer) clearTimeout(timer);
