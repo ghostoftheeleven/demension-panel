@@ -19,6 +19,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/** Перед установкой панель сканирует сервер (защита чужого контейнера); это отдельный вызов SSH без скрипта развёртывания */
+const isScan = (command: string) => command.includes('docker ps -a --format');
+const deployed = (calls: { command: string; input?: string }[]) => calls.filter((c) => !isScan(c.command));
+
 const dumpLine = (key: string, rx: number, tx: number) => `${key}\t(none)\t1.2.3.4:5\t10.8.0.2/32\t1700000000\t${rx}\t${tx}\toff`;
 
 describe('синхронизация пиров (doSync)', () => {
@@ -134,8 +138,8 @@ describe('применение параметров (doApply)', () => {
     const result = await ProvisionService.requestApply(serverId);
 
     expect(result.success).toBe(true);
-    expect(ssh.calls).toHaveLength(1);
-    expect(ssh.calls[0].input).toContain("export AWG_PORT='51840'");
+    expect(deployed(ssh.calls)).toHaveLength(1);
+    expect(deployed(ssh.calls)[0].input).toContain("export AWG_PORT='51840'");
     expect(getServer(serverId)).toMatchObject({ deployed_port: 51840, status: 'online' });
   });
 
@@ -174,7 +178,7 @@ describe('установка (doInstall)', () => {
     const result = await ProvisionService.installServer(serverId, (chunk) => logs.push(chunk));
 
     expect(result).toEqual({ success: true });
-    const script = ssh.calls[0].input!;
+    const script = deployed(ssh.calls)[0].input!;
     expect(script).toContain("export AWG_PORT='51850'");
     expect(script).toContain("export AWG_NETWORK='10.7.0.0/24'");
     expect(script).toContain("export AWG_IMAGE='amneziavpn/amneziawg-go:latest'");
@@ -183,7 +187,7 @@ describe('установка (doInstall)', () => {
     const conf = Buffer.from(encoded, 'base64').toString('utf-8');
     expect(conf).toContain('ListenPort = 51850');
     expect(conf).toContain(client.publicKey);
-    expect(ssh.calls[0].command).toContain('PANEL_IP=');
+    expect(deployed(ssh.calls)[0].command).toContain('PANEL_IP=');
     expect(logs.join('')).toContain('успешно установлен');
     expect(getServer(serverId)).toMatchObject({
       status: 'online', deployed_port: 51850, container_name: 'amnezia-awg', iface: 'awg0', awg_tool: 'awg', managed_by: 'demension', last_error: null,
@@ -192,11 +196,15 @@ describe('установка (doInstall)', () => {
 
   it('контейнер приложения Amnezia при установке заменяется контейнером панели', async () => {
     const serverId = insertServer({ managedBy: 'amnezia', containerName: 'amnezia-awg2', iface: 'wg0', awgTool: 'wg' });
-    const ssh = stubSsh(() => ({ stdout: '---DEMENSION_OK---' }));
+    const ssh = stubSsh((call) =>
+      isScan(call.command)
+        ? { stdout: '---CONTAINER amnezia-awg2|amneziavpn/amnezia-awg:latest|true\n---CONF /opt/amnezia/awg/wg0.conf\n[Interface]\nListenPort = 51820\n---ENDCONF\n---TOOL wg' }
+        : { stdout: '---DEMENSION_OK---' }
+    );
 
     expect((await ProvisionService.requestReinstall(serverId)).success).toBe(true);
 
-    expect(ssh.calls[0].input).toContain("export REPLACE_CONTAINER='amnezia-awg2'");
+    expect(deployed(ssh.calls)[0].input).toContain("export REPLACE_CONTAINER='amnezia-awg2'");
     expect(getServer(serverId)).toMatchObject({ container_name: 'amnezia-awg', iface: 'awg0', awg_tool: 'awg', managed_by: 'demension' });
   });
 
@@ -213,7 +221,7 @@ describe('установка (doInstall)', () => {
 
   it('подсказывает про sudo без пароля, если у пользователя нет NOPASSWD', async () => {
     const serverId = insertServer({ status: 'uninstalled', sshUser: 'deploy' });
-    stubSsh(() => ({ code: 1, stderr: 'sudo: a password is required' }));
+    stubSsh((call) => (isScan(call.command) ? {} : { code: 1, stderr: 'sudo: a password is required' }));
 
     const result = await ProvisionService.installServer(serverId);
 
@@ -469,5 +477,82 @@ describe('подключение установленного AmneziaWG (scanAnd
     const serverId = insertServer({ status: 'uninstalled', deployedPort: null });
     stubSsh(() => ({ code: 1, stderr: 'sudo: a terminal is required' }));
     await expect(ProvisionService.scanAndAdopt(serverId)).rejects.toThrow('нужен sudo без пароля');
+  });
+});
+
+describe('защита чужого контейнера при установке', () => {
+  const amneziaApp = (name: string, port: number, running = true) =>
+    [
+      `---CONTAINER ${name}|amneziavpn/amnezia-awg:latest|${running}`,
+      ...(running ? ['---CONF /opt/amnezia/awg/wg0.conf', '[Interface]', 'PrivateKey = KEY', 'Address = 10.8.1.0/24', `ListenPort = ${port}`, '---ENDCONF', '---TOOL awg'] : []),
+    ].join('\n');
+  /** Заглушка узла: сканирование отдаёт `scan`, развёртывание успешно */
+  const node = (scan: string) => stubSsh((call) => (isScan(call.command) ? { stdout: scan } : { stdout: '---DEMENSION_OK---' }));
+
+  it('контейнер приложения Amnezia с именем контейнера панели не удаляется: установка отказывается до любых изменений', async () => {
+    const serverId = insertServer({ status: 'uninstalled', deployedPort: null });
+    const ssh = node(amneziaApp('amnezia-awg', 55424));
+    const logs: string[] = [];
+
+    const result = await ProvisionService.installServer(serverId, (chunk) => logs.push(chunk));
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('AmneziaWG приложения Amnezia');
+    expect(result.error).toContain('amnezia-awg');
+    expect(result.error).toContain('Сканировать');
+    expect(deployed(ssh.calls)).toHaveLength(0);
+    expect(getServer(serverId)).toMatchObject({ status: 'uninstalled' });
+    expect(logs.join('')).toContain('Установка удалила бы его');
+  });
+
+  it('то же для остановленного контейнера (его конфигурация тоже пропала бы)', async () => {
+    const serverId = insertServer({ status: 'uninstalled', deployedPort: null });
+    const ssh = node(amneziaApp('amnezia-awg', 0, false));
+    expect((await ProvisionService.installServer(serverId)).success).toBe(false);
+    expect(deployed(ssh.calls)).toHaveLength(0);
+  });
+
+  it('другой контейнер Amnezia на том же UDP-порту тоже блокирует установку, на другом порту — нет', async () => {
+    const clash = insertServer({ status: 'uninstalled', deployedPort: null, awgPort: 51820 });
+    const clashSsh = node(amneziaApp('amnezia-awg2', 51820));
+    expect((await ProvisionService.installServer(clash)).error).toContain('amnezia-awg2');
+    expect(deployed(clashSsh.calls)).toHaveLength(0);
+    vi.restoreAllMocks();
+
+    const free = insertServer({ status: 'uninstalled', deployedPort: null, awgPort: 51821 });
+    const freeSsh = node(amneziaApp('amnezia-awg2', 51820));
+    expect((await ProvisionService.installServer(free)).success).toBe(true);
+    expect(deployed(freeSsh.calls)).toHaveLength(1);
+  });
+
+  it('контейнер, уже подключённый к этому серверу, можно заменить (клиенты хранятся в БД панели)', async () => {
+    const serverId = insertServer({ managedBy: 'amnezia', containerName: 'amnezia-awg', iface: 'wg0', awgPort: 55424 });
+    const ssh = node(amneziaApp('amnezia-awg', 55424));
+
+    expect((await ProvisionService.requestReinstall(serverId)).success).toBe(true);
+    expect(deployed(ssh.calls)).toHaveLength(1);
+    expect(getServer(serverId)).toMatchObject({ managed_by: 'demension', container_name: 'amnezia-awg' });
+  });
+
+  it('собственный контейнер панели переустанавливается без препятствий', async () => {
+    const serverId = insertServer();
+    const ssh = node('---CONTAINER amnezia-awg|amneziavpn/amneziawg-go:latest|true\n---DEMENSION');
+    expect((await ProvisionService.requestReinstall(serverId)).success).toBe(true);
+    expect(deployed(ssh.calls)).toHaveLength(1);
+  });
+
+  it('если сервер нельзя проверить, установка не начинается: статус error, скрипт не отправляется', async () => {
+    const serverId = insertServer({ status: 'uninstalled', deployedPort: null });
+    const ssh = stubSsh((call) => {
+      if (isScan(call.command)) return { code: 1, stderr: 'sudo: a password is required' };
+      return { stdout: '---DEMENSION_OK---' };
+    });
+
+    const result = await ProvisionService.installServer(serverId);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('нужен sudo без пароля');
+    expect(getServer(serverId).status).toBe('error');
+    expect(deployed(ssh.calls)).toHaveLength(0);
   });
 });

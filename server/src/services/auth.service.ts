@@ -10,7 +10,27 @@ function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
+/** Логин — буква и 9 символов a-z0-9, пароль — 20 символов A-Za-z0-9 (без знаков, которые путаются при вводе) */
+const LOGIN_FIRST = 'abcdefghijklmnopqrstuvwxyz';
+const LOGIN_REST = 'abcdefghijklmnopqrstuvwxyz0123456789';
+const PASSWORD_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+
+function randomString(alphabet: string, length: number): string {
+  let result = '';
+  for (let i = 0; i < length; i++) result += alphabet[crypto.randomInt(alphabet.length)];
+  return result;
+}
+
 export class AuthService {
+  /** Случайный логин администратора (не «admin»: его угадывают первым) */
+  static randomLogin(): string {
+    return randomString(LOGIN_FIRST, 1) + randomString(LOGIN_REST, 9);
+  }
+
+  static randomPassword(): string {
+    return randomString(PASSWORD_ALPHABET, 20);
+  }
+
   /**
    * Hash a plain-text password using native crypto.scryptSync
    */
@@ -30,23 +50,23 @@ export class AuthService {
   }
 
   /**
-   * Ensure an admin exists. Uses PANEL_USER / PANEL_PASSWORD when provided,
-   * otherwise generates a random password and prints it once.
+   * Ensure an admin exists. Uses PANEL_USER / PANEL_PASSWORD when provided; whatever is missing
+   * (login and/or password) is generated randomly and printed once.
    */
   static ensureDefaultAdmin(username?: string, password?: string): void {
     const adminCount = db.prepare('SELECT COUNT(*) as count FROM admins').get() as { count: number };
     if (adminCount.count > 0) return;
 
-    const user = username || 'admin';
+    const user = username || this.randomLogin();
     const generated = !password;
-    const pass = password || crypto.randomBytes(12).toString('base64url');
+    const pass = password || this.randomPassword();
     const { hash, salt } = this.hashPassword(pass);
     db.prepare('INSERT INTO admins (username, password_hash, salt) VALUES (?, ?, ?)').run(user, hash, salt);
 
     if (generated) {
       console.log('==================================================================');
-      console.log(`[AUTH] Создан администратор "${user}" со случайным паролем: ${pass}`);
-      console.log('[AUTH] Сохраните его и смените после входа. Больше он показан не будет.');
+      console.log(`[AUTH] Создан администратор. Логин: ${user}  Пароль: ${pass}`);
+      console.log('[AUTH] Сохраните их: пароль больше показан не будет (новый выдаёт: node dist/cli/reset-admin.js).');
       console.log('==================================================================');
     } else {
       console.log(`[AUTH] Создан администратор "${user}" (пароль из PANEL_PASSWORD)`);

@@ -180,7 +180,7 @@ if ! command -v fail2ban-client >/dev/null 2>&1; then
 fi
 
 if command -v fail2ban-client >/dev/null 2>&1; then
-  SSH_PORT=$(sshd -T 2>/dev/null | awk '$1 == "port" {print $2; exit}')
+  SSH_PORT=$(sshd -T 2>/dev/null | awk '$1 == "port" {print $2; exit}' || true)
   SSH_PORT=${SSH_PORT:-ssh}
   if [ -f /var/log/auth.log ] || [ -f /var/log/secure ]; then BACKEND=auto; else BACKEND=systemd; fi
   IGNORE_IP="127.0.0.1/8 ::1"

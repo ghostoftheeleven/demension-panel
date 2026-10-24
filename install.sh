@@ -5,7 +5,12 @@ set -euo pipefail
 # Demension Panel - Automated Server Deployment Script
 #
 # Интерактивно:      curl -sSL .../install.sh | sudo bash
-# Без вопросов:      curl -sSL .../install.sh | sudo PANEL_PORT=3001 PANEL_USER=admin PANEL_PASSWORD='...' bash
+# Без вопросов:      curl -sSL .../install.sh | sudo PANEL_PORT=3001 bash
+#
+# Логин и пароль администратора при первой установке генерируются случайно и показываются в конце установки
+# ОДИН РАЗ (в БД хранится только хэш). Свои значения можно передать через PANEL_USER / PANEL_PASSWORD.
+# При обновлении существующей панели учётные данные не меняются; PANEL_RESET_CREDENTIALS=1 выдаёт новые случайные.
+# Установка не трогает Docker и контейнеры на сервере (в том числе AmneziaWG приложения Amnezia).
 # ==============================================================================
 
 # Text formatting
@@ -33,8 +38,9 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-# При запуске через `curl | bash` stdin занят самим скриптом — вопросы задаём через терминал
-if [ -r /dev/tty ] && [ -w /dev/tty ]; then
+# При запуске через `curl | bash` stdin занят самим скриптом — вопросы задаём через терминал.
+# Узел /dev/tty есть и без терминала (ssh без -t, cron, CI, docker без -t), но открыть его нельзя — поэтому проверяется открытие.
+if (exec < /dev/tty) 2>/dev/null && (exec > /dev/tty) 2>/dev/null; then
   TTY=/dev/tty
 else
   TTY=""
@@ -44,31 +50,36 @@ ask() { # ask VAR "Вопрос" "по умолчанию"
   local __var="$1" __prompt="$2" __default="${3:-}" __reply=""
   if [ -n "${!__var:-}" ]; then return; fi
   if [ -n "$TTY" ]; then
-    read -r -p "$__prompt" __reply < "$TTY"
+    read -r -p "$__prompt" __reply < "$TTY" || __reply=""
   fi
   printf -v "$__var" '%s' "${__reply:-$__default}"
 }
 
-ask_secret() { # ask_secret VAR "Вопрос"
-  local __var="$1" __prompt="$2" __first="" __second=""
-  if [ -n "${!__var:-}" ]; then return; fi
-  if [ -z "$TTY" ]; then
-    echo -e "${RED}[ERROR] Нет терминала для ввода пароля. Передайте PANEL_PASSWORD через окружение.${NC}"
-    exit 1
+CREDS_PENDING=false
+print_pending_credentials() { # при обрыве установки после создания администратора пароль всё равно показывается
+  if [ "$CREDS_PENDING" = true ]; then
+    echo -e "\n${YELLOW}Установка прервана, но учётные данные администратора уже созданы:${NC}"
+    echo "  Логин:  $PANEL_USER"
+    if [ -n "${GENERATED_PASSWORD_VALUE:-}" ]; then echo "  Пароль: $GENERATED_PASSWORD_VALUE"; fi
+    echo "  Новый пароль при необходимости: cd ${INSTALL_DIR} && node server/dist/cli/reset-admin.js"
   fi
-  while true; do
-    read -r -s -p "$__prompt" __first < "$TTY"; echo ""
-    if [ ${#__first} -lt 8 ]; then
-      echo -e "${RED}Пароль должен содержать не менее 8 символов.${NC}"
-      continue
-    fi
-    read -r -s -p "Подтвердите пароль: " __second < "$TTY"; echo ""
-    if [ "$__first" = "$__second" ]; then
-      printf -v "$__var" '%s' "$__first"
-      return
-    fi
-    echo -e "${RED}Пароли не совпадают. Попробуйте снова.${NC}"
+}
+trap print_pending_credentials EXIT
+
+rand_chars() { # rand_chars ДЛИНА НАБОР — случайная строка из /dev/urandom
+  local out=""
+  while [ "${#out}" -lt "$1" ]; do
+    out+=$(head -c 96 /dev/urandom | LC_ALL=C tr -dc "$2" || true)
   done
+  printf '%s' "${out:0:$1}"
+}
+
+port_listeners() { # port_listeners ПОРТ — строки процессов, слушающих TCP-порт (пусто, если порт свободен)
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltnpH "sport = :$1" 2>/dev/null || true
+  elif command -v netstat >/dev/null 2>&1; then
+    netstat -ltnp 2>/dev/null | awk -v port=":$1" '$4 ~ port"$"' || true
+  fi
 }
 
 version_ge() { # version_ge 22.13.0 22.5.1
@@ -114,6 +125,12 @@ if [ "$NEED_NODE" = true ]; then
 fi
 echo -e "${GREEN}✓ Node.js $(node -v) и npm $(npm -v) готовы к работе.${NC}"
 
+# Контейнеры AmneziaWG, уже работающие на сервере (например, от приложения AmneziaVPN): установка панели их не трогает
+EXISTING_AWG=""
+if command -v docker >/dev/null 2>&1; then
+  EXISTING_AWG="$(docker ps -a --format '{{.Names}} ({{.Image}})' 2>/dev/null | grep -i 'amnezia' || true)"
+fi
+
 # 2. Detect existing installation
 UPDATE=false
 if [ -f "$INSTALL_DIR/server/package.json" ]; then
@@ -132,21 +149,43 @@ if ! [[ "$PANEL_PORT" =~ ^[0-9]+$ ]] || [ "$PANEL_PORT" -lt 1 ] || [ "$PANEL_POR
   exit 1
 fi
 
+# Учётные данные администратора: при первой установке — случайные; при обновлении остаются прежними
 SET_CREDENTIALS=true
-if [ "$UPDATE" = true ] && [ -z "${PANEL_PASSWORD:-}" ]; then
+if [ "$UPDATE" = true ] && [ -z "${PANEL_PASSWORD:-}" ] && [ -z "${PANEL_USER:-}" ] && [ "${PANEL_RESET_CREDENTIALS:-}" != "1" ]; then
   CHANGE_CREDS=""
-  ask CHANGE_CREDS "Обнаружена установленная панель. Сменить логин/пароль администратора? [y/N]: " "n"
+  ask CHANGE_CREDS "Обнаружена установленная панель. Выдать новые случайные логин и пароль администратора? [y/N]: " "n"
   case "$CHANGE_CREDS" in
     y|Y|yes|д|Д) ;;
     *) SET_CREDENTIALS=false ;;
   esac
 fi
 
+GENERATED_PASSWORD=false
 if [ "$SET_CREDENTIALS" = true ]; then
-  ask PANEL_USER "Логин администратора [admin]: " "admin"
-  ask_secret PANEL_PASSWORD "Пароль администратора (не менее 8 символов): "
-  if [ ${#PANEL_PASSWORD} -lt 8 ]; then
+  if [ -z "${PANEL_USER:-}" ]; then
+    # Логин начинается с буквы: так он однозначно читается и вводится
+    PANEL_USER="$(rand_chars 1 'a-z')$(rand_chars 9 'a-z0-9')"
+  elif ! [[ "$PANEL_USER" =~ ^[A-Za-z0-9._@-]{1,64}$ ]]; then
+    echo -e "${RED}[ERROR] Логин администратора: до 64 символов из A-Z a-z 0-9 . _ @ -${NC}"
+    exit 1
+  fi
+  if [ -z "${PANEL_PASSWORD:-}" ]; then
+    PANEL_PASSWORD="$(rand_chars 20 'A-Za-z0-9')"
+    GENERATED_PASSWORD=true
+  elif [ ${#PANEL_PASSWORD} -lt 8 ]; then
     echo -e "${RED}[ERROR] Пароль должен содержать не менее 8 символов.${NC}"
+    exit 1
+  fi
+fi
+
+# Порт панели должен быть свободен (кроме случая, когда его уже занимает сама обновляемая панель)
+if [ -n "$(port_listeners "$PANEL_PORT")" ]; then
+  if [ "$UPDATE" = true ] && [ "$PANEL_PORT" = "${CURRENT_PORT:-3001}" ] && systemctl is-active --quiet demension.service 2>/dev/null; then
+    :
+  else
+    echo -e "${RED}[ERROR] TCP-порт ${PANEL_PORT} уже занят:${NC}"
+    port_listeners "$PANEL_PORT"
+    echo -e "Выберите другой порт: PANEL_PORT=<порт> (или освободите этот)."
     exit 1
   fi
 fi
@@ -202,6 +241,9 @@ chmod 600 "$INSTALL_DIR/server/.env"
 if [ "$SET_CREDENTIALS" = true ]; then
   PANEL_USER="$PANEL_USER" PANEL_PASSWORD="$PANEL_PASSWORD" node "$INSTALL_DIR/server/dist/cli/reset-admin.js"
 fi
+GENERATED_PASSWORD_VALUE=""
+if [ "$GENERATED_PASSWORD" = true ]; then GENERATED_PASSWORD_VALUE="$PANEL_PASSWORD"; fi
+if [ "$SET_CREDENTIALS" = true ]; then CREDS_PENDING=true; fi
 unset PANEL_PASSWORD
 
 # 6. Setup Systemd Service
@@ -249,19 +291,25 @@ else
 fi
 echo -e "${YELLOW}Для выпуска сертификата Let's Encrypt методом HTTP-01 должен быть доступен порт 80/tcp.${NC}"
 
-# 8. Fail2ban SSH Protection
-echo -e "\n${CYAN}[7/7] Настройка защиты SSH от перебора (Fail2ban)...${NC}"
-if ! command -v fail2ban-client >/dev/null 2>&1; then
-  if [ "$PM" = apt ]; then
-    apt-get install -y fail2ban || true
+# 8. Fail2ban SSH Protection — необязательный шаг: его сбой не должен обрывать установку уже работающей панели
+setup_fail2ban() {
+  local HAD_FAIL2BAN=false SSH_PORT BACKEND
+  echo -e "\n${CYAN}[7/7] Настройка защиты SSH от перебора (Fail2ban)...${NC}"
+  if command -v fail2ban-client >/dev/null 2>&1; then
+    HAD_FAIL2BAN=true
   else
-    dnf install -y epel-release || true
-    dnf install -y fail2ban || true
+    if [ "$PM" = apt ]; then
+      apt-get install -y fail2ban || true
+    else
+      dnf install -y epel-release || true
+      dnf install -y fail2ban || true
+    fi
   fi
-fi
 
-if command -v fail2ban-client >/dev/null 2>&1; then
-  SSH_PORT=$(sshd -T 2>/dev/null | awk '$1 == "port" {print $2; exit}')
+  if [ "$HAD_FAIL2BAN" = true ]; then
+    echo "Fail2ban уже установлен на сервере — его настройки не менялись (защиту sshd можно включить в разделе «Безопасность» панели)."
+  elif command -v fail2ban-client >/dev/null 2>&1; then
+  SSH_PORT=$(sshd -T 2>/dev/null | awk '$1 == "port" {print $2; exit}' || true)
   SSH_PORT=${SSH_PORT:-ssh}
   if [ -f /var/log/auth.log ] || [ -f /var/log/secure ]; then BACKEND=auto; else BACKEND=systemd; fi
   mkdir -p /etc/fail2ban/jail.d
@@ -279,20 +327,67 @@ EOF
   systemctl enable fail2ban >/dev/null 2>&1 || true
   systemctl restart fail2ban >/dev/null 2>&1 || true
   echo -e "${GREEN}✓ Защита SSH (Fail2ban) активирована (порт ${SSH_PORT}, maxretry=4, bantime=24ч).${NC}"
-fi
+  fi
+}
+setup_fail2ban || echo -e "${YELLOW}Не удалось настроить fail2ban — это не мешает работе панели (настройка есть в разделе «Безопасность»).${NC}"
 
-# Detect Public IP
-SERVER_IP=$(curl -s -4 --max-time 5 ifconfig.me || curl -s -4 --max-time 5 icanhazip.com || echo "YOUR_SERVER_IP")
+# Панель должна ответить, прежде чем объявлять об успехе
+echo -e "\n${CYAN}Проверка запуска панели...${NC}"
+PANEL_UP=false
+for _ in $(seq 1 30); do
+  if curl -fsS --max-time 2 "http://127.0.0.1:${PANEL_PORT}/api/health" >/dev/null 2>&1; then
+    PANEL_UP=true
+    break
+  fi
+  sleep 1
+done
+if [ "$PANEL_UP" != true ]; then
+  echo -e "${RED}[ERROR] Панель не отвечает на порту ${PANEL_PORT}. Последние строки журнала:${NC}"
+  journalctl -u demension.service -n 40 --no-pager 2>/dev/null || true
+  echo -e "Повторить запуск: systemctl restart demension; журнал: journalctl -u demension -f"
+  exit 1
+fi
+echo -e "${GREEN}✓ Панель запущена.${NC}"
+
+# Адрес для браузера: внешний IPv4 сервера; если определить не удалось — первый адрес интерфейсов
+SERVER_IP=""
+for url in https://api.ipify.org https://ifconfig.me https://icanhazip.com; do
+  CANDIDATE="$(curl -s -4 --max-time 5 "$url" 2>/dev/null | tr -d '[:space:]' || true)"
+  if [[ "$CANDIDATE" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+    SERVER_IP="$CANDIDATE"
+    break
+  fi
+done
+if [ -z "$SERVER_IP" ]; then
+  SERVER_IP="$(hostname -I 2>/dev/null | awk '{print $1}' || true)"
+fi
+SERVER_IP="${SERVER_IP:-IP_СЕРВЕРА}"
 
 echo -e "\n${GREEN}${BOLD}======================================================================${NC}"
-echo -e "${GREEN}${BOLD}🎉 УСПЕХ: Demension Panel успешно установлена и запущена!${NC}"
+echo -e "${GREEN}${BOLD}🎉 УСПЕХ: Demension Panel установлена и запущена!${NC}"
 echo -e "${GREEN}${BOLD}======================================================================${NC}"
 echo -e "Адрес панели:         ${BOLD}${CYAN}http://${SERVER_IP}:${PANEL_PORT}${NC}"
 if [ "$SET_CREDENTIALS" = true ]; then
   echo -e "Логин администратора: ${BOLD}${PANEL_USER}${NC}"
+  if [ "$GENERATED_PASSWORD" = true ]; then
+    echo -e "Пароль администратора: ${BOLD}${GENERATED_PASSWORD_VALUE}${NC}"
+    echo -e "${YELLOW}Сохраните логин и пароль сейчас: пароль нигде не хранится и больше показан не будет.${NC}"
+  else
+    echo -e "Пароль администратора: заданный вами (PANEL_PASSWORD)"
+  fi
+else
+  echo -e "Логин и пароль:       не менялись (прежние)"
 fi
 echo -e "Служба systemd:       ${BOLD}systemctl status demension${NC}"
-echo -e "Сброс пароля:         ${BOLD}cd ${INSTALL_DIR} && PANEL_USER=admin PANEL_PASSWORD='...' node server/dist/cli/reset-admin.js${NC}"
-echo -e "Директория:           ${BOLD}${INSTALL_DIR}${NC}"
+echo -e "Новый пароль:         ${BOLD}cd ${INSTALL_DIR} && node server/dist/cli/reset-admin.js${NC}  (выдаст случайный)"
+echo -e "Директория:           ${BOLD}${INSTALL_DIR}${NC} (данные и ключ шифрования — ${INSTALL_DIR}/data, делайте его резервную копию)"
 echo -e "======================================================================"
-echo -e "${YELLOW}Рекомендуется сразу включить HTTPS в разделе «Безопасность».${NC}"
+CREDS_PENDING=false
+if [ -n "$EXISTING_AWG" ]; then
+  echo -e "${YELLOW}На сервере уже есть контейнеры AmneziaWG — панель их не трогала:${NC}"
+  echo "$EXISTING_AWG" | sed 's/^/  • /'
+  echo -e "Чтобы управлять ими из панели: «Добавить сервер» (адрес этого сервера и SSH-доступ) — панель найдёт контейнер и"
+  echo -e "подключит его вместе с клиентами. Не нажимайте «Установить», пока не подключите существующий контейнер."
+fi
+echo -e "${YELLOW}Первый вход по http:// передаёт пароль открытым текстом: сразу включите HTTPS в разделе «Безопасность»${NC}"
+echo -e "${YELLOW}или откройте панель через SSH-туннель: ssh -L ${PANEL_PORT}:127.0.0.1:${PANEL_PORT} root@${SERVER_IP}  →  http://127.0.0.1:${PANEL_PORT}${NC}"

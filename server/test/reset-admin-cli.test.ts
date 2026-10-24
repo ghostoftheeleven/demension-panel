@@ -57,27 +57,58 @@ describe('reset-admin CLI', () => {
     expect(AuthService.verifyPassword('wrong', admins[0].password_hash, admins[0].salt)).toBe(false);
   }, 90000);
 
-  it('по умолчанию логин admin; повторный запуск меняет данные единственного администратора и завершает сессии', () => {
-    const first = runCli({ PANEL_PASSWORD: 'FirstPassword-1' });
-    expect(readAdmins(first.dataDir).admins[0].username).toBe('admin');
+  it('без параметров создаёт администратора со случайными логином и паролем и показывает пароль один раз', () => {
+    const result = runCli({});
+
+    expect(result.status).toBe(0);
+    const { admins } = readAdmins(result.dataDir);
+    expect(admins).toHaveLength(1);
+    expect(admins[0].username).toMatch(/^[a-z][a-z0-9]{9}$/);
+    expect(admins[0].username).not.toBe('admin');
+    expect(result.stdout).toContain(`Учётные данные администратора "${admins[0].username}" обновлены`);
+    const printed = /Новый пароль: (\S+)/.exec(result.stdout)![1];
+    expect(printed).toMatch(/^[A-Za-z0-9]{20}$/);
+    expect(AuthService.verifyPassword(printed, admins[0].password_hash, admins[0].salt)).toBe(true);
+  }, 90000);
+
+  it('повторный запуск сохраняет логин, выдаёт другой пароль и завершает сессии', () => {
+    const first = runCli({});
+    const initial = readAdmins(first.dataDir).admins[0];
+    const firstPassword = /Новый пароль: (\S+)/.exec(first.stdout)![1];
 
     const db = new DatabaseSync(path.join(first.dataDir, 'demension.db'));
     db.exec("INSERT INTO sessions (token, admin_id, expires_at) VALUES ('x', 1, '2999-01-01T00:00:00.000Z')");
     db.exec("INSERT INTO trusted_login_ips (ip, last_login_at) VALUES ('203.0.113.1', '2999-01-01T00:00:00.000Z')");
     db.close();
 
-    const second = runCli({ PANEL_USER: 'renamed', PANEL_PASSWORD: 'SecondPassword-2' }, first.dataDir);
+    const second = runCli({}, first.dataDir);
+
+    expect(second.status).toBe(0);
+    const state = readAdmins(first.dataDir);
+    expect(state.admins).toHaveLength(1);
+    expect(state.admins[0].username).toBe(initial.username);
+    const secondPassword = /Новый пароль: (\S+)/.exec(second.stdout)![1];
+    expect(secondPassword).not.toBe(firstPassword);
+    expect(AuthService.verifyPassword(secondPassword, state.admins[0].password_hash, state.admins[0].salt)).toBe(true);
+    expect(AuthService.verifyPassword(firstPassword, state.admins[0].password_hash, state.admins[0].salt)).toBe(false);
+    expect(state.sessions).toBe(0);
+    expect(state.trusted).toBe(0);
+  }, 120000);
+
+  it('заданные логин и пароль применяются, а пустой пароль означает «сгенерировать»', () => {
+    const first = runCli({ PANEL_USER: 'chosen', PANEL_PASSWORD: 'ChosenPassword-1' });
+    const second = runCli({ PANEL_USER: 'renamed', PANEL_PASSWORD: '' }, first.dataDir);
 
     expect(second.status).toBe(0);
     const state = readAdmins(first.dataDir);
     expect(state.admins).toHaveLength(1);
     expect(state.admins[0].username).toBe('renamed');
-    expect(AuthService.verifyPassword('SecondPassword-2', state.admins[0].password_hash, state.admins[0].salt)).toBe(true);
-    expect(state.sessions).toBe(0);
-    expect(state.trusted).toBe(0);
+    expect(AuthService.verifyPassword('ChosenPassword-1', state.admins[0].password_hash, state.admins[0].salt)).toBe(false);
+    expect(second.stdout).toContain('Новый пароль:');
   }, 120000);
 
-  it.each([['короткий пароль', 'short'], ['пустой пароль', '']])('%s отклоняется с кодом 1, администратор не создаётся', (_name, password) => {
+  it('слишком короткий заданный пароль отклоняется с кодом 1, администратор не создаётся', () => {
+    const password = 'short';
     const result = runCli({ PANEL_USER: 'admin', PANEL_PASSWORD: password });
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('не менее 8 символов');

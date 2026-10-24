@@ -32,7 +32,9 @@ npx vitest run --coverage --coverage.provider=v8 --coverage.include='src/**'
 | `server-process.test.ts` | Настоящий процесс панели: HTTP и HTTPS на одном порту, WebSocket, редирект, устойчивость к мусору |
 | `reset-admin-cli.test.ts` | CLI сброса пароля администратора |
 | `real-docker-nodes.test.ts`, `real-docker-lifecycle.test.ts` | Реальные ноды в Docker: установка, переустановка, 1.x → 3.x, применение, смена порта, TOFU, удаление |
+| `real-docker-amnezia.test.ts` | Сервер с контейнером «как у приложения AmneziaVPN»: отказ установки поверх, подключение без перезапуска, синхронизация, применение, замена |
 | `real-federation-e2e.test.ts` | Две панели-процесса и реальная нода: получатель → владелец → Docker |
+| `test/install/run.sh` (не vitest) | `install.sh` целиком в чистом Ubuntu 24.04: случайные логин/пароль и вывод данных подключения, обновление, занятый порт, CLI сброса пароля (≈ 5 минут, нужны Docker и интернет) |
 
 ## Хелперы (`test/helpers`)
 
@@ -81,7 +83,8 @@ server/test/docker/nodes.sh down
 
 ## CI
 
-`.github/workflows/ci.yml`: `server` (типы, тесты без Docker, сборка), `client`, `scripts` (shellcheck) и `e2e` — поднимает
+`.github/workflows/ci.yml`: `server` (типы, тесты без Docker, сборка), `client`, `scripts` (shellcheck), `install` (`install.sh` в чистом
+Ubuntu, `test/install/run.sh`) и `e2e` — поднимает
 тестовые ноды и запускает весь набор, включая Docker-тесты (`continue-on-error`, пока не накоплена статистика стабильности).
 Локально ту же проверку на Linux можно выполнить в контейнере:
 

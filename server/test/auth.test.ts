@@ -48,3 +48,52 @@ describe('AuthService', () => {
     expect(AuthService.validateSession(newToken!)).not.toBeNull();
   });
 });
+
+describe('случайные учётные данные администратора', () => {
+  it('логин — буква и 9 символов a-z0-9, пароль — 20 символов A-Za-z0-9; значения не повторяются и не «admin»', () => {
+    const logins = new Set<string>();
+    const passwords = new Set<string>();
+    for (let i = 0; i < 2000; i++) {
+      const login = AuthService.randomLogin();
+      const password = AuthService.randomPassword();
+      expect(login).toMatch(/^[a-z][a-z0-9]{9}$/);
+      expect(password).toMatch(/^[A-Za-z0-9]{20}$/);
+      logins.add(login);
+      passwords.add(password);
+    }
+    expect(logins.size).toBe(2000);
+    expect(passwords.size).toBe(2000);
+    expect(logins.has('admin')).toBe(false);
+  });
+
+  it('символы распределены равномерно: встречаются заглавные, строчные и цифры', () => {
+    const sample = Array.from({ length: 200 }, () => AuthService.randomPassword()).join('');
+    expect(sample).toMatch(/[A-Z]/);
+    expect(sample).toMatch(/[a-z]/);
+    expect(sample).toMatch(/[0-9]/);
+  });
+});
+
+describe('администратор при первом запуске без PANEL_USER и PANEL_PASSWORD', () => {
+  it('получает случайные логин и пароль, которые выводятся в журнал один раз и подходят для входа', async () => {
+    const { vi } = await import('vitest');
+    db.exec('DELETE FROM sessions; DELETE FROM admins;');
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    AuthService.ensureDefaultAdmin(undefined, undefined);
+
+    const printed = log.mock.calls.map((call) => String(call[0])).join('\n');
+    const [, login, password] = /Логин: (\S+)\s+Пароль: (\S+)/.exec(printed)!;
+    expect(login).toMatch(/^[a-z][a-z0-9]{9}$/);
+    expect(password).toMatch(/^[A-Za-z0-9]{20}$/);
+    expect(AuthService.login(login, password)).not.toBeNull();
+    expect(AuthService.login('admin', 'admin')).toBeNull();
+
+    // Повторный запуск ничего не создаёт и не печатает
+    log.mockClear();
+    AuthService.ensureDefaultAdmin(undefined, undefined);
+    expect(log).not.toHaveBeenCalled();
+    expect((db.prepare('SELECT COUNT(*) AS c FROM admins').get() as any).c).toBe(1);
+    log.mockRestore();
+  });
+});

@@ -258,7 +258,7 @@ export class ProvisionService {
       '  done',
       '  if docker exec "$c" sh -c "command -v awg" >/dev/null 2>&1; then echo "---TOOL awg"; else echo "---TOOL wg"; fi',
       `  if docker exec "$c" test -f ${AWG_DIR}/clientsTable; then echo "---CLIENTS"; docker exec "$c" cat ${AWG_DIR}/clientsTable; echo; echo "---ENDCLIENTS"; fi`,
-      `  if [ "$c" = "${PANEL_CONTAINER}" ] && [ -f ${AWG_DIR}/demension.env ]; then echo "---DEMENSION"; fi`,
+      `  if [ "$c" = "${PANEL_CONTAINER}" ] && [ -f ${AWG_DIR}/demension.env ] && docker inspect -f "{{range .Mounts}}{{.Destination}} {{end}}" "$c" 2>/dev/null | grep -q "${AWG_DIR}"; then echo "---DEMENSION"; fi`,
       'done',
     ].join('\n');
 
@@ -397,9 +397,41 @@ export class ProvisionService {
     }
   }
 
+  /**
+   * Контейнер AmneziaWG приложения Amnezia, который установка панели уничтожила бы: скрипт развёртывания удаляет контейнер
+   * с именем amnezia-awg (имя совпадает с контейнером приложения), а конфигурация и клиенты Amnezia лежат внутри контейнера.
+   * Контейнер, уже подключённый к этому серверу (managed_by = amnezia), заменять можно — его клиенты хранятся в БД панели.
+   * Занятый тем же UDP-портом контейнер тоже мешает: после удаления своего контейнера docker run упал бы на порту.
+   */
+  static async findForeignContainer(server: any): Promise<DetectedContainer | null> {
+    const adopted = server.managed_by === 'amnezia' ? String(server.container_name) : null;
+    for (const container of await this.detectContainers(server)) {
+      if (container.managedBy !== 'amnezia' || container.name === adopted) continue;
+      const port = Number(/^\s*ListenPort\s*=\s*(\d+)/im.exec(container.config ?? '')?.[1]);
+      if (container.name === PANEL_CONTAINER || port === Number(server.awg_port)) return container;
+    }
+    return null;
+  }
+
   private static async doInstall(serverId: number, onLog?: (chunk: string) => void): Promise<OperationResult> {
     const server = loadServer(serverId);
     const log = (text: string) => onLog?.(text);
+
+    // Проверка до любых изменений: чужой контейнер не трогаем, статус сервера не меняется
+    try {
+      const foreign = await this.findForeignContainer(server);
+      if (foreign) {
+        const error =
+          `На сервере уже работает AmneziaWG приложения Amnezia (контейнер ${foreign.name}). Установка удалила бы его вместе с клиентами. ` +
+          'Нажмите «Сканировать», чтобы подключить его без переустановки, либо удалите контейнер вручную, если он не нужен.';
+        log(`\r\n❌ Ошибка: ${error}\r\n`);
+        return { success: false, error };
+      }
+    } catch (err: any) {
+      db.prepare("UPDATE servers SET status = 'error', last_error = ? WHERE id = ?").run(err.message, serverId);
+      log(`\r\n❌ Ошибка: ${err.message}\r\n`);
+      return { success: false, error: err.message };
+    }
 
     db.prepare("UPDATE servers SET status = 'installing', last_error = NULL WHERE id = ?").run(serverId);
     log(`=== Запуск установки AmneziaWG на ${server.name} (${server.host}) ===\r\n`);

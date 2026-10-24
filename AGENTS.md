@@ -47,6 +47,7 @@ cd server && npx tsc --noEmit && npm test     # проверка типов и �
 cd client && npx tsc -b && npm run lint && npx vite build
 npx shellcheck -S error install.sh server/src/scripts/deploy-awg.sh server/test/docker/nodes.sh server/test/docker/entrypoint.sh
 server/test/docker/nodes.sh up                # реальные ноды в Docker для real-*.test.ts (без них эти тесты пропускаются)
+server/test/install/run.sh                    # install.sh целиком в чистом Ubuntu (Docker, ≈ 5 мин) — гонять при любой правке install.sh
 ```
 
 CI (`.github/workflows/ci.yml`) выполняет всё перечисленное на каждый push в `main`; отдельное задание `e2e` поднимает тестовые
@@ -128,12 +129,18 @@ CI (`.github/workflows/ci.yml`) выполняет всё перечисленн
     `AllowedIPs = 0.0.0.0/0, ::/0` — намеренно, защита от утечки IPv6 мимо туннеля (docs/subscriptions.md).
 25. **Всё, что пришло от чужой панели, проверяйте по формату до записи в БД** (`sanitizeRemoteNode/Peer/Params`): эти значения попадают
     в .conf пользователей, а перевод строки в них даёт инъекцию директив (`PostUp` выполняется на устройстве клиента).
+26. **Установка панели на ноду не должна удалять чужой контейнер AmneziaWG**: у приложения Amnezia тот же `amnezia-awg`, а его
+    конфигурация и клиенты лежат внутри контейнера. Перед установкой работает `ProvisionService.findForeignContainer`;
+    контейнер панели опознаётся по `demension.env` на хосте **и** проброшенному каталогу `/opt/amnezia/awg`. Не удаляйте этот
+    контроль и не вызывайте `deploy-awg.sh` в обход `doInstall`.
+27. **Логин и пароль администратора случайные** (`AuthService.randomLogin/randomPassword`), «admin/admin» и пароли по умолчанию
+    недопустимы. `install.sh` выводит адрес панели, логин и пароль один раз; пароль не пишется в `.env`, БД (только хэш), журнал.
 
 ## Чек-лист перед коммитом
 
 - [ ] `cd server && npx tsc --noEmit && npm test` (при правках провижининга, федерации, WebSocket/HTTPS — с поднятыми нодами `nodes.sh up`)
 - [ ] `cd client && npx tsc -b && npm run lint && npx vite build`
-- [ ] shellcheck, если менялись `install.sh` / `deploy-awg.sh`
+- [ ] shellcheck, если менялись `install.sh` / `deploy-awg.sh`; при правках `install.sh` — `server/test/install/run.sh`
 - [ ] Новые поля сервера/клиента не утекают в API (п. 1) и, если нужны клиенту, добавлены в `client/src/types`
 - [ ] Изменение схемы — новой миграцией (п. 21)
 - [ ] Обновлён документ в `docs/` для изменённой подсистемы (и `AGENTS.md`, если появилось правило или команда)
