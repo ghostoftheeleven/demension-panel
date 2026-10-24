@@ -195,7 +195,8 @@ echo -e "\n${CYAN}[3/7] Развертывание кодовой базы в ${
 # Новый код скачивается, пока панель ещё работает: при ошибке (нет сети, локальные правки) она остаётся запущенной
 if [ -d "$INSTALL_DIR/.git" ]; then
   echo "Обновление существующей установки..."
-  if ! git -C "$INSTALL_DIR" pull --ff-only origin main; then
+  # safe.directory: каталог мог быть скопирован из клона обычного пользователя, а установщик работает от root
+  if ! git -c safe.directory="$INSTALL_DIR" -C "$INSTALL_DIR" pull --ff-only origin main; then
     echo -e "${RED}[ERROR] Не удалось получить обновление (git pull). Панель продолжает работать на прежней версии.${NC}"
     echo -e "Проверьте доступ к GitHub и локальные изменения: git -C ${INSTALL_DIR} status"
     exit 1

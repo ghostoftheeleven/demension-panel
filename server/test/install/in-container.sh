@@ -4,6 +4,8 @@
 set -uo pipefail
 
 mkdir -p /work && cd /src && tar cf - --exclude=node_modules --exclude=.git --exclude=dist --exclude=data . | tar xf - -C /work
+# Исходники, как у клона обычного пользователя, не принадлежат root (так же в CI) — install.sh работает от root
+chown -R 1000:1000 /work
 
 # --- подставной systemctl: запоминает вызовы и запускает/останавливает службу по unit-файлу ---
 cat > /usr/local/bin/systemctl <<'SHIM'
@@ -148,12 +150,15 @@ grep -q 'PANEL_PASSWORD\|OldPlainPassword' "$ENVF" && fail "пароль ста�
 [ "$(stat -c '%a' "$ENVF")" = 600 ] || fail "права .env не 600"
 
 section "11. Обновление из git: код скачивается, пока панель работает"
+# /opt/demension-panel скопирован из /work и принадлежит не root: доверие к нему install.sh задаёт сам (safe.directory),
+# тестовой обвязке — через G; удалённый репозиторий /tmp/origin создаётся root
 git config --global user.email test@example.com && git config --global user.name test
-rm -rf /tmp/origin && mkdir /tmp/origin && cp -a /work/. /tmp/origin/
+G() { git -c safe.directory=/opt/demension-panel "$@"; }
+rm -rf /tmp/origin && mkdir /tmp/origin && cp -r /work/. /tmp/origin/
 git -C /tmp/origin init -q -b main && git -C /tmp/origin add -A && git -C /tmp/origin commit -qm base
-git -C /opt/demension-panel init -q -b main
-git -C /opt/demension-panel remote add origin /tmp/origin
-git -C /opt/demension-panel fetch -q origin && git -C /opt/demension-panel reset -q origin/main
+G -C /opt/demension-panel init -q -b main
+G -C /opt/demension-panel remote add origin /tmp/origin
+G -C /opt/demension-panel fetch -q origin && G -C /opt/demension-panel reset -q origin/main
 echo marker > /tmp/origin/UPDATE_MARKER && git -C /tmp/origin add -A && git -C /tmp/origin commit -qm update
 bash install.sh > /tmp/install6.out 2>&1
 CODE=$?
@@ -162,7 +167,7 @@ sed 's/\x1b\[[0-9;]*m//g' /tmp/install6.out | grep -E "Обновление|УС
 [ -f /opt/demension-panel/UPDATE_MARKER ] || fail "git pull не выполнен"
 
 section "12. Ошибка git pull: панель не останавливается"
-git -C /opt/demension-panel remote set-url origin /nonexistent
+G -C /opt/demension-panel remote set-url origin /nonexistent
 : > /var/log/systemctl-shim.log
 bash install.sh > /tmp/install7.out 2>&1
 CODE=$?
