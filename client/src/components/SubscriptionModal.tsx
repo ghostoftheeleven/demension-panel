@@ -3,12 +3,15 @@ import QRCode from 'qrcode';
 import { X, Link2, Copy, Check, QrCode, RefreshCw, Server as ServerIcon, Smartphone } from 'lucide-react';
 import type { Subscriber } from '../types';
 import { api } from '../api';
+import { copyToClipboard } from '../utils';
 
 interface SubscriptionModalProps {
   isOpen: boolean;
   subscriber: Subscriber | null;
   onClose: () => void;
   onTokenReset: (updated: Subscriber) => void;
+  /** Публичный адрес панели из настроек (если панель открыта через туннель/внутренний адрес) */
+  publicUrl?: string | null;
 }
 
 export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
@@ -16,12 +19,13 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   subscriber,
   onClose,
   onTokenReset,
+  publicUrl,
 }) => {
   const [copied, setCopied] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
 
-  const subUrl = subscriber ? api.getSubscriptionUrl(subscriber.token) : '';
+  const subUrl = subscriber ? api.getSubscriptionUrl(subscriber.token, publicUrl) : '';
 
   useEffect(() => {
     if (!subUrl) {
@@ -41,14 +45,17 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
 
   if (!isOpen || !subscriber) return null;
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(subUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopy = async () => {
+    if (await copyToClipboard(subUrl)) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } else {
+      alert('Не удалось скопировать — выделите ссылку вручную');
+    }
   };
 
   const handleResetToken = async () => {
-    if (!confirm('Вы уверены, что хотите сбросить ссылку подписки? Старая ссылка перестанет работать!')) return;
+    if (!confirm('Сбросить ссылку подписки? Старая ссылка перестанет работать, а ключи пользователя будут перевыпущены — на всех устройствах нужно будет добавить новую подписку.')) return;
     setResetting(true);
     try {
       const res = await api.resetSubscriberToken(subscriber.id);
@@ -152,7 +159,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
               </div>
               <p className="text-xs text-zinc-400 text-center flex items-center gap-1.5 pt-1">
                 <QrCode className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Отсканируйте камерой в приложении <strong>HAPP</strong> или <strong>Incy</strong></span>
+                <span>Отсканируйте камерой в приложении <strong>Incy</strong> (iOS / Android)</span>
               </p>
             </div>
           )}
@@ -164,7 +171,8 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
               <span>Автоматическое обновление серверов (Auto-sync)</span>
             </div>
             <p>
-              При добавлении или удалении серверов в панели список в приложениях <strong>HAPP</strong> и <strong>Incy</strong> обновится автоматически без участия пользователя.
+              При добавлении или удалении серверов в панели список в приложении <strong>Incy</strong> обновится автоматически.
+              HAPP не поддерживает AmneziaWG — для него подписка работать не будет.
             </p>
           </div>
         </div>

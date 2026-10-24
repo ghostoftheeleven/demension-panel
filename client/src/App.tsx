@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Navbar } from './components/Navbar';
 import { ServerCards } from './components/ServerCards';
 import { ClientList } from './components/ClientList';
@@ -39,7 +39,11 @@ export const App: React.FC = () => {
   // Subscriber modals
   const [isAddSubscriberOpen, setIsAddSubscriberOpen] = useState(false);
   const [editingSubscriber, setEditingSubscriber] = useState<Subscriber | null>(null);
-  const [subscriptionModalSub, setSubscriptionModalSub] = useState<Subscriber | null>(null);
+  const [subscriptionModalSubId, setSubscriptionModalSubId] = useState<number | null>(null);
+  const [editingServer, setEditingServer] = useState<Server | null>(null);
+  const [publicUrl, setPublicUrl] = useState<string | null>(null);
+  // Номер последнего запроса клиентов: ответ для ранее выбранного сервера отбрасывается
+  const clientsRequestRef = useRef(0);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
 
   // Check auth on mount
@@ -65,15 +69,17 @@ export const App: React.FC = () => {
   const loadData = async () => {
     if (!user) return;
     try {
-      const [serversData, subscribersData] = await Promise.all([
+      const [serversData, subscribersData, settings] = await Promise.all([
         api.getServers(),
         api.getSubscribers(),
+        api.getSettings().catch(() => null),
       ]);
       setServers(serversData);
       setSubscribers(subscribersData);
-      if (serversData.length > 0 && selectedServerId === null) {
-        setSelectedServerId(serversData[0].id);
-      }
+      if (settings) setPublicUrl(settings.public_url || null);
+      setSelectedServerId((current) =>
+        current !== null && serversData.some((s) => s.id === current) ? current : serversData[0]?.id ?? null
+      );
     } catch (err) {
       console.error('Ошибка загрузки данных:', err);
     } finally {
@@ -82,9 +88,10 @@ export const App: React.FC = () => {
   };
 
   const loadClients = async (serverId: number) => {
+    const requestId = ++clientsRequestRef.current;
     try {
       const data = await api.getClients(serverId);
-      setClients(data);
+      if (requestId === clientsRequestRef.current) setClients(data);
     } catch (err) {
       console.error('Ошибка загрузки клиентов:', err);
     }
@@ -97,10 +104,9 @@ export const App: React.FC = () => {
   }, [user]);
 
   useEffect(() => {
+    setClients([]);
     if (selectedServerId !== null && user) {
       loadClients(selectedServerId);
-    } else {
-      setClients([]);
     }
   }, [selectedServerId, user]);
 
@@ -129,6 +135,7 @@ export const App: React.FC = () => {
   }
 
   const selectedServer = servers.find((s) => s.id === selectedServerId) || null;
+  const subscriptionModalSub = subscribers.find((s) => s.id === subscriptionModalSubId) || null;
 
   const handleServerAdded = (newServer: Server) => {
     setServers((prev) => [newServer, ...prev]);
@@ -177,6 +184,12 @@ export const App: React.FC = () => {
     const remaining = servers.filter((s) => s.id !== id);
     setServers(remaining);
     setSelectedServerId(remaining.length > 0 ? remaining[0].id : null);
+    // Клиенты удалённого сервера пропали и из подписок
+    loadData();
+  };
+
+  const handleServerUpdated = (updated: Server) => {
+    setServers((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
   };
 
   return (
@@ -205,7 +218,7 @@ export const App: React.FC = () => {
           </div>
         ) : activeTab === 'security' ? (
           /* Security: HTTPS & Fail2ban Tab */
-          <SecurityView />
+          <SecurityView onSettingsSaved={(settings) => setPublicUrl(settings.public_url || null)} />
         ) : activeTab === 'subscribers' ? (
           /* Subscribers & Multi-Node Subscriptions Tab */
           <SubscribersList
@@ -218,7 +231,7 @@ export const App: React.FC = () => {
               setEditingSubscriber(sub);
               setIsAddSubscriberOpen(true);
             }}
-            onShowSubscription={(sub) => setSubscriptionModalSub(sub)}
+            onShowSubscription={(sub) => setSubscriptionModalSubId(sub.id)}
             onSubscriberUpdated={(updated) => {
               setSubscribers((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
             }}
@@ -282,6 +295,8 @@ export const App: React.FC = () => {
               onInstallServer={(s) => setInstallModalServer(s)}
               onEditParams={(s) => setParamsModalServer(s)}
               onServerDeleted={handleServerDeleted}
+              onEditServer={(s) => setEditingServer(s)}
+              onServerChanged={loadData}
             />
 
             {selectedServer && (
@@ -301,9 +316,14 @@ export const App: React.FC = () => {
 
       {/* Modals */}
       <AddServerModal
-        isOpen={isAddServerOpen}
-        onClose={() => setIsAddServerOpen(false)}
+        isOpen={isAddServerOpen || !!editingServer}
+        editingServer={editingServer}
+        onClose={() => {
+          setIsAddServerOpen(false);
+          setEditingServer(null);
+        }}
         onServerAdded={handleServerAdded}
+        onServerUpdated={handleServerUpdated}
       />
 
       <InstallLogsModal
@@ -317,9 +337,7 @@ export const App: React.FC = () => {
         isOpen={!!paramsModalServer}
         server={paramsModalServer}
         onClose={() => setParamsModalServer(null)}
-        onUpdated={(updated) => {
-          setServers((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
-        }}
+        onUpdated={handleServerUpdated}
       />
 
       <AddClientModal
@@ -341,9 +359,9 @@ export const App: React.FC = () => {
       <SubscriptionModal
         isOpen={!!subscriptionModalSub}
         subscriber={subscriptionModalSub}
-        onClose={() => setSubscriptionModalSub(null)}
+        publicUrl={publicUrl}
+        onClose={() => setSubscriptionModalSubId(null)}
         onTokenReset={(updated) => {
-          setSubscriptionModalSub(updated);
           setSubscribers((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
         }}
       />

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import type { Client } from '../types';
 import { api } from '../api';
+import { formatBytes } from '../utils';
 
 interface ClientListProps {
   clients: Client[];
@@ -33,14 +34,6 @@ export const ClientList: React.FC<ClientListProps> = ({
   onClientDeleted,
 }) => {
   const [search, setSearch] = useState('');
-
-  const formatBytes = (bytes: number) => {
-    if (!bytes || bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-  };
 
   const formatLastHandshake = (dateStr: string | null) => {
     if (!dateStr) return 'Никогда';
@@ -65,6 +58,14 @@ export const ClientList: React.FC<ClientListProps> = ({
         enabled: client.enabled ? 0 : 1,
       });
       onClientUpdated(updated);
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleDownload = async (client: Client) => {
+    try {
+      await api.downloadClientConfig(client.id, client.name);
     } catch (err: any) {
       alert(err.message);
     }
@@ -140,7 +141,7 @@ export const ClientList: React.FC<ClientListProps> = ({
                 <th className="pb-3 font-medium">Клиент / Устройство</th>
                 <th className="pb-3 font-medium">IP адрес</th>
                 <th className="pb-3 font-medium">Статус</th>
-                <th className="pb-3 font-medium">Трафик (RX / TX)</th>
+                <th className="pb-3 font-medium">Трафик (получено / отправлено)</th>
                 <th className="pb-3 font-medium">Активность</th>
                 <th className="pb-3 font-medium text-right">Действия</th>
               </tr>
@@ -154,7 +155,7 @@ export const ClientList: React.FC<ClientListProps> = ({
                   <tr key={client.id} className="hover:bg-zinc-800/20 transition">
                     {/* Name */}
                     <td className="py-3 font-medium text-white flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${disabled ? 'bg-zinc-600' : online ? 'bg-emerald-400' : 'bg-zinc-500'}`} />
                       <span>{client.name}</span>
                     </td>
 
@@ -184,13 +185,13 @@ export const ClientList: React.FC<ClientListProps> = ({
                     {/* Traffic */}
                     <td className="py-3 text-zinc-300 font-mono">
                       <div className="flex items-center gap-3">
-                        <span className="flex items-center gap-1 text-emerald-400">
+                        <span className="flex items-center gap-1 text-emerald-400" title="Получено клиентом">
                           <ArrowDownRight className="w-3.5 h-3.5" />
-                          {formatBytes(client.total_rx)}
-                        </span>
-                        <span className="flex items-center gap-1 text-cyan-400">
-                          <ArrowUpRight className="w-3.5 h-3.5" />
                           {formatBytes(client.total_tx)}
+                        </span>
+                        <span className="flex items-center gap-1 text-cyan-400" title="Отправлено клиентом">
+                          <ArrowUpRight className="w-3.5 h-3.5" />
+                          {formatBytes(client.total_rx)}
                         </span>
                       </div>
                     </td>
@@ -214,14 +215,13 @@ export const ClientList: React.FC<ClientListProps> = ({
                           <QrCode className="w-4 h-4" />
                         </button>
 
-                        <a
-                          href={api.getClientConfigUrl(client.id)}
-                          download={`${client.name}.conf`}
+                        <button
+                          onClick={() => handleDownload(client)}
                           title="Скачать .conf"
                           className="p-1.5 text-zinc-400 hover:text-cyan-400 hover:bg-zinc-800 rounded-lg transition"
                         >
                           <Download className="w-4 h-4" />
-                        </a>
+                        </button>
 
                         <button
                           onClick={() => handleToggle(client)}

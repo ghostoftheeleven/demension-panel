@@ -2,6 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { X, UserPlus, Server as ServerIcon, CheckSquare, Square, Shield } from 'lucide-react';
 import type { Server, Subscriber } from '../types';
 import { api } from '../api';
+import { GIB } from '../utils';
+
+function toDateInput(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+}
 
 interface AddSubscriberModalProps {
   isOpen: boolean;
@@ -20,19 +27,29 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
 }) => {
   const [name, setName] = useState('');
   const [selectedServerIds, setSelectedServerIds] = useState<number[]>([]);
+  const [limitGb, setLimitGb] = useState('');
+  const [expireDate, setExpireDate] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Форма заполняется только при открытии: периодический опрос серверов не должен затирать ввод
   useEffect(() => {
+    if (!isOpen) return;
     if (editingSubscriber) {
       setName(editingSubscriber.name);
       setSelectedServerIds(editingSubscriber.server_ids || []);
+      setLimitGb(editingSubscriber.traffic_limit ? String(+(editingSubscriber.traffic_limit / GIB).toFixed(2)) : '');
+      setExpireDate(toDateInput(editingSubscriber.expire_at));
     } else {
       setName('');
       // By default select all online servers
       setSelectedServerIds(servers.filter((s) => s.status === 'online').map((s) => s.id));
+      setLimitGb('');
+      setExpireDate('');
     }
-  }, [editingSubscriber, servers, isOpen]);
+    setError(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, editingSubscriber?.id]);
 
   if (!isOpen) return null;
 
@@ -54,6 +71,14 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
     e.preventDefault();
     if (!name.trim()) return;
 
+    const limit = limitGb.trim() ? Math.round(parseFloat(limitGb.replace(',', '.')) * GIB) : 0;
+    if (!Number.isFinite(limit) || limit < 0) {
+      setError('Лимит трафика должен быть положительным числом (ГБ)');
+      return;
+    }
+    // Дата окончания — конец выбранного дня по местному времени
+    const expireAt = expireDate ? new Date(`${expireDate}T23:59:59`).toISOString() : null;
+
     setError(null);
     setLoading(true);
 
@@ -62,12 +87,16 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
         const updated = await api.updateSubscriber(editingSubscriber.id, {
           name: name.trim(),
           server_ids: selectedServerIds,
+          traffic_limit: limit,
+          expire_at: expireAt,
         });
-        onSaved({ ...editingSubscriber, ...updated, server_ids: selectedServerIds });
+        onSaved(updated);
       } else {
         const created = await api.createSubscriber({
           name: name.trim(),
           server_ids: selectedServerIds,
+          traffic_limit: limit,
+          expire_at: expireAt,
         });
         onSaved(created);
       }
@@ -88,10 +117,10 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
             <UserPlus className="w-5 h-5 text-emerald-400" />
             <div>
               <h2 className="text-base font-semibold text-white">
-                {editingSubscriber ? 'Редактировать доступ к нодам' : 'Новый пользователь (Подписка)'}
+                {editingSubscriber ? 'Редактировать пользователя' : 'Новый пользователь (Подписка)'}
               </h2>
               <p className="text-xs text-zinc-400">
-                {editingSubscriber ? editingSubscriber.name : 'Генерация мультисерверной подписки для HAPP и Incy'}
+                {editingSubscriber ? editingSubscriber.name : 'Мультисерверная подписка AmneziaWG (Incy)'}
               </p>
             </div>
           </div>
@@ -124,6 +153,30 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
               onChange={(e) => setName(e.target.value)}
               className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500 transition text-sm"
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Лимит трафика, ГБ</label>
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                placeholder="без лимита"
+                value={limitGb}
+                onChange={(e) => setLimitGb(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500 transition text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Действует до</label>
+              <input
+                type="date"
+                value={expireDate}
+                onChange={(e) => setExpireDate(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-emerald-500 transition text-sm"
+              />
+            </div>
           </div>
 
           {/* Node Selection Checkboxes */}
@@ -202,7 +255,7 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
               </div>
             )}
             <p className="text-[11px] text-zinc-500 mt-2">
-              * Пользователь получит единую ссылку подписки. Все выбранные ноды появятся у него в HAPP / Incy автоматически.
+              * Пользователь получит единую ссылку подписки. Все выбранные ноды появятся у него в Incy автоматически.
             </p>
           </div>
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Terminal, CheckCircle2, AlertCircle, X, Loader2 } from 'lucide-react';
 import type { Server } from '../types';
+import { getToken } from '../api';
 
 interface InstallLogsModalProps {
   isOpen: boolean;
@@ -20,6 +21,10 @@ export const InstallLogsModal: React.FC<InstallLogsModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const onFinishedRef = useRef(onFinished);
+  useEffect(() => {
+    onFinishedRef.current = onFinished;
+  }, [onFinished]);
 
   useEffect(() => {
     if (!isOpen || !server) return;
@@ -33,29 +38,36 @@ export const InstallLogsModal: React.FC<InstallLogsModalProps> = ({
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
+    let finished = false;
+
+    // Токен передаётся первым сообщением, а не в URL
     ws.onopen = () => {
-      setStatus('running');
-      ws.send(JSON.stringify({ type: 'start_install', serverId: server.id }));
+      ws.send(JSON.stringify({ type: 'auth', token: getToken() }));
     };
 
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
-        if (msg.type === 'log') {
+        if (msg.type === 'auth_ok') {
+          setStatus('running');
+          ws.send(JSON.stringify({ type: 'start_install', serverId: server.id }));
+        } else if (msg.type === 'log') {
           setLogs((prev) => [...prev, msg.data]);
         } else if (msg.type === 'install_finished') {
+          finished = true;
           if (msg.result?.success) {
             setStatus('success');
-            onFinished();
+            onFinishedRef.current();
           } else {
             setStatus('error');
             setErrorMessage(msg.result?.error || 'Произошла ошибка при установке');
-            onFinished();
+            onFinishedRef.current();
           }
         } else if (msg.type === 'error') {
+          finished = true;
           setStatus('error');
           setErrorMessage(msg.message);
-          onFinished();
+          onFinishedRef.current();
         }
       } catch {
         setLogs((prev) => [...prev, event.data]);
@@ -63,11 +75,21 @@ export const InstallLogsModal: React.FC<InstallLogsModalProps> = ({
     };
 
     ws.onerror = () => {
+      if (finished) return;
       setStatus('error');
       setErrorMessage('Не удалось установить WebSocket соединение с панелью');
     };
 
+    ws.onclose = () => {
+      if (finished) return;
+      finished = true;
+      setStatus('error');
+      setErrorMessage('Соединение с панелью прервано. Установка могла продолжиться на сервере — проверьте его статус через минуту.');
+      onFinishedRef.current();
+    };
+
     return () => {
+      finished = true;
       ws.close();
     };
   }, [isOpen, server]);

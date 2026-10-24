@@ -10,9 +10,11 @@ import {
   Server as ServerIcon,
   Users,
   Settings,
+  RotateCcw,
 } from 'lucide-react';
 import type { Subscriber } from '../types';
 import { api } from '../api';
+import { formatBytes } from '../utils';
 
 interface SubscribersListProps {
   subscribers: Subscriber[];
@@ -33,20 +35,21 @@ export const SubscribersList: React.FC<SubscribersListProps> = ({
 }) => {
   const [search, setSearch] = useState('');
 
-  const formatBytes = (bytes: number) => {
-    if (!bytes || bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-  };
-
   const handleToggle = async (sub: Subscriber) => {
     try {
       const updated = await api.updateSubscriber(sub.id, {
         enabled: sub.enabled ? 0 : 1,
       });
-      onSubscriberUpdated({ ...sub, ...updated });
+      onSubscriberUpdated(updated);
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleResetTraffic = async (sub: Subscriber) => {
+    if (!confirm(`Обнулить счётчик трафика пользователя "${sub.name}"?`)) return;
+    try {
+      onSubscriberUpdated(await api.resetSubscriberTraffic(sub.id));
     } catch (err: any) {
       alert(err.message);
     }
@@ -72,7 +75,7 @@ export const SubscribersList: React.FC<SubscribersListProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h3 className="text-base font-semibold text-white flex items-center gap-2">
-            <span>Пользователи и подписки (HAPP / Incy)</span>
+            <span>Пользователи и подписки (Incy)</span>
             <span className="text-xs font-mono text-zinc-400 bg-zinc-800 px-2 py-0.5 rounded-full">
               {subscribers.length}
             </span>
@@ -111,7 +114,7 @@ export const SubscribersList: React.FC<SubscribersListProps> = ({
           <Users className="w-10 h-10 text-zinc-600 mx-auto mb-2" />
           <p className="text-sm font-medium text-zinc-400">Нет созданных пользователей</p>
           <p className="text-xs text-zinc-600 mt-1">
-            Нажмите «Новый пользователь», чтобы настроить доступ к серверам и создать ссылку для HAPP / Incy
+            Нажмите «Новый пользователь», чтобы настроить доступ к серверам и создать ссылку подписки
           </p>
         </div>
       ) : (
@@ -163,6 +166,10 @@ export const SubscribersList: React.FC<SubscribersListProps> = ({
                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-800 text-zinc-400 border border-zinc-700">
                           Отключен
                         </span>
+                      ) : sub.suspended ? (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                          {sub.expired ? 'Срок истёк' : 'Лимит исчерпан'}
+                        </span>
                       ) : (
                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -174,15 +181,23 @@ export const SubscribersList: React.FC<SubscribersListProps> = ({
                     {/* Traffic */}
                     <td className="py-3 text-zinc-300 font-mono">
                       <div className="flex items-center gap-3">
-                        <span className="flex items-center gap-1 text-emerald-400" title="Входящий (RX)">
+                        <span className="flex items-center gap-1 text-emerald-400" title="Получено пользователем">
                           <ArrowDownRight className="w-3.5 h-3.5" />
-                          {formatBytes(sub.total_rx)}
-                        </span>
-                        <span className="flex items-center gap-1 text-cyan-400" title="Исходящий (TX)">
-                          <ArrowUpRight className="w-3.5 h-3.5" />
                           {formatBytes(sub.total_tx)}
                         </span>
+                        <span className="flex items-center gap-1 text-cyan-400" title="Отправлено пользователем">
+                          <ArrowUpRight className="w-3.5 h-3.5" />
+                          {formatBytes(sub.total_rx)}
+                        </span>
                       </div>
+                      {(sub.traffic_limit > 0 || sub.expire_at) && (
+                        <div className="text-[10px] text-zinc-500 mt-1 space-x-2">
+                          {sub.traffic_limit > 0 && (
+                            <span>{formatBytes(sub.traffic_used)} из {formatBytes(sub.traffic_limit)}</span>
+                          )}
+                          {sub.expire_at && <span>до {new Date(sub.expire_at).toLocaleDateString()}</span>}
+                        </div>
+                      )}
                     </td>
 
                     {/* Actions */}
@@ -192,7 +207,7 @@ export const SubscribersList: React.FC<SubscribersListProps> = ({
                         <button
                           onClick={() => onShowSubscription(sub)}
                           className="flex items-center gap-1 px-2.5 py-1 text-xs bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-lg transition font-medium"
-                          title="Ссылка подписки и QR-код для HAPP и Incy"
+                          title="Ссылка подписки и QR-код для Incy"
                         >
                           <Link2 className="w-3.5 h-3.5" />
                           <span>Подписка</span>
@@ -205,6 +220,14 @@ export const SubscribersList: React.FC<SubscribersListProps> = ({
                           className="p-1.5 text-zinc-400 hover:text-cyan-400 hover:bg-zinc-800 rounded-lg transition"
                         >
                           <Settings className="w-4 h-4" />
+                        </button>
+
+                        <button
+                          onClick={() => handleResetTraffic(sub)}
+                          title="Обнулить трафик"
+                          className="p-1.5 text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 rounded-lg transition"
+                        >
+                          <RotateCcw className="w-4 h-4" />
                         </button>
 
                         {/* Toggle */}

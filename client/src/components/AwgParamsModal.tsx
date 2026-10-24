@@ -10,14 +10,23 @@ interface AwgParamsModalProps {
   onUpdated: (server: Server) => void;
 }
 
-export const AwgParamsModal: React.FC<AwgParamsModalProps> = ({
-  isOpen,
+// Хуки живут во внутреннем компоненте: он монтируется только при открытии окна,
+// а key пересоздаёт его при выборе другого сервера
+export const AwgParamsModal: React.FC<AwgParamsModalProps> = ({ isOpen, server, onClose, onUpdated }) => {
+  if (!isOpen || !server) return null;
+  return <AwgParamsForm key={server.id} server={server} onClose={onClose} onUpdated={onUpdated} />;
+};
+
+const CHANGE_WARNING =
+  'Сервер AmneziaWG будет перезапущен с новыми параметрами. Все текущие подключения оборвутся, ' +
+  'а клиентам нужно будет обновить подписку или заново импортировать конфигурацию. Продолжить?';
+
+const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: (server: Server) => void }> = ({
   server,
   onClose,
   onUpdated,
 }) => {
-  if (!isOpen || !server) return null;
-
+  const installed = server.status !== 'uninstalled';
   const [jc, setJc] = useState(server.jc);
   const [jmin, setJmin] = useState(server.jmin);
   const [jmax, setJmax] = useState(server.jmax);
@@ -30,6 +39,7 @@ export const AwgParamsModal: React.FC<AwgParamsModalProps> = ({
   const [loading, setLoading] = useState(false);
 
   const handleRandomize = async () => {
+    if (installed && !confirm(CHANGE_WARNING)) return;
     try {
       setLoading(true);
       const updated = await api.randomizeParams(server.id);
@@ -52,6 +62,7 @@ export const AwgParamsModal: React.FC<AwgParamsModalProps> = ({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (installed && !confirm(CHANGE_WARNING)) return;
     try {
       setLoading(true);
       const updated = await api.updateServer(server.id, {
@@ -100,6 +111,7 @@ export const AwgParamsModal: React.FC<AwgParamsModalProps> = ({
             <Info className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
             <span>
               Эти параметры изменяют структуру пакетов WireGuard, маскируя протокол от систем глубокого анализа трафика (DPI/ТСПУ).
+              {installed && ' После сохранения AmneziaWG на сервере будет перезапущен, а клиентам потребуется обновить конфигурацию.'}
             </span>
           </div>
 

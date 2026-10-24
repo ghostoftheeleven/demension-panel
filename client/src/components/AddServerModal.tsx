@@ -1,18 +1,23 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { X, Server, Key, Lock, Shield } from 'lucide-react';
 import { api } from '../api';
-import type { Server as ServerType } from '../types';
+import type { Server as ServerType, ServerUpdate } from '../types';
 
 interface AddServerModalProps {
   isOpen: boolean;
   onClose: () => void;
   onServerAdded: (server: ServerType) => void;
+  /** Если задан — окно работает в режиме редактирования */
+  editingServer?: ServerType | null;
+  onServerUpdated?: (server: ServerType) => void;
 }
 
 export const AddServerModal: React.FC<AddServerModalProps> = ({
   isOpen,
   onClose,
   onServerAdded,
+  editingServer = null,
+  onServerUpdated,
 }) => {
   const [name, setName] = useState('');
   const [host, setHost] = useState('');
@@ -25,8 +30,30 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
   const [subnet, setSubnet] = useState('10.8.0.1/24');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resetHostKey, setResetHostKey] = useState(false);
+
+  const editing = Boolean(editingServer);
+  const hasClients = (editingServer?.client_count || 0) > 0;
+
+  // Заполнение формы при каждом открытии (без устаревших значений от прошлого раза)
+  useEffect(() => {
+    if (!isOpen) return;
+    setName(editingServer?.name ?? '');
+    setHost(editingServer?.host ?? '');
+    setSshPort(String(editingServer?.ssh_port ?? 22));
+    setSshUser(editingServer?.ssh_user ?? 'root');
+    setAuthType(editingServer?.has_ssh_key ? 'key' : 'password');
+    setSshPassword('');
+    setSshKey('');
+    setAwgPort(String(editingServer?.awg_port ?? 51820));
+    setSubnet(editingServer?.subnet ?? '10.8.0.1/24');
+    setResetHostKey(false);
+    setError(null);
+  }, [isOpen, editingServer]);
 
   if (!isOpen) return null;
+
+  const currentAuth = editingServer?.has_ssh_key ? 'key' : 'password';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,6 +61,35 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
     setLoading(true);
 
     try {
+      if (editingServer) {
+        const update: ServerUpdate = {
+          name,
+          host,
+          ssh_port: parseInt(sshPort, 10),
+          ssh_user: sshUser,
+          awg_port: parseInt(awgPort, 10),
+          subnet,
+        };
+        // Пустое поле — оставить текущий секрет; смена способа требует нового значения
+        const secret = authType === 'password' ? sshPassword : sshKey;
+        if (secret || authType !== currentAuth) {
+          update.auth_type = authType;
+          if (authType === 'password') update.ssh_password = sshPassword;
+          else update.ssh_key = sshKey;
+        }
+        if (resetHostKey) update.reset_host_key = true;
+        if (update.awg_port !== editingServer.awg_port && editingServer.status !== 'uninstalled') {
+          if (!confirm('Смена порта пересоздаст контейнер AmneziaWG на сервере, а клиентам потребуется обновить конфигурацию. Продолжить?')) {
+            setLoading(false);
+            return;
+          }
+        }
+        const updated = await api.updateServer(editingServer.id, update);
+        onServerUpdated?.(updated);
+        onClose();
+        return;
+      }
+
       const server = await api.createServer({
         name,
         host,
@@ -61,7 +117,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
         <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-zinc-900/50">
           <div className="flex items-center gap-2">
             <Server className="w-5 h-5 text-emerald-400" />
-            <h2 className="text-lg font-semibold text-white">Добавить сервер</h2>
+            <h2 className="text-lg font-semibold text-white">{editing ? 'Настройки сервера' : 'Добавить сервер'}</h2>
           </div>
           <button
             onClick={onClose}
@@ -167,7 +223,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
             {authType === 'password' ? (
               <input
                 type="password"
-                placeholder="Введите пароль root"
+                placeholder={editing && editingServer?.has_ssh_password ? 'Оставьте пустым, чтобы не менять' : 'Введите пароль SSH'}
                 value={sshPassword}
                 onChange={(e) => setSshPassword(e.target.value)}
                 className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500 transition text-sm"
@@ -175,7 +231,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
             ) : (
               <textarea
                 rows={3}
-                placeholder="Вставьте приватный ключ (-----BEGIN OPENSSH PRIVATE KEY-----)"
+                placeholder={editing && editingServer?.has_ssh_key ? 'Оставьте пустым, чтобы не менять ключ' : 'Вставьте приватный ключ (-----BEGIN OPENSSH PRIVATE KEY-----)'}
                 value={sshKey}
                 onChange={(e) => setSshKey(e.target.value)}
                 className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500 transition font-mono text-xs"
@@ -208,16 +264,39 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
                 <input
                   type="text"
                   value={subnet}
+                  disabled={editing && hasClients}
+                  title={editing && hasClients ? 'Подсеть нельзя менять, пока на сервере есть клиенты' : undefined}
                   onChange={(e) => setSubnet(e.target.value)}
                   className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-emerald-500 transition text-sm"
                 />
               </div>
             </div>
-            <p className="text-[11px] text-zinc-500 mt-2">
-              * Заголовки обфускации (H1-H4, Jc, S1, S2) будут сгенерированы автоматически случайным образом.
-            </p>
+            {!editing && (
+              <p className="text-[11px] text-zinc-500 mt-2">
+                * Заголовки обфускации (H1-H4, Jc, S1, S2) будут сгенерированы автоматически случайным образом.
+              </p>
+            )}
+            {sshUser !== 'root' && (
+              <p className="text-[11px] text-amber-400/80 mt-2">
+                * Для пользователя, отличного от root, нужен sudo без пароля (NOPASSWD).
+              </p>
+            )}
           </div>
 
+          {editing && editingServer?.host_key && (
+            <label className="flex items-start gap-2 text-xs text-zinc-400 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={resetHostKey}
+                onChange={(e) => setResetHostKey(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                Сбросить сохранённый ключ SSH-хоста (<span className="font-mono">{editingServer.host_key.slice(0, 24)}…</span>).
+                Только если сервер был переустановлен — иначе это может быть атака «человек посередине».
+              </span>
+            </label>
+          )}
           {/* Submit */}
           <div className="flex items-center justify-end gap-3 pt-4">
             <button
@@ -232,7 +311,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
               disabled={loading}
               className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-medium text-sm px-5 py-2 rounded-xl transition shadow-lg shadow-emerald-600/20"
             >
-              {loading ? 'Добавление...' : 'Сохранить сервер'}
+              {loading ? 'Сохранение...' : 'Сохранить сервер'}
             </button>
           </div>
         </form>

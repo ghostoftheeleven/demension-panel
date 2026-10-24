@@ -7,6 +7,9 @@ import {
   Trash2,
   KeyRound,
   Shield,
+  Pencil,
+  AlertTriangle,
+  Zap,
 } from 'lucide-react';
 import type { Server } from '../types';
 import { api } from '../api';
@@ -18,7 +21,17 @@ interface ServerCardsProps {
   onInstallServer: (server: Server) => void;
   onEditParams: (server: Server) => void;
   onServerDeleted: (id: number) => void;
+  onEditServer: (server: Server) => void;
+  onServerChanged: () => void;
 }
+
+const STATUS_LABELS: Record<Server['status'], string> = {
+  online: 'AmneziaWG Активен',
+  installing: 'Идет установка',
+  offline: 'Недоступен',
+  error: 'Ошибка',
+  uninstalled: 'Не установлен',
+};
 
 export const ServerCards: React.FC<ServerCardsProps> = ({
   servers,
@@ -27,7 +40,10 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
   onInstallServer,
   onEditParams,
   onServerDeleted,
+  onEditServer,
+  onServerChanged,
 }) => {
+  const [applying, setApplying] = useState<number | null>(null);
   const [testingSsh, setTestingSsh] = useState<number | null>(null);
   const [syncing, setSyncing] = useState<number | null>(null);
 
@@ -58,16 +74,40 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
       alert(err.message);
     } finally {
       setSyncing(null);
+      onServerChanged();
+    }
+  };
+
+  const handleApply = async (serverId: number) => {
+    setApplying(serverId);
+    try {
+      const res = await api.applyServer(serverId);
+      alert(res.success ? 'Параметры применены, AmneziaWG перезапущен.' : `Ошибка применения: ${res.error}`);
+    } finally {
+      setApplying(null);
+      onServerChanged();
     }
   };
 
   const handleDelete = async (server: Server) => {
-    if (!confirm(`Удалить сервер "${server.name}" из панели?`)) return;
+    if (!confirm(`Удалить сервер "${server.name}" из панели вместе со всеми его клиентами?`)) return;
+    const teardown =
+      server.status !== 'uninstalled' &&
+      confirm(
+        'Остановить и удалить AmneziaWG на самом сервере?\n\n' +
+          'ОК — VPN на сервере будет отключён.\n' +
+          'Отмена — удалить только из панели (VPN на сервере продолжит работать для всех выданных конфигов).'
+      );
     try {
-      await api.deleteServer(server.id);
+      await api.deleteServer(server.id, { teardown });
       onServerDeleted(server.id);
     } catch (err: any) {
-      alert(err.message);
+      if (teardown && confirm(`${err.message}\n\nУдалить сервер из панели принудительно?`)) {
+        await api.deleteServer(server.id, { force: true }).catch((e) => alert(e.message));
+        onServerDeleted(server.id);
+      } else {
+        alert(err.message);
+      }
     }
   };
 
@@ -101,6 +141,8 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
                     ? 'bg-amber-400 animate-ping'
                     : s.status === 'error'
                     ? 'bg-red-400'
+                    : s.status === 'offline'
+                    ? 'bg-orange-400'
                     : 'bg-zinc-500'
                 }`}
               />
@@ -131,17 +173,13 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
                         ? 'bg-amber-400/10 text-amber-400 border border-amber-400/20'
                         : selectedServer.status === 'error'
                         ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                        : selectedServer.status === 'offline'
+                        ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20'
                         : 'bg-zinc-800 text-zinc-400 border border-zinc-700'
                     }`}
                   >
                     <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                    {selectedServer.status === 'online'
-                      ? 'AmneziaWG Активен'
-                      : selectedServer.status === 'installing'
-                      ? 'Идет установка'
-                      : selectedServer.status === 'error'
-                      ? 'Ошибка'
-                      : 'Не установлен'}
+                    {STATUS_LABELS[selectedServer.status]}
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-4 text-xs text-zinc-400 mt-1 font-mono">
@@ -161,7 +199,7 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
               >
                 <Play className="w-3.5 h-3.5 fill-current" />
                 <span>
-                  {selectedServer.status === 'online' ? 'Переустановить AWG' : 'Установить AmneziaWG'}
+                  {selectedServer.status === 'uninstalled' ? 'Установить AmneziaWG' : 'Переустановить AWG'}
                 </span>
               </button>
 
@@ -184,7 +222,16 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
                 <span>{testingSsh === selectedServer.id ? 'Тест...' : 'Тест SSH'}</span>
               </button>
 
-              {selectedServer.status === 'online' && (
+              <button
+                onClick={() => onEditServer(selectedServer)}
+                className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium px-3.5 py-2.5 rounded-xl border border-zinc-700/60 transition"
+                title="Хост, SSH-доступ, порт"
+              >
+                <Pencil className="w-3.5 h-3.5 text-zinc-300" />
+                <span>Настройки</span>
+              </button>
+
+              {selectedServer.status !== 'uninstalled' && selectedServer.status !== 'installing' && (
                 <button
                   onClick={() => handleSync(selectedServer.id)}
                   disabled={syncing === selectedServer.id}
@@ -205,6 +252,31 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
               </button>
             </div>
           </div>
+
+          {(selectedServer.needs_apply || selectedServer.needs_sync || selectedServer.last_error) && selectedServer.status !== 'uninstalled' && (
+            <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3.5 flex flex-wrap items-start justify-between gap-3 text-xs">
+              <div className="flex items-start gap-2 text-amber-300">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  {selectedServer.needs_apply && <p>Параметры интерфейса изменены, но ещё не применены на сервере.</p>}
+                  {selectedServer.needs_sync && !selectedServer.needs_apply && (
+                    <p>Изменения клиентов ещё не доставлены на сервер — панель повторит попытку автоматически.</p>
+                  )}
+                  {selectedServer.last_error && <p className="text-amber-200/80 break-all">Последняя ошибка: {selectedServer.last_error}</p>}
+                </div>
+              </div>
+              {selectedServer.needs_apply && (
+                <button
+                  onClick={() => handleApply(selectedServer.id)}
+                  disabled={applying === selectedServer.id}
+                  className="flex items-center gap-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 font-medium px-3 py-1.5 rounded-lg transition"
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>{applying === selectedServer.id ? 'Применение...' : 'Применить сейчас'}</span>
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Obfuscation Badges Banner */}
           <div className="bg-zinc-950/70 border border-zinc-800/80 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">

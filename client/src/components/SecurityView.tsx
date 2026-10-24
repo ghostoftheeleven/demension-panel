@@ -14,10 +14,27 @@ import {
   Server,
   Power,
 } from 'lucide-react';
-import type { SslStatus, Fail2banStatus, CloudflareZone } from '../types';
+import type { SslStatus, Fail2banStatus, CloudflareZone, PanelSettings } from '../types';
 import { api } from '../api';
+import { PanelSettingsCard } from './PanelSettingsCard';
 
-export const SecurityView: React.FC = () => {
+/**
+ * HTTPS включается сразу (без перезапуска). Открытая по HTTP панель после этого
+ * перестаёт принимать API-запросы, поэтому переходим на HTTPS-адрес.
+ */
+function switchToHttps(domain?: string | null) {
+  if (window.location.protocol === 'https:') return;
+  const isIp = !domain || /^[\d.]+$/.test(domain) || domain.includes(':');
+  const host = isIp ? window.location.hostname : domain;
+  const port = window.location.port ? `:${window.location.port}` : '';
+  setTimeout(() => {
+    window.location.href = `https://${host}${port}${window.location.pathname}`;
+  }, 2500);
+}
+
+const HTTPS_SWITCH_NOTE = ' Через пару секунд панель откроется по HTTPS. Старые http-ссылки подписок продолжат работать.';
+
+export const SecurityView: React.FC<{ onSettingsSaved?: (settings: PanelSettings) => void }> = ({ onSettingsSaved }) => {
   const [sslStatus, setSslStatus] = useState<SslStatus | null>(null);
   const [f2bStatus, setF2bStatus] = useState<Fail2banStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -111,9 +128,10 @@ export const SecurityView: React.FC = () => {
       });
       setMessage({
         type: 'success',
-        text: `🎉 Сертификат Let's Encrypt для ${cfDomain} успешно выпущен и сохранен!`,
+        text: `🎉 Сертификат Let's Encrypt для ${cfDomain} выпущен, HTTPS включён, автопродление настроено.` + HTTPS_SWITCH_NOTE,
       });
       loadSecurityData();
+      switchToHttps(cfDomain.trim());
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
     } finally {
@@ -133,9 +151,10 @@ export const SecurityView: React.FC = () => {
       });
       setMessage({
         type: 'success',
-        text: `🎉 Сертификат Let's Encrypt для ${httpDomain} успешно выпущен!`,
+        text: `🎉 Сертификат Let's Encrypt для ${httpDomain} выпущен, HTTPS включён, автопродление настроено.` + HTTPS_SWITCH_NOTE,
       });
       loadSecurityData();
+      switchToHttps(httpDomain.trim());
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
     } finally {
@@ -153,9 +172,13 @@ export const SecurityView: React.FC = () => {
       await api.issueSelfSignedIp(ipTarget.trim());
       setMessage({
         type: 'success',
-        text: `🎉 Сертификат на IP-адрес ${ipTarget} успешно сгенерирован и установлен!`,
+        text:
+          `🎉 Самоподписанный сертификат для ${ipTarget} установлен. Браузер покажет предупреждение — это ожидаемо. ` +
+          'Мобильные приложения могут не принять такой сертификат для подписок — для них используйте http-ссылку или Let\'s Encrypt.' +
+          HTTPS_SWITCH_NOTE,
       });
       loadSecurityData();
+      switchToHttps(ipTarget.trim());
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
     } finally {
@@ -174,8 +197,9 @@ export const SecurityView: React.FC = () => {
         key: customKey,
         domain: customDomain.trim() || undefined,
       });
-      setMessage({ type: 'success', text: 'Пользовательский сертификат успешно сохранен!' });
+      setMessage({ type: 'success', text: 'Пользовательский сертификат сохранён, HTTPS включён.' + HTTPS_SWITCH_NOTE });
       loadSecurityData();
+      switchToHttps(customDomain.trim() || sslStatus?.domain);
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
     } finally {
@@ -193,9 +217,15 @@ export const SecurityView: React.FC = () => {
       setMessage({
         type: 'success',
         text: targetState
-          ? 'HTTPS активирован! Перезапустите службу панели (systemctl restart demension) для применения.'
+          ? 'HTTPS активирован.' + HTTPS_SWITCH_NOTE
           : 'HTTPS отключен. Панель работает по обычному HTTP.',
       });
+      if (targetState) switchToHttps(sslStatus.domain);
+      else if (window.location.protocol === 'https:') {
+        setTimeout(() => {
+          window.location.href = `http://${window.location.host}${window.location.pathname}`;
+        }, 2000);
+      }
     } catch (err: any) {
       setMessage({ type: 'error', text: err.message });
     }
@@ -250,6 +280,8 @@ export const SecurityView: React.FC = () => {
 
   return (
     <div className="space-y-8">
+      <PanelSettingsCard onSaved={onSettingsSaved} />
+
       {/* Notification banner */}
       {message && (
         <div

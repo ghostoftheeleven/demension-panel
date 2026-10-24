@@ -26,6 +26,10 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
       setError('Новые пароли не совпадают');
       return;
     }
+    if (newPassword.length < 8) {
+      setError('Новый пароль должен содержать не менее 8 символов');
+      return;
+    }
 
     setError(null);
     setLoading(true);
@@ -33,6 +37,9 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
     try {
       await api.changePassword(oldPassword, newPassword);
       setSuccess(true);
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
       setTimeout(() => {
         setSuccess(false);
         onClose();

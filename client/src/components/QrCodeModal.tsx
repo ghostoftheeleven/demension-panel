@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, QrCode, Download, Copy, Check } from 'lucide-react';
 import type { QrCodeData } from '../types';
 import { api } from '../api';
+import { copyToClipboard } from '../utils';
 
 interface QrCodeModalProps {
   isOpen: boolean;
@@ -20,13 +21,18 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
 
   if (!isOpen || !qrData || !clientId) return null;
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(qrData.config);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopy = async () => {
+    if (await copyToClipboard(qrData.config)) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } else {
+      alert('Не удалось скопировать — выделите текст конфигурации вручную');
+    }
   };
 
-  const downloadUrl = api.getClientConfigUrl(clientId);
+  const handleDownload = () => {
+    api.downloadClientConfig(clientId, qrData.clientName).catch((err) => alert(err.message));
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
@@ -59,7 +65,7 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
             />
           </div>
           <p className="text-xs text-zinc-400 text-center">
-            Отсканируйте камерой смартфона в приложении <span className="text-emerald-400 font-medium">Amnezia VPN</span> или <span className="text-emerald-400 font-medium">AmneziaWG</span>
+            Отсканируйте камерой смартфона в приложении <span className="text-emerald-400 font-medium">AmneziaWG</span> (для Amnezia VPN импортируйте .conf файл)
           </p>
 
           {/* Config Preview */}
@@ -81,14 +87,14 @@ export const QrCodeModal: React.FC<QrCodeModalProps> = ({
 
           {/* Download Action */}
           <div className="w-full flex items-center gap-3 pt-2">
-            <a
-              href={downloadUrl}
-              download={`${qrData.clientName}.conf`}
+            <button
+              type="button"
+              onClick={handleDownload}
               className="flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-sm py-2.5 rounded-xl transition shadow-lg shadow-emerald-600/20"
             >
               <Download className="w-4 h-4" />
               <span>Скачать .conf файл</span>
-            </a>
+            </button>
           </div>
         </div>
       </div>
