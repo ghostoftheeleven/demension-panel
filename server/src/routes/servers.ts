@@ -21,10 +21,15 @@ export function serializeServer(s: any) {
   if (!s) return s;
   const { ssh_password, ssh_key, server_private_key, preshared_key, extra_params, ...rest } = s;
   const params = paramsFromRow(s);
+  const remotePanel = s.remote_panel_id
+    ? (db.prepare('SELECT name, status FROM remote_panels WHERE id = ?').get(s.remote_panel_id) as any)
+    : null;
   return {
     ...rest,
     ...params,
     latest_awg_version: LATEST_AWG_VERSION,
+    remote_panel_name: remotePanel?.name ?? null,
+    remote_panel_status: remotePanel?.status ?? null,
     has_ssh_password: Boolean(ssh_password),
     has_ssh_key: Boolean(ssh_key),
     needs_sync: Boolean(s.needs_sync),
@@ -36,6 +41,17 @@ export function serializeServer(s: any) {
 function getServerOr404(id: number): any {
   const server = db.prepare('SELECT * FROM servers WHERE id = ?').get(id) as any;
   if (!server) throw new HttpError(404, 'Сервер не найден');
+  return server;
+}
+
+/**
+ * Нодами партнёра управляет панель владельца: SSH, установка и параметры здесь недоступны
+ */
+function getLocalServerOr404(id: number): any {
+  const server = getServerOr404(id);
+  if (server.remote_panel_id) {
+    throw new HttpError(400, 'Это нода партнёра: её настройками управляет владелец. Отключить её можно в разделе «Партнёры».');
+  }
   return server;
 }
 
@@ -140,7 +156,7 @@ serversRouter.post('/', (req, res) => {
 // PUT update server
 serversRouter.put('/:id', (req, res) => {
   const id = parseId(req.params.id);
-  const server = getServerOr404(id);
+  const server = getLocalServerOr404(id);
   const body = req.body ?? {};
   const updates: Record<string, unknown> = {};
 
@@ -227,7 +243,7 @@ serversRouter.put('/:id', (req, res) => {
 // DELETE server (?teardown=1 — остановить и удалить контейнер на ноде; ?force=1 — удалить из панели даже при ошибке)
 serversRouter.delete('/:id', asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
-  const server = getServerOr404(id);
+  const server = getLocalServerOr404(id);
   if (ProvisionService.isInstalling(id)) throw new HttpError(409, 'Дождитесь окончания установки');
 
   if (req.query.teardown === '1' && server.status !== 'uninstalled') {
@@ -246,7 +262,7 @@ serversRouter.delete('/:id', asyncHandler(async (req, res) => {
 
 // POST test SSH connection
 serversRouter.post('/:id/test-ssh', asyncHandler(async (req, res) => {
-  const server = getServerOr404(parseId(req.params.id));
+  const server = getLocalServerOr404(parseId(req.params.id));
   const result = await SshService.testConnection(ProvisionService.getCredentials(server));
   res.json(result);
 }));
@@ -254,7 +270,7 @@ serversRouter.post('/:id/test-ssh', asyncHandler(async (req, res) => {
 // POST randomize AWG parameters (and apply them on the node)
 serversRouter.post('/:id/randomize-params', (req, res) => {
   const id = parseId(req.params.id);
-  const server = getServerOr404(id);
+  const server = getLocalServerOr404(id);
 
   // Новые случайные значения в рамках текущей версии протокола; I1–I5 и доп. параметры сохраняются
   const current = paramsFromRow(server);
@@ -288,7 +304,7 @@ serversRouter.post('/:id/sync', asyncHandler(async (req, res) => {
 // POST apply interface parameters (restart AmneziaWG on the node)
 serversRouter.post('/:id/apply', asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
-  getServerOr404(id);
+  getLocalServerOr404(id);
   const result = await ProvisionService.requestApply(id);
   res.status(result.success ? 200 : 502).json(result);
 }));
@@ -296,7 +312,7 @@ serversRouter.post('/:id/apply', asyncHandler(async (req, res) => {
 // POST scan — поиск уже установленного AmneziaWG (контейнера панели или приложения Amnezia) и подключение без установки
 serversRouter.post('/:id/scan', asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
-  getServerOr404(id);
+  getLocalServerOr404(id);
   if (ProvisionService.isInstalling(id)) throw new HttpError(409, 'Дождитесь окончания установки');
   try {
     const result = await ProvisionService.scanAndAdopt(id);
@@ -309,7 +325,7 @@ serversRouter.post('/:id/scan', asyncHandler(async (req, res) => {
 // POST upgrade-protocol — переход на актуальную версию AmneziaWG: новые параметры и переустановка с latest-образом
 serversRouter.post('/:id/upgrade-protocol', asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
-  const server = getServerOr404(id);
+  const server = getLocalServerOr404(id);
   const current = paramsFromRow(server);
   if (current.awg_version === LATEST_AWG_VERSION) throw new HttpError(400, 'Сервер уже использует актуальную версию протокола');
 

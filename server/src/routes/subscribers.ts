@@ -5,7 +5,8 @@ import { AwgService } from '../services/awg.service.js';
 import { ProvisionService } from '../services/provision.service.js';
 import { SubscriptionService } from '../services/subscription.service.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
-import { HttpError, parseId } from '../utils/http.js';
+import { asyncHandler, HttpError, parseId } from '../utils/http.js';
+import { pendingIp } from '../services/federation-client.service.js';
 
 export const subscribersRouter = Router();
 
@@ -75,7 +76,8 @@ function serializeSubscriber(sub: any) {
 function addPeer(subscriberId: number, subscriberName: string, enabled: number, server: any): void {
   const keyPair = AwgService.generateKeyPair();
   const psk = AwgService.generatePresharedKey();
-  const clientIp = AwgService.getNextClientIp(server.id, server.subnet);
+  // На ноде партнёра IP выдаёт панель владельца при синхронизации
+  const clientIp = server.remote_panel_id ? pendingIp() : AwgService.getNextClientIp(server.id, server.subnet);
   db.prepare(`
     INSERT INTO clients (
       server_id, subscriber_id, name, client_ip, client_public_key, client_private_key, preshared_key, enabled
@@ -83,13 +85,22 @@ function addPeer(subscriberId: number, subscriberName: string, enabled: number, 
   `).run(server.id, subscriberId, `${subscriberName} (${server.name})`, clientIp, keyPair.publicKey, keyPair.privateKey, psk, enabled);
 }
 
-function syncServers(serverIds: Iterable<number>): void {
+/**
+ * Синхронизация затронутых нод. Возвращает промис для нод партнёров, чтобы ответ ушёл,
+ * когда клиенты уже созданы у владельца (и подписка сразу содержит эти ноды).
+ */
+function syncServers(serverIds: Iterable<number>): Promise<unknown> {
+  const remote: Promise<unknown>[] = [];
   for (const sId of serverIds) {
-    const server = db.prepare('SELECT status FROM servers WHERE id = ?').get(sId) as any;
-    if (server && server.status !== 'uninstalled') {
+    const server = db.prepare('SELECT status, remote_panel_id FROM servers WHERE id = ?').get(sId) as any;
+    if (!server) continue;
+    if (server.remote_panel_id) {
+      remote.push(ProvisionService.requestSync(sId));
+    } else if (server.status !== 'uninstalled') {
       ProvisionService.requestSync(sId).catch((err) => console.error(`Ошибка синхронизации сервера #${sId}:`, err));
     }
   }
+  return Promise.allSettled(remote);
 }
 
 function loadServers(ids: number[]): any[] {
@@ -107,7 +118,7 @@ subscribersRouter.get('/', (req, res) => {
 });
 
 // POST /api/subscribers
-subscribersRouter.post('/', (req, res) => {
+subscribersRouter.post('/', asyncHandler(async (req, res) => {
   const body = req.body ?? {};
   const name = validateName(body.name);
   const serverIds = validateServerIds(body.server_ids ?? []);
@@ -126,14 +137,14 @@ subscribersRouter.post('/', (req, res) => {
   });
 
   SubscriptionService.refreshSuspension(subscriberId);
-  syncServers(serverIds);
+  await syncServers(serverIds);
 
   const created = db.prepare('SELECT * FROM subscribers WHERE id = ?').get(subscriberId);
   res.status(201).json(serializeSubscriber(created));
-});
+}));
 
 // PUT /api/subscribers/:id
-subscribersRouter.put('/:id', (req, res) => {
+subscribersRouter.put('/:id', asyncHandler(async (req, res) => {
   const subscriberId = parseId(req.params.id);
   const subscriber = db.prepare('SELECT * FROM subscribers WHERE id = ?').get(subscriberId) as any;
   if (!subscriber) throw new HttpError(404, 'Пользователь не найден');
@@ -186,11 +197,11 @@ subscribersRouter.put('/:id', (req, res) => {
 
   // Пересчёт срока/лимита сам синхронизирует ноды при смене статуса
   SubscriptionService.refreshSuspension(subscriberId);
-  syncServers(affectedServers);
+  await syncServers(affectedServers);
 
   const updated = db.prepare('SELECT * FROM subscribers WHERE id = ?').get(subscriberId);
   res.json(serializeSubscriber(updated));
-});
+}));
 
 // POST /api/subscribers/:id/reset-traffic
 subscribersRouter.post('/:id/reset-traffic', (req, res) => {
@@ -228,11 +239,21 @@ subscribersRouter.post('/:id/reset-token', (req, res) => {
   // Вместе со ссылкой перевыпускаются ключи пиров: иначе тот, кто успел скачать старую подписку,
   // сохранил бы доступ к VPN
   const token = newToken();
-  const peers = db.prepare('SELECT id, server_id FROM clients WHERE subscriber_id = ?').all(subscriberId) as any[];
+  const peers = db.prepare(`
+    SELECT c.id, c.server_id, s.remote_panel_id FROM clients c JOIN servers s ON s.id = c.server_id WHERE c.subscriber_id = ?
+  `).all(subscriberId) as any[];
   transaction(() => {
     db.prepare('UPDATE subscribers SET token = ? WHERE id = ?').run(token, subscriberId);
     for (const peer of peers) {
       const keyPair = AwgService.generateKeyPair();
+      if (peer.remote_panel_id) {
+        db.prepare(`
+          UPDATE clients SET client_public_key = ?, client_private_key = ?, preshared_key = NULL,
+            remote_peer_id = NULL, client_ip = ?, rx_counter = 0, tx_counter = 0
+          WHERE id = ?
+        `).run(keyPair.publicKey, keyPair.privateKey, pendingIp(), peer.id);
+        continue;
+      }
       db.prepare(`
         UPDATE clients SET client_public_key = ?, client_private_key = ?, preshared_key = ?, rx_counter = 0, tx_counter = 0
         WHERE id = ?

@@ -241,7 +241,10 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
                               }`}
                             />
                           </div>
-                          <p className="text-[11px] font-mono text-zinc-500">{s.host}:{s.awg_port}</p>
+                          <p className="text-[11px] font-mono text-zinc-500">
+                            {s.host}:{s.awg_port}
+                            {s.remote_panel_name && <span className="font-sans text-amber-400/80"> · партнёр: {s.remote_panel_name}</span>}
+                          </p>
                         </div>
                       </div>
 

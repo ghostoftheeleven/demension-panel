@@ -214,6 +214,69 @@ const migrations: Array<() => void> = [
     // Пиры, импортированные из существующей установки: приватный ключ клиента панели неизвестен
     addColumn('clients', 'external INTEGER NOT NULL DEFAULT 0');
   },
+
+  // v5: партнёрский доступ к нодам между панелями
+  () => {
+    db.exec(`
+      -- Сторона владельца нод: выданные партнёрам доступы
+      CREATE TABLE IF NOT EXISTS partners (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        token_hash TEXT UNIQUE NOT NULL,
+        token_hint TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        suspended INTEGER NOT NULL DEFAULT 0,
+        max_clients INTEGER NOT NULL DEFAULT 0,
+        traffic_limit INTEGER NOT NULL DEFAULT 0,
+        expire_at TEXT,
+        last_used_at TEXT,
+        last_ip TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS partner_nodes (
+        partner_id INTEGER NOT NULL REFERENCES partners(id) ON DELETE CASCADE,
+        server_id INTEGER NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+        PRIMARY KEY (partner_id, server_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS partner_audit (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        partner_id INTEGER NOT NULL REFERENCES partners(id) ON DELETE CASCADE,
+        action TEXT NOT NULL,
+        details TEXT,
+        ip TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_partner_audit ON partner_audit(partner_id, id);
+
+      -- Сторона получателя: подключённые панели партнёров
+      CREATE TABLE IF NOT EXISTS remote_panels (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        base_url TEXT NOT NULL,
+        token TEXT NOT NULL,
+        partner_name TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        limits TEXT,
+        last_sync_at TEXT,
+        last_error TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+    `);
+    // Владелец: клиент создан партнёром; owner_blocked — заблокирован владельцем (партнёр не может включить)
+    addColumn('clients', 'partner_id INTEGER REFERENCES partners(id) ON DELETE CASCADE');
+    addColumn('clients', 'remote_ref TEXT');
+    addColumn('clients', 'owner_blocked INTEGER NOT NULL DEFAULT 0');
+    // Получатель: идентификатор пира на панели владельца и его состояние
+    addColumn('clients', 'remote_peer_id INTEGER');
+    addColumn('clients', 'remote_state TEXT');
+    // Получатель: нода партнёра хранится как сервер без SSH-доступа
+    addColumn('servers', 'remote_panel_id INTEGER REFERENCES remote_panels(id) ON DELETE CASCADE');
+    addColumn('servers', 'remote_node_id INTEGER');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_clients_partner ON clients(partner_id);');
+    db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_servers_remote ON servers(remote_panel_id, remote_node_id);');
+  },
 ];
 
 export function initDatabase() {

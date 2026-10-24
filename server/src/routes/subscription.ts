@@ -144,7 +144,8 @@ subscriptionRouter.get('/:token', (req, res) => {
           s.i1, s.i2, s.i3, s.i4, s.i5, s.header_protection_key, s.extra_params
         FROM clients c
         JOIN servers s ON c.server_id = s.id
-        WHERE c.subscriber_id = ? AND c.enabled = 1 AND c.external = 0 AND s.status != 'uninstalled' AND s.server_public_key IS NOT NULL
+        WHERE c.subscriber_id = ? AND c.enabled = 1 AND c.external = 0 AND s.status != 'uninstalled'
+          AND c.client_ip NOT LIKE 'pending:%' AND COALESCE(c.remote_state, '') != 'blocked' AND s.server_public_key IS NOT NULL
         ORDER BY s.sub_order, s.id
       `).all(subscriber.id) as any[])
     : [];

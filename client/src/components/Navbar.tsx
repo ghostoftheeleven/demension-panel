@@ -1,8 +1,8 @@
 import React from 'react';
-import { ShieldCheck, Plus, Server as ServerIcon, Users, Activity, LogOut, KeyRound, Lock, Palette } from 'lucide-react';
+import { ShieldCheck, Plus, Server as ServerIcon, Users, Activity, LogOut, KeyRound, Lock, Palette, Handshake } from 'lucide-react';
 import type { Server, AdminUser } from '../types';
 
-export type AppTab = 'servers' | 'subscribers' | 'subscription' | 'security';
+export type AppTab = 'servers' | 'subscribers' | 'subscription' | 'partners' | 'security';
 
 interface NavbarProps {
   servers: Server[];
@@ -84,6 +84,18 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <Palette className="w-3.5 h-3.5 text-purple-400" />
               <span>Оформление подписки</span>
+            </button>
+
+            <button
+              onClick={() => onSelectTab('partners')}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                activeTab === 'partners'
+                  ? 'bg-zinc-800 text-white shadow-sm'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Handshake className="w-3.5 h-3.5 text-amber-400" />
+              <span>Партнёры</span>
             </button>
 
             <button

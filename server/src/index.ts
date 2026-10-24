@@ -18,6 +18,11 @@ import { subscriptionRouter } from './routes/subscription.js';
 import { securityRouter } from './routes/security.js';
 import { settingsRouter } from './routes/settings.js';
 import { subscriptionSettingsRouter } from './routes/subscription-settings.js';
+import { federationRouter, cleanupFederationLimits } from './routes/federation.js';
+import { partnersRouter } from './routes/partners.js';
+import { remotePanelsRouter } from './routes/remote-panels.js';
+import { PartnerService } from './services/partner.service.js';
+import { FederationClient } from './services/federation-client.service.js';
 import { ProvisionService } from './services/provision.service.js';
 import { SubscriptionService } from './services/subscription.service.js';
 import { SslService, http01Challenges } from './services/ssl.service.js';
@@ -81,6 +86,9 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// API для панелей партнёров (авторизация по партнёрскому токену, только HTTPS)
+app.use('/api/federation/v1', federationRouter);
+
 // Authentication routes (login, me, logout, change-password)
 app.use('/api/auth', authRouter);
 
@@ -90,6 +98,8 @@ app.use('/api/subscribers', subscribersRouter);
 app.use('/api/security', securityRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/subscription-settings', subscriptionSettingsRouter);
+app.use('/api/partners', partnersRouter);
+app.use('/api/remote-panels', remotePanelsRouter);
 app.use('/api', requireAuth, clientsRouter);
 
 // Unknown API routes must not fall through to the SPA
@@ -250,6 +260,7 @@ async function statsLoop() {
     const servers = db.prepare("SELECT id FROM servers WHERE status IN ('online', 'offline', 'error')").all() as { id: number }[];
     await mapLimit(servers, 5, (s) => ProvisionService.fetchServerStats(s.id));
     SubscriptionService.refreshSuspension();
+    PartnerService.refreshSuspension();
   } catch (err) {
     console.error('[STATS] Ошибка фонового опроса:', err);
   } finally {
@@ -258,7 +269,20 @@ async function statsLoop() {
 }
 setTimeout(statsLoop, 5000);
 
+// Синхронизация нод и клиентов на панелях партнёров
+async function federationLoop() {
+  try {
+    await FederationClient.syncAll();
+  } catch (err) {
+    console.error('[FEDERATION] Ошибка синхронизации:', err);
+  } finally {
+    setTimeout(federationLoop, 60000);
+  }
+}
+setTimeout(federationLoop, 10000);
+
 setInterval(() => {
+  cleanupFederationLimits();
   AuthService.cleanupExpiredSessions();
   loginIpLimiter.cleanup();
   loginUserLimiter.cleanup();

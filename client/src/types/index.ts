@@ -70,7 +70,11 @@ export interface Server {
   extra_params: Record<string, string>;
   /** Контейнер на ноде: панели (demension) или найденный контейнер приложения Amnezia */
   container_name: string;
-  managed_by: 'demension' | 'amnezia';
+  managed_by: 'demension' | 'amnezia' | 'partner';
+  /** Нода партнёрской панели (управляется владельцем, без SSH) */
+  remote_panel_id: number | null;
+  remote_panel_name: string | null;
+  remote_panel_status: string | null;
   status: ServerStatus;
   needs_sync: boolean;
   needs_apply: boolean;
@@ -139,6 +143,15 @@ export interface Client {
   enabled: number;
   /** Импортирован из существующей установки: приватный ключ неизвестен, конфиг недоступен */
   external: boolean;
+  /** Создан панелью партнёра (на своей ноде) */
+  partner_id?: number | null;
+  partner_name?: string | null;
+  /** Заблокирован владельцем ноды */
+  owner_blocked: boolean;
+  /** Нода партнёра: клиент ещё не создан у владельца */
+  pending: boolean;
+  /** Нода партнёра: 'blocked' — заблокирован владельцем, 'error: …' — ошибка создания */
+  remote_state: string | null;
   /** Отправлено клиентом (upload) */
   total_rx: number;
   /** Получено клиентом (download) */
@@ -205,4 +218,63 @@ export interface SubscriptionServer {
   status: ServerStatus;
   sub_name: string | null;
   sub_order: number;
+}
+
+export interface PartnerUsage {
+  clients: number;
+  upload: number;
+  download: number;
+  used: number;
+}
+
+export interface Partner {
+  id: number;
+  name: string;
+  token_hint: string;
+  enabled: boolean;
+  suspended: boolean;
+  expired: boolean;
+  max_clients: number;
+  traffic_limit: number;
+  expire_at: string | null;
+  last_used_at: string | null;
+  last_ip: string | null;
+  created_at: string;
+  node_ids: number[];
+  usage: PartnerUsage;
+}
+
+export interface PartnerClient {
+  id: number;
+  server_id: number;
+  server_name: string;
+  name: string;
+  client_ip: string;
+  enabled: boolean;
+  owner_blocked: boolean;
+  total_rx: number;
+  total_tx: number;
+  last_handshake: string | null;
+  created_at: string;
+}
+
+export interface PartnerAuditEntry {
+  id: number;
+  action: string;
+  details: string | null;
+  ip: string | null;
+  created_at: string;
+}
+
+export interface RemotePanel {
+  id: number;
+  name: string;
+  base_url: string;
+  partner_name: string | null;
+  status: 'pending' | 'online' | 'error' | 'revoked';
+  limits: { max_clients: number; traffic_limit: number; expire_at: string | null; suspended: boolean; usage: PartnerUsage } | null;
+  last_sync_at: string | null;
+  last_error: string | null;
+  node_count: number;
+  client_count: number;
 }

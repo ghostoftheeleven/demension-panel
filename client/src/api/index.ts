@@ -12,6 +12,10 @@ import type {
   SubscriptionSettings,
   SubscriptionServer,
   ScanResult,
+  Partner,
+  PartnerClient,
+  PartnerAuditEntry,
+  RemotePanel,
 } from '../types';
 
 const API_BASE = '/api';
@@ -264,6 +268,61 @@ export const api = {
     servers?: { id: number; sub_name: string; sub_order: number }[];
   }): Promise<{ settings: SubscriptionSettings; servers: SubscriptionServer[] }> {
     return request(`${API_BASE}/subscription-settings`, { method: 'PUT', ...json(data) }, 'Ошибка сохранения настроек подписки');
+  },
+
+  // Партнёрский доступ: выданные доступы к своим нодам
+  getPartners(): Promise<Partner[]> {
+    return request(`${API_BASE}/partners`, {}, 'Ошибка загрузки партнёров');
+  },
+
+  createPartner(data: {
+    name: string;
+    node_ids: number[];
+    max_clients: number;
+    traffic_limit: number;
+    expire_at: string | null;
+  }): Promise<{ partner: Partner; token: string; connect_string: string }> {
+    return request(`${API_BASE}/partners`, { method: 'POST', ...json(data) }, 'Ошибка создания доступа');
+  },
+
+  updatePartner(
+    id: number,
+    data: Partial<{ name: string; node_ids: number[]; max_clients: number; traffic_limit: number; expire_at: string | null; enabled: boolean }>
+  ): Promise<Partner> {
+    return request(`${API_BASE}/partners/${id}`, { method: 'PUT', ...json(data) }, 'Ошибка обновления доступа');
+  },
+
+  regeneratePartnerToken(id: number): Promise<{ partner: Partner; token: string; connect_string: string }> {
+    return request(`${API_BASE}/partners/${id}/regenerate-token`, { method: 'POST' }, 'Ошибка перевыпуска токена');
+  },
+
+  async deletePartner(id: number): Promise<void> {
+    await request(`${API_BASE}/partners/${id}`, { method: 'DELETE' }, 'Ошибка удаления доступа');
+  },
+
+  getPartnerClients(id: number): Promise<PartnerClient[]> {
+    return request(`${API_BASE}/partners/${id}/clients`, {}, 'Ошибка загрузки клиентов партнёра');
+  },
+
+  getPartnerAudit(id: number): Promise<PartnerAuditEntry[]> {
+    return request(`${API_BASE}/partners/${id}/audit`, {}, 'Ошибка загрузки журнала');
+  },
+
+  // Партнёрский доступ: подключённые панели партнёров
+  getRemotePanels(): Promise<RemotePanel[]> {
+    return request(`${API_BASE}/remote-panels`, {}, 'Ошибка загрузки панелей партнёров');
+  },
+
+  connectRemotePanel(connectString: string, name?: string): Promise<RemotePanel> {
+    return request(`${API_BASE}/remote-panels`, { method: 'POST', ...json({ connect_string: connectString, name }) }, 'Ошибка подключения панели');
+  },
+
+  syncRemotePanel(id: number): Promise<RemotePanel> {
+    return request(`${API_BASE}/remote-panels/${id}/sync`, { method: 'POST' }, 'Ошибка синхронизации');
+  },
+
+  disconnectRemotePanel(id: number): Promise<{ success: boolean; remoteCleanup: boolean }> {
+    return request(`${API_BASE}/remote-panels/${id}`, { method: 'DELETE' }, 'Ошибка отключения панели');
   },
 
   // Security: SSL & Fail2ban

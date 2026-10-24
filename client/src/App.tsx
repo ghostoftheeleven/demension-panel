@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Navbar, type AppTab } from './components/Navbar';
 import { SubscriptionSettingsView } from './components/SubscriptionSettingsView';
+import { PartnersView } from './components/PartnersView';
 import { ServerCards } from './components/ServerCards';
 import { ClientList } from './components/ClientList';
 import { SubscribersList } from './components/SubscribersList';
@@ -239,6 +240,8 @@ export const App: React.FC = () => {
           <div className="flex items-center justify-center py-24 text-zinc-500 text-sm">
             Загрузка данных...
           </div>
+        ) : activeTab === 'partners' ? (
+          <PartnersView servers={servers} publicUrl={publicUrl} onChanged={loadData} />
         ) : activeTab === 'subscription' ? (
           <SubscriptionSettingsView subscribers={subscribers} publicUrl={publicUrl} />
         ) : activeTab === 'security' ? (

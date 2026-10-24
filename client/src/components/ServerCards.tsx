@@ -228,6 +228,12 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
 
             {/* Right Quick Actions */}
             <div className="flex flex-wrap items-center gap-2">
+              {selectedServer.remote_panel_id ? (
+                <span className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 px-3 py-2 rounded-xl">
+                  Нода партнёра · {selectedServer.remote_panel_name}
+                </span>
+              ) : (
+              <>
               <button
                 onClick={() => onInstallServer(selectedServer)}
                 className="flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-medium text-xs px-4 py-2.5 rounded-xl transition shadow-lg shadow-emerald-600/20 active:scale-[0.98]"
@@ -256,6 +262,8 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
                 <KeyRound className="w-3.5 h-3.5 text-cyan-400" />
                 <span>{testingSsh === selectedServer.id ? 'Тест...' : 'Тест SSH'}</span>
               </button>
+              </>
+              )}
 
               {(selectedServer.status === 'uninstalled' || selectedServer.status === 'error') && (
                 <button
@@ -290,6 +298,7 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
                 </button>
               )}
 
+              {!selectedServer.remote_panel_id && (
               <button
                 onClick={() => handleDelete(selectedServer)}
                 className="p-2.5 text-zinc-500 hover:text-red-400 hover:bg-zinc-800/80 rounded-xl transition"
@@ -297,6 +306,7 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
               >
                 <Trash2 className="w-4 h-4" />
               </button>
+              )}
             </div>
           </div>
 
@@ -325,7 +335,17 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
             </div>
           )}
 
-          {selectedServer.awg_version < selectedServer.latest_awg_version && (
+          {selectedServer.remote_panel_id && (
+            <div className="bg-zinc-950/70 border border-zinc-800 rounded-xl p-3.5 text-xs text-zinc-400">
+              Нода предоставлена панелью партнёра «{selectedServer.remote_panel_name}». Параметры, установку и обновления выполняет владелец;
+              вы можете создавать на ней клиентов и выдавать её своим пользователям. Владелец видит ваших клиентов и может их заблокировать.
+              {selectedServer.status === 'uninstalled' && selectedServer.last_error && (
+                <span className="block text-amber-300 mt-1">{selectedServer.last_error}</span>
+              )}
+            </div>
+          )}
+
+          {!selectedServer.remote_panel_id && selectedServer.awg_version < selectedServer.latest_awg_version && (
             <div className="bg-cyan-500/5 border border-cyan-500/20 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
               <span className="text-cyan-200">
                 Используются параметры обфускации устаревшего AmneziaWG 1.x. Актуальная версия — {selectedServer.latest_awg_version}.x

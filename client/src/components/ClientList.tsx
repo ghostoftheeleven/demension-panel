@@ -60,8 +60,10 @@ export const ClientList: React.FC<ClientListProps> = ({
 
   const handleToggle = async (client: Client) => {
     try {
+      // Для клиента партнёра переключатель блокирует/разблокирует его владельцем
+      const active = client.partner_name ? !client.owner_blocked : Boolean(client.enabled);
       const updated = await api.updateClient(client.id, {
-        enabled: client.enabled ? 0 : 1,
+        enabled: active ? 0 : 1,
       });
       onClientUpdated(updated);
     } catch (err: any) {
@@ -155,7 +157,8 @@ export const ClientList: React.FC<ClientListProps> = ({
             <tbody className="divide-y divide-zinc-800/60">
               {filteredClients.map((client) => {
                 const online = isOnline(client.last_handshake);
-                const disabled = !client.enabled;
+                const disabled = !client.enabled || client.owner_blocked;
+                const keyless = client.external || Boolean(client.partner_name) || client.pending;
 
                 return (
                   <tr key={client.id} className="hover:bg-zinc-800/20 transition">
@@ -163,6 +166,27 @@ export const ClientList: React.FC<ClientListProps> = ({
                     <td className="py-3 font-medium text-white flex items-center gap-2">
                       <span className={`w-2 h-2 rounded-full flex-shrink-0 ${disabled ? 'bg-zinc-600' : online ? 'bg-emerald-400' : 'bg-zinc-500'}`} />
                       <span>{client.name}</span>
+                      {client.partner_name && (
+                        <span
+                          className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-300 border border-amber-500/20"
+                          title="Клиент создан панелью партнёра. Его можно заблокировать, но не удалить."
+                        >
+                          партнёр: {client.partner_name}
+                        </span>
+                      )}
+                      {client.pending && (
+                        <span
+                          className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-zinc-800 text-zinc-400 border border-zinc-700"
+                          title={client.remote_state?.startsWith('error') ? client.remote_state.slice(7) : 'Ожидает создания на ноде партнёра'}
+                        >
+                          {client.remote_state?.startsWith('error') ? 'ошибка у владельца' : 'создаётся'}
+                        </span>
+                      )}
+                      {client.remote_state === 'blocked' && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-500/10 text-red-300 border border-red-500/20">
+                          заблокирован владельцем
+                        </span>
+                      )}
                       {client.external && (
                         <span
                           className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-zinc-800 text-zinc-400 border border-zinc-700"
@@ -223,8 +247,8 @@ export const ClientList: React.FC<ClientListProps> = ({
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           onClick={() => onShowQr(client.id)}
-                          disabled={client.external}
-                          title={client.external ? 'Недоступно для импортированного клиента' : 'Показать QR-код'}
+                          disabled={keyless}
+                          title={keyless ? 'Конфигурация недоступна для этого клиента' : 'Показать QR-код'}
                           className="p-1.5 text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 rounded-lg transition"
                         >
                           <QrCode className="w-4 h-4" />
@@ -232,8 +256,8 @@ export const ClientList: React.FC<ClientListProps> = ({
 
                         <button
                           onClick={() => handleDownload(client)}
-                          disabled={client.external}
-                          title={client.external ? 'Недоступно для импортированного клиента' : 'Скачать .conf'}
+                          disabled={keyless}
+                          title={keyless ? 'Конфигурация недоступна для этого клиента' : 'Скачать .conf'}
                           className="p-1.5 text-zinc-400 hover:text-cyan-400 hover:bg-zinc-800 rounded-lg transition"
                         >
                           <Download className="w-4 h-4" />
@@ -241,9 +265,9 @@ export const ClientList: React.FC<ClientListProps> = ({
 
                         <button
                           onClick={() => handleToggle(client)}
-                          title={client.enabled ? 'Отключить пира' : 'Включить пира'}
+                          title={!disabled ? (client.partner_name ? 'Заблокировать клиента партнёра' : 'Отключить пира') : (client.partner_name ? 'Разблокировать' : 'Включить пира')}
                           className={`p-1.5 rounded-lg transition ${
-                            client.enabled
+                            !disabled
                               ? 'text-zinc-400 hover:text-amber-400 hover:bg-zinc-800'
                               : 'text-amber-400 hover:text-emerald-400 hover:bg-zinc-800'
                           }`}
@@ -251,6 +275,7 @@ export const ClientList: React.FC<ClientListProps> = ({
                           <Power className="w-4 h-4" />
                         </button>
 
+                        {!client.partner_name && (
                         <button
                           onClick={() => handleDelete(client)}
                           title="Удалить пира"
@@ -258,6 +283,7 @@ export const ClientList: React.FC<ClientListProps> = ({
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
+                        )}
                       </div>
                     </td>
                   </tr>

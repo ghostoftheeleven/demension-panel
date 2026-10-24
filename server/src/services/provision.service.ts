@@ -7,6 +7,9 @@ import { AwgService } from './awg.service.js';
 import { decryptSecret } from './secrets.service.js';
 import { shellQuote, parseSubnet } from '../utils/net.js';
 import { parseServerConfig, paramsToColumns, ParsedServerConfig } from '../utils/awg-params.js';
+import { FederationClient } from './federation-client.service.js';
+
+const REMOTE_NODE_ERROR = 'Это нода партнёра: ею управляет панель владельца';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -73,6 +76,20 @@ function loadServer(serverId: number): any {
   const server = db.prepare('SELECT * FROM servers WHERE id = ?').get(serverId) as any;
   if (!server) throw new Error(`Сервер #${serverId} не найден`);
   return server;
+}
+
+/**
+ * Сервер — нода партнёрской панели (без SSH-доступа)
+ */
+function loadLocalServer(serverId: number): any {
+  const server = loadServer(serverId);
+  if (server.remote_panel_id) throw new Error(REMOTE_NODE_ERROR);
+  return server;
+}
+
+function remotePanelOf(serverId: number): number | null {
+  const row = db.prepare('SELECT remote_panel_id FROM servers WHERE id = ?').get(serverId) as any;
+  return row?.remote_panel_id ?? null;
 }
 
 function readDeployScript(): string {
@@ -165,15 +182,21 @@ export class ProvisionService {
    * Клиенты сервера с признаком активности подписчика (выключен/истёк/превышен лимит → 0)
    */
   static getServerClients(serverId: number): any[] {
+    // Клиент партнёра активен, пока доступ включён, не приостановлен и нода не отозвана у партнёра
     return db.prepare(`
       SELECT c.*,
         CASE
+          WHEN c.owner_blocked = 1 THEN 0
+          WHEN c.partner_id IS NOT NULL THEN
+            CASE WHEN p.enabled = 1 AND p.suspended = 0 AND pn.server_id IS NOT NULL THEN 1 ELSE 0 END
           WHEN c.subscriber_id IS NULL THEN 1
           WHEN sub.enabled = 1 AND sub.suspended = 0 THEN 1
           ELSE 0
         END AS subscriber_active
       FROM clients c
       LEFT JOIN subscribers sub ON sub.id = c.subscriber_id
+      LEFT JOIN partners p ON p.id = c.partner_id
+      LEFT JOIN partner_nodes pn ON pn.partner_id = c.partner_id AND pn.server_id = c.server_id
       WHERE c.server_id = ?
     `).all(serverId) as any[];
   }
@@ -253,7 +276,7 @@ export class ProvisionService {
    */
   static async scanAndAdopt(serverId: number): Promise<ScanResult> {
     return runExclusive(serverId, async () => {
-      const server = loadServer(serverId);
+      const server = loadLocalServer(serverId);
       const detected = await this.detectContainers(server);
       const containers = detected.map((d) => ({ name: d.name, image: d.image, running: d.running, managedBy: d.managedBy }));
 
@@ -357,7 +380,7 @@ export class ProvisionService {
    * Run remote AmneziaWG installation via Docker and configure firewall & interface
    */
   static async installServer(serverId: number, onLog?: (chunk: string) => void): Promise<OperationResult> {
-    const server = loadServer(serverId);
+    const server = loadLocalServer(serverId);
     if (installing.has(serverId)) {
       throw new Error('Установка этого сервера уже выполняется');
     }
@@ -466,6 +489,16 @@ export class ProvisionService {
    * При недоступности ноды флаг needs_sync остаётся, и фоновая задача повторит попытку.
    */
   static requestSync(serverId: number): Promise<OperationResult> {
+    // Клиенты на нодах партнёра создаются и меняются через API панели владельца
+    const remotePanelId = remotePanelOf(serverId);
+    if (remotePanelId) {
+      return FederationClient.requestSync(remotePanelId).then(() => {
+        const panel = db.prepare('SELECT status, last_error FROM remote_panels WHERE id = ?').get(remotePanelId) as any;
+        return panel?.status === 'online' && !panel.last_error
+          ? { success: true }
+          : { success: false, error: panel?.last_error || 'Панель партнёра недоступна' };
+      });
+    }
     db.prepare('UPDATE servers SET needs_sync = 1 WHERE id = ?').run(serverId);
     const existing = pendingSync.get(serverId);
     if (existing) return existing;
@@ -523,6 +556,7 @@ export class ProvisionService {
    * Смена порта или подсети требует пересоздания контейнера (переустановка контейнером панели).
    */
   static requestApply(serverId: number): Promise<OperationResult> {
+    if (remotePanelOf(serverId)) return Promise.resolve({ success: false, error: REMOTE_NODE_ERROR });
     db.prepare('UPDATE servers SET needs_apply = 1 WHERE id = ?').run(serverId);
     return runExclusive(serverId, () => this.doApply(serverId));
   }
@@ -531,6 +565,7 @@ export class ProvisionService {
    * Переустановка с актуальным образом (обновление AmneziaWG или переход на новую версию протокола)
    */
   static requestReinstall(serverId: number): Promise<OperationResult> {
+    if (remotePanelOf(serverId)) return Promise.resolve({ success: false, error: REMOTE_NODE_ERROR });
     if (installing.has(serverId)) return Promise.resolve({ success: false, error: 'Установка уже выполняется' });
     installing.add(serverId);
     return runExclusive(serverId, () => this.doInstall(serverId)).finally(() => installing.delete(serverId));
@@ -582,7 +617,7 @@ export class ProvisionService {
    */
   static async teardown(serverId: number): Promise<OperationResult> {
     return runExclusive(serverId, async () => {
-      const server = loadServer(serverId);
+      const server = loadLocalServer(serverId);
       try {
         const credentials = this.getCredentials(server);
         const c = this.container(server);
@@ -609,7 +644,7 @@ export class ProvisionService {
    */
   static async fetchServerStats(serverId: number): Promise<void> {
     const server = db.prepare('SELECT * FROM servers WHERE id = ?').get(serverId) as any;
-    if (!server || server.status === 'uninstalled' || server.status === 'installing' || installing.has(serverId)) return;
+    if (!server || server.remote_panel_id || server.status === 'uninstalled' || server.status === 'installing' || installing.has(serverId)) return;
 
     try {
       const credentials = this.getCredentials(server);
