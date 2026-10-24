@@ -186,7 +186,8 @@ export const App: React.FC = () => {
           : s
       )
     );
-    handleShowQr(newClient.id);
+    // Конфигурации ещё нет, пока панель владельца не выдала IP клиенту на ноде партнёра (сервер ответил бы 409)
+    if (!newClient.pending && !newClient.external && !newClient.partner_id) handleShowQr(newClient.id);
   };
 
   const handleClientUpdated = (updated: Client) => {

@@ -262,9 +262,8 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
                 <KeyRound className="w-3.5 h-3.5 text-cyan-400" />
                 <span>{testingSsh === selectedServer.id ? 'Тест...' : 'Тест SSH'}</span>
               </button>
-              </>
-              )}
 
+              {/* Нодой партнёра управляет владелец: сканирование и настройки SSH для неё недоступны (сервер ответит 400) */}
               {(selectedServer.status === 'uninstalled' || selectedServer.status === 'error') && (
                 <button
                   onClick={() => handleScan(selectedServer)}
@@ -285,6 +284,8 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
                 <Pencil className="w-3.5 h-3.5 text-zinc-300" />
                 <span>Настройки</span>
               </button>
+              </>
+              )}
 
               {selectedServer.status !== 'uninstalled' && selectedServer.status !== 'installing' && (
                 <button
