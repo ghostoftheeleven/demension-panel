@@ -107,7 +107,9 @@ clientsRouter.put('/clients/:id', (req, res) => {
 
   const newEnabled = enabled === undefined ? client.enabled : enabled ? 1 : 0;
   db.prepare('UPDATE clients SET name = ?, enabled = ? WHERE id = ?').run(newName, newEnabled, id);
-  if (newEnabled !== client.enabled) syncIfInstalled(client.server_id);
+  // На ноде партнёра имя видит и владелец, поэтому переименование тоже передаётся ему
+  const remote = Boolean((db.prepare('SELECT remote_panel_id FROM servers WHERE id = ?').get(client.server_id) as any)?.remote_panel_id);
+  if (newEnabled !== client.enabled || (remote && newName !== client.name)) syncIfInstalled(client.server_id);
 
   res.json(serializeClient(db.prepare('SELECT * FROM clients WHERE id = ?').get(id)));
 });

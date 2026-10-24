@@ -297,9 +297,12 @@ const migrations: Array<() => void> = [
   },
 ];
 
-export function initDatabase() {
+/**
+ * Применяет недостающие миграции. `targetVersion` позволяет остановиться раньше — так тесты воспроизводят БД старой версии.
+ */
+export function initDatabase(targetVersion = migrations.length) {
   const current = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version;
-  for (let version = current; version < migrations.length; version++) {
+  for (let version = current; version < Math.min(targetVersion, migrations.length); version++) {
     transaction(() => {
       migrations[version]();
       db.exec(`PRAGMA user_version = ${version + 1}`);

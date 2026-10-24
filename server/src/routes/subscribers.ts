@@ -174,10 +174,14 @@ subscribersRouter.put('/:id', asyncHandler(async (req, res) => {
 
     if (name !== subscriber.name) {
       const peers = db.prepare(`
-        SELECT c.id, s.name AS server_name FROM clients c JOIN servers s ON s.id = c.server_id WHERE c.subscriber_id = ?
-      `).all(subscriberId) as { id: number; server_name: string }[];
+        SELECT c.id, c.server_id, s.name AS server_name, s.remote_panel_id FROM clients c JOIN servers s ON s.id = c.server_id WHERE c.subscriber_id = ?
+      `).all(subscriberId) as { id: number; server_id: number; server_name: string; remote_panel_id: number | null }[];
       const rename = db.prepare('UPDATE clients SET name = ? WHERE id = ?');
-      for (const peer of peers) rename.run(subscriberPeerName(name, peer.server_name), peer.id);
+      for (const peer of peers) {
+        rename.run(subscriberPeerName(name, peer.server_name), peer.id);
+        // Новое имя нужно владельцу нод партнёра; в конфигурации локальных нод имён нет, их синхронизировать незачем
+        if (peer.remote_panel_id) affectedServers.add(peer.server_id);
+      }
     }
 
     if (targetIds) {

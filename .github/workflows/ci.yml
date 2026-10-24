@@ -43,5 +43,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: bash -n install.sh && bash -n server/src/scripts/deploy-awg.sh
-      - run: shellcheck -S error install.sh server/src/scripts/deploy-awg.sh
+      - run: bash -n install.sh && bash -n server/src/scripts/deploy-awg.sh && bash -n server/test/docker/nodes.sh && bash -n server/test/docker/entrypoint.sh
+      - run: shellcheck -S error install.sh server/src/scripts/deploy-awg.sh server/test/docker/nodes.sh server/test/docker/entrypoint.sh
+
+  # Реальные ноды (Docker-in-Docker с SSH): весь набор тестов, включая real-*.test.ts. Не блокирует остальные проверки,
+  # пока не накоплена статистика стабильности (тесты скачивают образ AmneziaWG из интернета).
+  e2e:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: bash test/docker/nodes.sh up
+      - run: npm test
+      - if: always()
+        run: bash test/docker/nodes.sh down

@@ -25,6 +25,8 @@
 | `db/index.ts` | Схема, миграции, `transaction`, `getSetting`/`setSetting` |
 | `middleware/auth.middleware.ts` | `requireAuth` (Bearer-токен сессии) |
 | `middleware/rate-limit.ts` | `FailureLimiter` — счётчик неудачных попыток (логин, токены партнёров) |
+| `middleware/security-headers.ts` | CSP, X-Frame-Options, nosniff, Referrer-Policy, HSTS |
+| `middleware/error-handler.ts` | Единый JSON-обработчик ошибок (общий для `index.ts` и тестового приложения) |
 | `routes/*.ts` | HTTP API, см. [api.md](api.md) |
 | `services/ssh.service.ts` | SSH: TOFU-проверка ключа хоста, таймауты, stdin, `sudo -n` для не-root |
 | `services/provision.service.ts` | Всё про ноды: установка, синхронизация, применение, сканирование и импорт, мониторинг |
@@ -38,7 +40,8 @@
 | `services/fail2ban.service.ts` | fail2ban на хосте панели |
 | `utils/awg-params.ts` | Параметры AWG: генерация, проверка, рендер, разбор конфигов |
 | `utils/amnezia-key.ts` | Разбор ключей AmneziaVPN `vpn://` |
-| `utils/net.ts` | Подсети, выделение IP, `shellQuote`, проверки хостов/портов |
+| `utils/net.ts` | Подсети, выделение IP, `shellQuote`, проверки хостов/портов, адрес редиректа на HTTPS |
+| `utils/names.ts` | Имена клиентов на нодах партнёра: `subscriberPeerName`, `normalizePeerName` (до 64 символов) |
 | `utils/http.ts` | `HttpError`, `asyncHandler`, `contentDisposition`, `base64HeaderValue`, `parseId` |
 
 ## Клиент (`client/src`)

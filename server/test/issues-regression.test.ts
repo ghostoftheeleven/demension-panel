@@ -9,14 +9,14 @@ import { decryptSecret, encryptSecret, isEncrypted } from '../src/services/secre
 import { buildClashConfig } from '../src/routes/subscription.js';
 import { paramsToColumns, parseServerConfig } from '../src/utils/awg-params.js';
 import { startTestServer } from './test-app.js';
+import { insertServer as insertFullServer } from './helpers/db.js';
+import { stubSsh } from './helpers/ssh-stub.js';
+import { createRemotePanel as createRemotePanelOn, FULL_PARAMS, newRemote, PUBKEY_PLACEHOLDER, type RemoteState } from './helpers/remote-panel.js';
 
 /**
  * Регрессионные тесты по открытым Issues и черновикам Security Advisories: каждый сценарий проверяется на реальном коде
  * (роуты, сервисы, БД), без копирования логики в тест.
  */
-
-const PUBKEY_PLACEHOLDER = 'X'.repeat(43) + '=';
-const PSK_FROM_OWNER = 'B'.repeat(43) + '=';
 
 let testEnv: Awaited<ReturnType<typeof startTestServer>>;
 let adminToken: string;
@@ -53,94 +53,7 @@ function insertServer(name: string, host: string, managedBy = 'demension'): numb
   return Number(result.lastInsertRowid);
 }
 
-// ==============================================================================
-// Имитация панели владельца нод (для сценариев FederationClient)
-// ==============================================================================
-
-interface RemoteState {
-  peers: Map<number, any>;
-  calls: { method: string; path: string; body: any }[];
-  nextPeerId: number;
-  nodeName: string;
-  nodeParams: Record<string, unknown>;
-  nodeHost: string;
-  /** IP, который панель владельца вернёт новому клиенту (по умолчанию выдаётся из 10.50.0.0/24) */
-  assignedIp?: string;
-  /** Задержка ответа панели владельца: без неё гонка «ответ раньше синхронизации» не воспроизводится */
-  latencyMs: number;
-}
-
-const FULL_PARAMS = {
-  awg_version: 3, jc: 4, jmin: 40, jmax: 70, s1: 36, s2: 124, s3: 15, s4: 16,
-  h1: '100-200', h2: '300-400', h3: '500-600', h4: '700-800',
-  i1: null, i2: null, i3: null, i4: null, i5: null, header_protection_key: null, extra_params: {},
-};
-
-function newRemote(overrides: Partial<RemoteState> = {}): RemoteState {
-  return { peers: new Map(), calls: [], nextPeerId: 100, nodeName: 'Remote node', nodeParams: FULL_PARAMS, nodeHost: '203.0.113.7', latencyMs: 0, ...overrides };
-}
-
-function stubRemotePanel(state: RemoteState) {
-  const realFetch = globalThis.fetch;
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (url: string, init: RequestInit = {}) => {
-      // Запросы тестового клиента к самой панели проходят как обычно, подменяется только панель владельца
-      if (String(url).startsWith(testEnv.baseUrl)) return realFetch(url, init);
-      const path = String(url).split('/api/federation/v1')[1];
-      const method = init.method || 'GET';
-      const body = init.body ? JSON.parse(String(init.body)) : undefined;
-      state.calls.push({ method, path, body });
-      if (state.latencyMs) await new Promise((resolve) => setTimeout(resolve, state.latencyMs));
-      const reply = (json: unknown, status = 200) => new Response(JSON.stringify(json), { status, headers: { 'content-type': 'application/json' } });
-
-      if (method === 'GET' && path === '/info') return reply({ api_version: 1, partner_name: 'Owner', limits: null });
-      if (method === 'GET' && path === '/nodes') {
-        return reply({
-          nodes: [{ id: 7, name: state.nodeName, host: state.nodeHost, port: 51820, public_key: PUBKEY_PLACEHOLDER, status: 'online', params: state.nodeParams }],
-          limits: null,
-        });
-      }
-      if (method === 'GET' && path === '/peers') return reply({ peers: [...state.peers.values()] });
-      if (method === 'POST' && path === '/peers') {
-        const existing = [...state.peers.values()].find((p) => p.remote_ref === body.remote_ref);
-        if (existing) {
-          existing.public_key = body.public_key;
-          return reply({ peer: existing });
-        }
-        const id = state.nextPeerId++;
-        const peer = {
-          id, node_id: body.node_id, name: body.name, remote_ref: body.remote_ref, public_key: body.public_key,
-          client_ip: state.assignedIp ?? `10.50.0.${id - 90}`, preshared_key: PSK_FROM_OWNER, enabled: body.enabled, owner_blocked: false,
-          total_rx: 0, total_tx: 0, last_handshake: null,
-        };
-        state.peers.set(id, peer);
-        return reply({ peer }, 201);
-      }
-      const match = /^\/peers\/(\d+)$/.exec(path || '');
-      if (match && method === 'PATCH') {
-        const peer = state.peers.get(Number(match[1]));
-        Object.assign(peer, body);
-        return reply({ peer });
-      }
-      if (match && method === 'DELETE') {
-        state.peers.delete(Number(match[1]));
-        return reply({ success: true });
-      }
-      return reply({ error: `unexpected ${method} ${path}` }, 500);
-    })
-  );
-}
-
-let panelCounter = 0;
-
-/** Подключённая панель партнёра с одной нодой (удалённый узел #7) */
-async function createRemotePanel(state: RemoteState): Promise<{ panelId: number; serverId: number }> {
-  stubRemotePanel(state);
-  const panelId = await FederationClient.connect(`https://owner-${++panelCounter}.example.com#dp_${'a'.repeat(32)}`, 'Owner');
-  const server = db.prepare('SELECT id FROM servers WHERE remote_panel_id = ?').get(panelId) as { id: number } | undefined;
-  return { panelId, serverId: server?.id ?? 0 };
-}
+const createRemotePanel = (state: RemoteState) => createRemotePanelOn(state, testEnv.baseUrl);
 
 // ==============================================================================
 // Issues
@@ -312,6 +225,33 @@ describe('#33 переименование клиента на стороне п
     remote.calls.length = 0;
     await FederationClient.requestSync(panelId);
     expect(remote.calls.filter((c) => c.method === 'PATCH')).toHaveLength(0);
+  });
+});
+
+describe('#33 переименование через API получателя', () => {
+  it('переименование пользователя и клиента на ноде партнёра сразу передаётся владельцу, на локальных нодах SSH не используется', async () => {
+    const remote = newRemote();
+    const { serverId } = await createRemotePanel(remote);
+    const created = await api('/api/subscribers', 'POST', { name: 'Старое имя', server_ids: [serverId] });
+    const subscriberPeer = [...remote.peers.values()][0];
+    expect(subscriberPeer.name).toBe("Старое имя (Remote node)");
+
+    expect((await api(`/api/subscribers/${created.body.id}`, 'PUT', { name: 'Новое имя' })).status).toBe(200);
+    expect(subscriberPeer.name).toBe('Новое имя (Remote node)');
+
+    const client = (await api(`/api/servers/${serverId}/clients`, 'POST', { name: 'телефон' })).body;
+    const clientPeer = [...remote.peers.values()].find((p) => p.name === 'телефон')!;
+    expect((await api(`/api/clients/${client.id}`, 'PUT', { name: 'планшет' })).status).toBe(200);
+    await vi.waitFor(() => expect(clientPeer.name).toBe('планшет'));
+
+    // Локальная нода: переименование не требует синхронизации по SSH
+    const ssh = stubSsh();
+    const local = insertFullServer({ name: 'Локальная' });
+    const localSub = await api('/api/subscribers', 'POST', { name: 'До', server_ids: [local] });
+    await vi.waitFor(() => expect(ssh.calls.length).toBeGreaterThan(0));
+    const calls = ssh.calls.length;
+    await api(`/api/subscribers/${localSub.body.id}`, 'PUT', { name: 'После' });
+    expect(ssh.calls.length).toBe(calls);
   });
 });
 

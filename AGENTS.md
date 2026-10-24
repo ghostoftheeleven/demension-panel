@@ -17,6 +17,7 @@ Demension Panel — агентлесс-панель управления нод�
 | [docs/amnezia-import.md](docs/amnezia-import.md) | Перенос серверов из AmneziaVPN по ключу «Полный доступ» (`vpn://`) |
 | [docs/security.md](docs/security.md) | Авторизация, секреты, HTTPS на одном порту, ограничения частоты, fail2ban |
 | [docs/api.md](docs/api.md) | Справочник HTTP API панели |
+| [docs/testing.md](docs/testing.md) | Как устроены тесты, хелперы, реальные ноды в Docker, правила для новых тестов |
 
 ## Структура репозитория
 
@@ -29,7 +30,8 @@ server/            Node.js 22.13+ / Express 4 / TypeScript, SQLite через no
   src/utils/         чистые функции (сети, параметры AWG, ключи Amnezia, HTTP-утилиты)
   src/scripts/deploy-awg.sh  скрипт развёртывания ноды (передаётся по SSH через stdin)
   src/cli/reset-admin.ts     сброс логина/пароля администратора
-  test/              vitest
+  src/middleware/    авторизация, ограничение частоты, заголовки безопасности (CSP), единый обработчик ошибок
+  test/              vitest: *.test.ts, helpers/ (API, БД, подмена SSH и панели партнёра, процесс панели), docker/ (тестовые ноды)
 client/            React 19 + Vite + Tailwind 4 (SPA, собирается в client/dist и раздаётся сервером)
 install.sh         установка панели на VPS (systemd)
 docs/              документация
@@ -41,12 +43,14 @@ docs/              документация
 npm install --prefix server && npm install --prefix client
 npm run dev:server            # бэкенд :3001 (tsx watch)
 npm run dev:client            # фронтенд :3000, прокси /api, /sub, /ws на :3001
-cd server && npx tsc --noEmit && npm test     # проверка типов и тесты сервера
+cd server && npx tsc --noEmit && npm test     # проверка типов и тесты сервера (≈ 1–2 мин)
 cd client && npx tsc -b && npm run lint && npx vite build
-npx shellcheck -S error install.sh server/src/scripts/deploy-awg.sh
+npx shellcheck -S error install.sh server/src/scripts/deploy-awg.sh server/test/docker/nodes.sh server/test/docker/entrypoint.sh
+server/test/docker/nodes.sh up                # реальные ноды в Docker для real-*.test.ts (без них эти тесты пропускаются)
 ```
 
-CI (`.github/workflows/ci.yml`) выполняет всё перечисленное на каждый push в `main`.
+CI (`.github/workflows/ci.yml`) выполняет всё перечисленное на каждый push в `main`; отдельное задание `e2e` поднимает тестовые
+ноды и гоняет весь набор вместе с Docker-тестами.
 
 ## Правила работы с репозиторием
 
@@ -54,7 +58,10 @@ CI (`.github/workflows/ci.yml`) выполняет всё перечисленн
 - Shell-скрипты хранятся с LF (`.gitattributes`). На Windows с `core.autocrlf=true` рабочие файлы могут быть с CRLF —
   учитывайте это в скриптах, которые патчат исходники.
 - Тексты интерфейса и сообщения об ошибках — на русском.
-- Новые функции сопровождайте тестами в `server/test` и обновлением соответствующего документа в `docs/`.
+- Новые функции и правки поведения сопровождайте тестами в `server/test` и обновлением документа в `docs/`; новое правило,
+  которое легко нарушить, — пунктом в инвариантах ниже. Изменили данные для ИИ-агентов (этот файл, `docs/`) — обновляйте их в том
+  же коммите. Правила тестов — [docs/testing.md](docs/testing.md): проверяйте реальный код, тест на баг должен падать на старом коде,
+  SSH и чужие панели подменяйте хелперами (`stubSsh`, `stubRemotePanel`).
 
 ## Критические инварианты — не ломать
 
@@ -124,9 +131,10 @@ CI (`.github/workflows/ci.yml`) выполняет всё перечисленн
 
 ## Чек-лист перед коммитом
 
-- [ ] `cd server && npx tsc --noEmit && npm test`
+- [ ] `cd server && npx tsc --noEmit && npm test` (при правках провижининга, федерации, WebSocket/HTTPS — с поднятыми нодами `nodes.sh up`)
 - [ ] `cd client && npx tsc -b && npm run lint && npx vite build`
 - [ ] shellcheck, если менялись `install.sh` / `deploy-awg.sh`
 - [ ] Новые поля сервера/клиента не утекают в API (п. 1) и, если нужны клиенту, добавлены в `client/src/types`
 - [ ] Изменение схемы — новой миграцией (п. 21)
-- [ ] Обновлён документ в `docs/` для изменённой подсистемы
+- [ ] Обновлён документ в `docs/` для изменённой подсистемы (и `AGENTS.md`, если появилось правило или команда)
+- [ ] Для исправленного бага есть тест, который падает без исправления

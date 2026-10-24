@@ -1,0 +1,473 @@
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { db, initDatabase } from '../src/db/index.js';
+import { AwgService } from '../src/services/awg.service.js';
+import { parseScanOutput, ProvisionService } from '../src/services/provision.service.js';
+import { HostKeyMismatchError } from '../src/services/ssh.service.js';
+import { getServer, insertClient, insertServer, insertSubscriber } from './helpers/db.js';
+import { stubSsh } from './helpers/ssh-stub.js';
+
+/**
+ * ProvisionService без реального SSH: команды к ноде записываются заглушкой и проверяются.
+ * Реальную ноду в Docker проверяют real-docker-*.test.ts.
+ */
+
+beforeAll(() => {
+  initDatabase();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+const dumpLine = (key: string, rx: number, tx: number) => `${key}\t(none)\t1.2.3.4:5\t10.8.0.2/32\t1700000000\t${rx}\t${tx}\toff`;
+
+describe('синхронизация пиров (doSync)', () => {
+  it('отправляет на ноду конфиг только с активными клиентами и сбрасывает needs_sync', async () => {
+    const serverId = insertServer();
+    const active = insertClient(serverId);
+    const disabled = insertClient(serverId, { enabled: 0 });
+    const suspended = insertSubscriber();
+    db.prepare('UPDATE subscribers SET suspended = 1 WHERE id = ?').run(suspended);
+    const ofSuspended = insertClient(serverId, { subscriberId: suspended });
+    const ssh = stubSsh();
+
+    const result = await ProvisionService.requestSync(serverId);
+
+    expect(result).toEqual({ success: true });
+    expect(ssh.calls).toHaveLength(1);
+    const conf = ssh.calls[0].input!;
+    expect(conf).toContain(active.publicKey);
+    expect(conf).not.toContain(disabled.publicKey);
+    expect(conf).not.toContain(ofSuspended.publicKey);
+    expect(conf).toContain('[Interface]');
+    expect(ssh.calls[0].command).toContain("docker exec -i 'amnezia-awg' sh -c");
+    expect(ssh.calls[0].command).toContain('awg syncconf awg0');
+    expect(ssh.calls[0].command).not.toContain('sudo');
+    expect(getServer(serverId)).toMatchObject({ needs_sync: 0, last_error: null });
+  });
+
+  it('использует контейнер, интерфейс и утилиту сервера, а для не-root — sudo -n', async () => {
+    const serverId = insertServer({
+      managedBy: 'amnezia', containerName: 'amnezia-awg2', iface: 'wg0', confPath: '/opt/amnezia/awg/wg0.conf', awgTool: 'wg', sshUser: 'deploy',
+    });
+    const ssh = stubSsh();
+
+    await ProvisionService.requestSync(serverId);
+
+    const command = ssh.calls[0].command;
+    expect(command).toContain("sudo -n docker exec -i 'amnezia-awg2' sh -c");
+    expect(command).toContain('wg-quick strip /opt/amnezia/awg/wg0.conf');
+    expect(command).toContain('wg syncconf wg0');
+    expect(command).not.toContain('awg ');
+  });
+
+  it('при ошибке ноды оставляет needs_sync и сохраняет текст ошибки для повторной попытки', async () => {
+    const serverId = insertServer();
+    stubSsh(() => ({ code: 1, stderr: 'RTNETLINK answers: boom' }));
+
+    const result = await ProvisionService.requestSync(serverId);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('boom');
+    expect(getServer(serverId)).toMatchObject({ needs_sync: 1 });
+    expect(getServer(serverId).last_error).toContain('boom');
+  });
+
+  it('недоступная по SSH нода не роняет синхронизацию', async () => {
+    const serverId = insertServer();
+    stubSsh(() => {
+      throw new Error('connect ECONNREFUSED');
+    });
+    expect(await ProvisionService.requestSync(serverId)).toEqual({ success: false, error: 'connect ECONNREFUSED' });
+    expect(getServer(serverId).needs_sync).toBe(1);
+  });
+
+  it('одновременные запросы объединяются в одну отправку', async () => {
+    const serverId = insertServer();
+    const ssh = stubSsh(() => new Promise((resolve) => setTimeout(() => resolve({}), 15)));
+
+    await Promise.all([ProvisionService.requestSync(serverId), ProvisionService.requestSync(serverId), ProvisionService.requestSync(serverId)]);
+
+    expect(ssh.calls).toHaveLength(1);
+  });
+
+  it('не трогает нераспознанные состояния: неустановленный сервер и несуществующий id', async () => {
+    const uninstalled = insertServer({ status: 'uninstalled' });
+    const ssh = stubSsh();
+    expect(await ProvisionService.requestSync(uninstalled)).toEqual({ success: false, error: 'Сервер не установлен' });
+    expect(await ProvisionService.requestSync(987654)).toEqual({ success: false, error: 'Сервер удалён' });
+    expect(ssh.calls).toHaveLength(0);
+  });
+
+  it('при needs_apply синхронизация превращается в применение (перезапуск контейнера)', async () => {
+    const serverId = insertServer({ managedBy: 'amnezia' });
+    db.prepare('UPDATE servers SET needs_apply = 1 WHERE id = ?').run(serverId);
+    const ssh = stubSsh();
+
+    await ProvisionService.requestSync(serverId);
+
+    expect(ssh.calls).toHaveLength(1);
+    expect(ssh.calls[0].command).toContain("docker restart 'amnezia-awg'");
+    expect(getServer(serverId)).toMatchObject({ needs_apply: 0, needs_sync: 0 });
+  });
+});
+
+describe('применение параметров (doApply)', () => {
+  it('для контейнера панели обновляет demension.env, затем конфиг и перезапускает контейнер', async () => {
+    const serverId = insertServer({ subnet: '10.9.0.1/24', awgPort: 51830 });
+    const ssh = stubSsh();
+
+    const result = await ProvisionService.requestApply(serverId);
+
+    expect(result.success).toBe(true);
+    expect(ssh.calls).toHaveLength(2);
+    expect(ssh.calls[0].input).toBe('AWG_NETWORK=10.9.0.0/24\nAWG_PORT=51830\n');
+    expect(ssh.calls[0].command).toContain('demension.env');
+    expect(ssh.calls[1].command).toContain("docker restart 'amnezia-awg'");
+    expect(getServer(serverId)).toMatchObject({ needs_apply: 0, needs_sync: 0 });
+  });
+
+  it('при смене порта вместо перезапуска выполняется переустановка контейнера', async () => {
+    const serverId = insertServer({ awgPort: 51840, deployedPort: 51820 });
+    const ssh = stubSsh(() => ({ stdout: '---DEMENSION_OK---\n' }));
+
+    const result = await ProvisionService.requestApply(serverId);
+
+    expect(result.success).toBe(true);
+    expect(ssh.calls).toHaveLength(1);
+    expect(ssh.calls[0].input).toContain("export AWG_PORT='51840'");
+    expect(getServer(serverId)).toMatchObject({ deployed_port: 51840, status: 'online' });
+  });
+
+  it('ошибка перезапуска сохраняется, needs_apply остаётся для повтора', async () => {
+    const serverId = insertServer({ managedBy: 'amnezia' });
+    stubSsh(() => ({ code: 125, stderr: 'docker: daemon not running' }));
+
+    const result = await ProvisionService.requestApply(serverId);
+
+    expect(result.success).toBe(false);
+    expect(getServer(serverId).needs_apply).toBe(1);
+    expect(getServer(serverId).last_error).toContain('daemon not running');
+  });
+
+  it('нода партнёра управляется только владельцем', async () => {
+    const panelId = Number(db.prepare("INSERT INTO remote_panels (name, base_url, token) VALUES ('p', 'https://p.example', 'x')").run().lastInsertRowid);
+    const serverId = insertServer();
+    db.prepare('UPDATE servers SET remote_panel_id = ?, remote_node_id = 1 WHERE id = ?').run(panelId, serverId);
+    const ssh = stubSsh();
+
+    expect((await ProvisionService.requestApply(serverId)).success).toBe(false);
+    expect((await ProvisionService.requestReinstall(serverId)).success).toBe(false);
+    await expect(ProvisionService.teardown(serverId)).rejects.toThrow('нода партнёра');
+    await expect(ProvisionService.installServer(serverId)).rejects.toThrow('нода партнёра');
+    expect(ssh.calls).toHaveLength(0);
+  });
+});
+
+describe('установка (doInstall)', () => {
+  it('передаёт скрипт через stdin с переменными окружения и фиксирует результат в БД', async () => {
+    const serverId = insertServer({ status: 'uninstalled', deployedPort: null, awgPort: 51850, subnet: '10.7.0.1/24' });
+    const client = insertClient(serverId, { ip: '10.7.0.2' });
+    const logs: string[] = [];
+    const ssh = stubSsh(() => ({ stdout: 'установка...\n---DEMENSION_OK---\n' }));
+
+    const result = await ProvisionService.installServer(serverId, (chunk) => logs.push(chunk));
+
+    expect(result).toEqual({ success: true });
+    const script = ssh.calls[0].input!;
+    expect(script).toContain("export AWG_PORT='51850'");
+    expect(script).toContain("export AWG_NETWORK='10.7.0.0/24'");
+    expect(script).toContain("export AWG_IMAGE='amneziavpn/amneziawg-go:latest'");
+    expect(script).toContain("export REPLACE_CONTAINER=''");
+    const encoded = /export AWG_CONF_B64='([^']+)'/.exec(script)![1];
+    const conf = Buffer.from(encoded, 'base64').toString('utf-8');
+    expect(conf).toContain('ListenPort = 51850');
+    expect(conf).toContain(client.publicKey);
+    expect(ssh.calls[0].command).toContain('PANEL_IP=');
+    expect(logs.join('')).toContain('успешно установлен');
+    expect(getServer(serverId)).toMatchObject({
+      status: 'online', deployed_port: 51850, container_name: 'amnezia-awg', iface: 'awg0', awg_tool: 'awg', managed_by: 'demension', last_error: null,
+    });
+  });
+
+  it('контейнер приложения Amnezia при установке заменяется контейнером панели', async () => {
+    const serverId = insertServer({ managedBy: 'amnezia', containerName: 'amnezia-awg2', iface: 'wg0', awgTool: 'wg' });
+    const ssh = stubSsh(() => ({ stdout: '---DEMENSION_OK---' }));
+
+    expect((await ProvisionService.requestReinstall(serverId)).success).toBe(true);
+
+    expect(ssh.calls[0].input).toContain("export REPLACE_CONTAINER='amnezia-awg2'");
+    expect(getServer(serverId)).toMatchObject({ container_name: 'amnezia-awg', iface: 'awg0', awg_tool: 'awg', managed_by: 'demension' });
+  });
+
+  it('без маркера успеха установка считается неудачной, статус error', async () => {
+    const serverId = insertServer({ status: 'uninstalled' });
+    stubSsh(() => ({ stdout: 'что-то пошло не так' }));
+
+    const result = await ProvisionService.installServer(serverId);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('не подтвердил');
+    expect(getServer(serverId).status).toBe('error');
+  });
+
+  it('подсказывает про sudo без пароля, если у пользователя нет NOPASSWD', async () => {
+    const serverId = insertServer({ status: 'uninstalled', sshUser: 'deploy' });
+    stubSsh(() => ({ code: 1, stderr: 'sudo: a password is required' }));
+
+    const result = await ProvisionService.installServer(serverId);
+
+    expect(result.error).toContain('NOPASSWD');
+    expect(getServer(serverId).status).toBe('error');
+  });
+
+  it('вторая одновременная установка отклоняется', async () => {
+    const serverId = insertServer({ status: 'uninstalled' });
+    stubSsh(() => new Promise((resolve) => setTimeout(() => resolve({ stdout: '---DEMENSION_OK---' }), 30)));
+
+    const first = ProvisionService.installServer(serverId);
+    expect(ProvisionService.isInstalling(serverId)).toBe(true);
+    await expect(ProvisionService.installServer(serverId)).rejects.toThrow('уже выполняется');
+    expect((await first).success).toBe(true);
+    expect(ProvisionService.isInstalling(serverId)).toBe(false);
+  });
+});
+
+describe('удаление контейнера (teardown)', () => {
+  it('контейнер панели удаляется вместе с каталогом, чужой — только сам контейнер', async () => {
+    const own = insertServer();
+    const foreign = insertServer({ managedBy: 'amnezia', containerName: 'amnezia-awg2' });
+    const ssh = stubSsh();
+
+    expect((await ProvisionService.teardown(own)).success).toBe(true);
+    expect((await ProvisionService.teardown(foreign)).success).toBe(true);
+
+    expect(ssh.calls[0].command).toContain('docker rm -f amnezia-awg');
+    expect(ssh.calls[0].command).toContain('rm -rf /opt/amnezia/awg');
+    expect(ssh.calls[1].command).toContain('docker rm -f amnezia-awg2');
+    expect(ssh.calls[1].command).not.toContain('rm -rf');
+  });
+});
+
+describe('опрос ноды (fetchServerStats)', () => {
+  it('накапливает трафик и переводит ноду в online', async () => {
+    const serverId = insertServer({ status: 'offline' });
+    const client = insertClient(serverId);
+    db.prepare('UPDATE servers SET fail_count = 2 WHERE id = ?').run(serverId);
+    const ssh = stubSsh((call) => (call.command.includes(' show ') ? { stdout: `iface\n${dumpLine(client.publicKey, 1000, 2000)}` } : {}));
+
+    await ProvisionService.fetchServerStats(serverId);
+
+    expect(ssh.calls[0].command).toContain("docker exec 'amnezia-awg' awg show awg0 dump");
+    expect(getServer(serverId)).toMatchObject({ status: 'online', fail_count: 0 });
+    expect(db.prepare('SELECT total_rx, total_tx FROM clients WHERE id = ?').get(client.id)).toEqual({ total_rx: 1000, total_tx: 2000 });
+  });
+
+  it('после трёх неудач подряд нода становится offline, успешный опрос возвращает online и запускает досинхронизацию', async () => {
+    const serverId = insertServer();
+    stubSsh(() => {
+      throw new Error('timeout');
+    });
+    await ProvisionService.fetchServerStats(serverId);
+    await ProvisionService.fetchServerStats(serverId);
+    expect(getServer(serverId).status).toBe('online');
+    await ProvisionService.fetchServerStats(serverId);
+    expect(getServer(serverId)).toMatchObject({ status: 'offline', fail_count: 3, last_error: 'timeout' });
+
+    vi.restoreAllMocks();
+    const sync = vi.spyOn(ProvisionService, 'requestSync').mockResolvedValue({ success: true });
+    stubSsh(() => ({ stdout: 'iface' }));
+    await ProvisionService.fetchServerStats(serverId);
+    expect(getServer(serverId)).toMatchObject({ status: 'online', fail_count: 0 });
+    expect(sync).toHaveBeenCalledWith(serverId);
+  });
+
+  it('изменённый ключ SSH-хоста ставит статус error без накопления неудач', async () => {
+    const serverId = insertServer({ hostKey: 'SHA256:old' });
+    stubSsh(() => {
+      throw new HostKeyMismatchError('SHA256:old', 'SHA256:new');
+    });
+
+    await ProvisionService.fetchServerStats(serverId);
+
+    expect(getServer(serverId)).toMatchObject({ status: 'error', fail_count: 0 });
+    expect(getServer(serverId).last_error).toContain('Ключ SSH-хоста изменился');
+  });
+
+  it('при ненулевом коде интерфейс считается недоступным', async () => {
+    const serverId = insertServer();
+    stubSsh(() => ({ code: 1, stderr: 'Unable to access interface' }));
+    await ProvisionService.fetchServerStats(serverId);
+    expect(getServer(serverId).last_error).toContain('Интерфейс awg0 недоступен');
+    expect(getServer(serverId).fail_count).toBe(1);
+  });
+
+  it('при needs_apply опрос запускает применение, а не синхронизацию', async () => {
+    const serverId = insertServer();
+    db.prepare('UPDATE servers SET needs_apply = 1, needs_sync = 1 WHERE id = ?').run(serverId);
+    stubSsh(() => ({ stdout: 'iface' }));
+    const apply = vi.spyOn(ProvisionService, 'requestApply').mockResolvedValue({ success: true });
+    const sync = vi.spyOn(ProvisionService, 'requestSync').mockResolvedValue({ success: true });
+
+    await ProvisionService.fetchServerStats(serverId);
+
+    expect(apply).toHaveBeenCalledWith(serverId);
+    expect(sync).not.toHaveBeenCalled();
+  });
+
+  it('нода партнёра, неустановленный и устанавливаемый сервер не опрашиваются', async () => {
+    const ssh = stubSsh();
+    const uninstalled = insertServer({ status: 'uninstalled' });
+    const installing = insertServer({ status: 'installing' });
+    await ProvisionService.fetchServerStats(uninstalled);
+    await ProvisionService.fetchServerStats(installing);
+    await ProvisionService.fetchServerStats(424242);
+    expect(ssh.calls).toHaveLength(0);
+  });
+});
+
+describe('ключи SSH-хоста (TOFU)', () => {
+  it('первый отпечаток сохраняется, следующий его не перезаписывает', () => {
+    const serverId = insertServer();
+    const credentials = ProvisionService.getCredentials(getServer(serverId));
+    expect(credentials.hostKey).toBeNull();
+
+    credentials.onNewHostKey!('SHA256:first');
+    credentials.onNewHostKey!('SHA256:second');
+
+    expect(getServer(serverId).host_key).toBe('SHA256:first');
+    expect(ProvisionService.getCredentials(getServer(serverId)).hostKey).toBe('SHA256:first');
+  });
+
+  it('пароль расшифровывается перед подключением', () => {
+    const serverId = insertServer({ sshPassword: 'p@ss' });
+    expect(getServer(serverId).ssh_password).toMatch(/^enc:v1:/);
+    expect(ProvisionService.getCredentials(getServer(serverId)).password).toBe('p@ss');
+  });
+});
+
+describe('разбор вывода сканирования (parseScanOutput)', () => {
+  const output = [
+    '---CONTAINER amnezia-awg2|amneziavpn/amnezia-awg:latest|true',
+    '---CONF /opt/amnezia/awg/wg0.conf',
+    '[Interface]',
+    'PrivateKey = KEY',
+    '---ENDCONF',
+    '---TOOL wg',
+    '---CLIENTS',
+    '[{"clientId":"PEER1=","userData":{"clientName":"Алиса"}},{"clientId":"PEER2=","userData":{}}]',
+    '---ENDCLIENTS',
+    '---CONTAINER amnezia-awg|amneziavpn/amneziawg-go|false',
+  ].join('\n');
+
+  it('различает контейнеры, утилиту, конфиг и имена клиентов', () => {
+    const [foreign, stopped] = parseScanOutput(output);
+    expect(foreign).toMatchObject({ name: 'amnezia-awg2', running: true, confPath: '/opt/amnezia/awg/wg0.conf', tool: 'wg', managedBy: 'amnezia' });
+    expect(foreign.config).toBe('[Interface]\nPrivateKey = KEY');
+    expect(foreign.clientNames).toEqual({ 'PEER1=': 'Алиса' });
+    expect(stopped).toMatchObject({ name: 'amnezia-awg', running: false, config: null });
+  });
+
+  it('помечает контейнер панели маркером DEMENSION и переживает мусор в clientsTable', () => {
+    const [own] = parseScanOutput('---CONTAINER amnezia-awg|img|true\n---DEMENSION\n---CLIENTS\nне json\n---ENDCLIENTS');
+    expect(own.managedBy).toBe('demension');
+    expect(own.clientNames).toEqual({});
+  });
+
+  it('пустой вывод — нет контейнеров', () => {
+    expect(parseScanOutput('')).toEqual([]);
+  });
+});
+
+describe('подключение установленного AmneziaWG (scanAndAdopt)', () => {
+  const buildScan = (privateKey: string, peers: string, extra = '') =>
+    [
+      '---CONTAINER amnezia-awg2|amneziavpn/amnezia-awg:latest|true',
+      '---CONF /opt/amnezia/awg/awg0.conf',
+      '[Interface]',
+      `PrivateKey = ${privateKey}`,
+      'Address = 10.8.1.0/24',
+      'ListenPort = 55555',
+      'Jc = 5', 'Jmin = 10', 'Jmax = 50', 'S1 = 30', 'S2 = 40', 'H1 = 1111', 'H2 = 2222', 'H3 = 3333', 'H4 = 4444',
+      extra,
+      peers,
+      '---ENDCONF',
+      '---TOOL awg',
+      '---CLIENTS',
+      '[{"clientId":"PEERKEY1_______________________________________=","userData":{"clientName":"Алиса"}}]',
+      '---ENDCLIENTS',
+    ].join('\n');
+
+  it('переносит ключи, порт, параметры и пиров (в том числе с AllowedIPs без /32)', async () => {
+    const serverId = insertServer({ status: 'uninstalled', deployedPort: null });
+    const serverKeys = AwgService.generateKeyPair();
+    const peers = [
+      '[Peer]', 'PublicKey = PEERKEY1_______________________________________=', 'PresharedKey = PSKPSKPSK=', 'AllowedIPs = 10.8.1.2',
+      '[Peer]', 'PublicKey = PEERKEY2=', 'AllowedIPs = 10.8.1.3/32',
+      '[Peer]', 'PublicKey = PEERKEY3=', 'AllowedIPs = 10.8.1.3/32',
+      '[Peer]', 'PublicKey = PEERKEY4=', 'AllowedIPs = 10.9.0.0/16',
+    ].join('\n');
+    stubSsh(() => ({ stdout: buildScan(serverKeys.privateKey, peers) }));
+
+    const result = await ProvisionService.scanAndAdopt(serverId);
+
+    expect(result.found).toBe(true);
+    expect(result.adopted).toMatchObject({ container: 'amnezia-awg2', managedBy: 'amnezia', awgVersion: 1, port: 55555, importedPeers: 2, skippedPeers: 2 });
+    expect(getServer(serverId)).toMatchObject({
+      status: 'online', awg_port: 55555, deployed_port: 55555, subnet: '10.8.1.0/24', container_name: 'amnezia-awg2', iface: 'awg0',
+      managed_by: 'amnezia', server_public_key: serverKeys.publicKey, jc: 5, s1: 30, h4: 4444, // колонка с INTEGER-аффинностью хранит одиночное число числом (paramsFromRow приводит к строке)
+    });
+    const imported = db.prepare('SELECT name, client_ip, external, enabled FROM clients WHERE server_id = ? ORDER BY client_ip').all(serverId);
+    expect(imported).toEqual([
+      { name: 'Алиса', client_ip: '10.8.1.2', external: 1, enabled: 1 },
+      { name: 'Импорт 10.8.1.3', client_ip: '10.8.1.3', external: 1, enabled: 1 },
+    ]);
+
+    // Повторное сканирование не дублирует клиентов
+    const again = await ProvisionService.scanAndAdopt(serverId);
+    expect(again.adopted?.importedPeers).toBe(0);
+    expect((db.prepare('SELECT COUNT(*) AS c FROM clients WHERE server_id = ?').get(serverId) as any).c).toBe(2);
+  });
+
+  it('сохраняет параметры AWG 3.x и дополнительные параметры как есть', async () => {
+    const serverId = insertServer({ status: 'uninstalled', deployedPort: null });
+    const key = AwgService.generateKeyPair().privateKey;
+    stubSsh(() => ({
+      stdout: buildScan(key, '', ['S3 = 20', 'S4 = 16', 'H1 = 100-200', 'RekeyTimeout = 12', 'RandomTrailers = on'].join('\n')),
+    }));
+
+    const result = await ProvisionService.scanAndAdopt(serverId);
+
+    expect(result.adopted?.awgVersion).toBe(3);
+    const row = getServer(serverId);
+    expect(row).toMatchObject({ awg_version: 3, s3: 20, s4: 16, h1: '100-200' });
+    expect(JSON.parse(row.extra_params)).toEqual({ RekeyTimeout: '12', RandomTrailers: 'on' });
+  });
+
+  it('предпочитает контейнер панели чужому и сообщает, что ничего не найдено', async () => {
+    const serverId = insertServer({ status: 'uninstalled', deployedPort: null });
+    stubSsh(() => ({ stdout: '' }));
+    expect(await ProvisionService.scanAndAdopt(serverId)).toMatchObject({ found: false, message: expect.stringContaining('не найден') });
+
+    vi.restoreAllMocks();
+    stubSsh(() => ({ stdout: '---CONTAINER amnezia-awg|img|false' }));
+    expect(await ProvisionService.scanAndAdopt(serverId)).toMatchObject({ found: false, message: expect.stringContaining('остановленные контейнеры') });
+  });
+
+  it('конфигурация без обязательных полей не подключается, сервер не меняется', async () => {
+    const serverId = insertServer({ status: 'uninstalled', deployedPort: null });
+    stubSsh(() => ({ stdout: '---CONTAINER amnezia-awg|img|true\n---CONF /opt/amnezia/awg/awg0.conf\n[Interface]\nAddress = 10.8.0.1/24\n---ENDCONF' }));
+
+    const result = await ProvisionService.scanAndAdopt(serverId);
+
+    expect(result.found).toBe(false);
+    expect(result.message).toContain('не удалось разобрать');
+    expect(getServer(serverId).status).toBe('uninstalled');
+  });
+
+  it('ошибка sudo при сканировании объясняется пользователю', async () => {
+    const serverId = insertServer({ status: 'uninstalled', deployedPort: null });
+    stubSsh(() => ({ code: 1, stderr: 'sudo: a terminal is required' }));
+    await expect(ProvisionService.scanAndAdopt(serverId)).rejects.toThrow('нужен sudo без пароля');
+  });
+});
