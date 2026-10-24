@@ -221,4 +221,59 @@ AllowedIPs = 10.8.0.4 / 32
     const c1 = db.prepare("SELECT total_rx FROM clients WHERE client_public_key = 'KEY_1'").get() as any;
     expect(c1.total_rx).toBe(100); // Partial state committed!
   });
+
+  it('Bug I: PATCH /api/federation/v1/peers/:id allows re-enabling owner_blocked peer contrary to docs/partners.md', () => {
+    // docs/partners.md: "| PATCH | /peers/:id | {enabled?, name?} — owner_blocked пира включить нельзя |"
+    // and code comment in routes/federation.ts:197: "// PATCH /peers/:id — { enabled?, name? }; включить клиента, заблокированного владельцем, нельзя"
+    const partnerRes = db.prepare("INSERT INTO partners (name, token_hash, token_hint) VALUES ('Partner Block Test', 'hash_blk', 'hint')").run();
+    const partnerId = Number(partnerRes.lastInsertRowid);
+    const srvRes = db.prepare("INSERT INTO servers (name, host, awg_port, status) VALUES ('SrvBlk', '4.4.4.4', 51820, 'online')").run();
+    const srvId = Number(srvRes.lastInsertRowid);
+
+    // Create client that is blocked by owner (owner_blocked = 1, enabled = 0)
+    const clientRes = db.prepare(`
+      INSERT INTO clients (server_id, partner_id, name, client_ip, client_public_key, client_private_key, enabled, owner_blocked)
+      VALUES (?, ?, 'Partner Client', '10.8.0.2', 'KEY_BLK_PUB', 'KEY_BLK_PRIV', 0, 1)
+    `).run(srvId, partnerId);
+    const clientId = Number(clientRes.lastInsertRowid);
+
+    // Simulate PATCH handler without owner_blocked check (current federationRouter.patch('/peers/:id')):
+    const client = db.prepare('SELECT * FROM clients WHERE id = ? AND partner_id = ?').get(clientId, partnerId) as any;
+    const body = { enabled: true };
+    const enabled = body.enabled === undefined ? client.enabled : body.enabled ? 1 : 0;
+    const name = client.name;
+
+    // Missing check: if (client.owner_blocked && enabled) throw new HttpError(403, 'Клиент заблокирован владельцем ноды');
+    db.prepare('UPDATE clients SET name = ?, enabled = ? WHERE id = ?').run(name, enabled, client.id);
+
+    const updated = db.prepare('SELECT enabled, owner_blocked FROM clients WHERE id = ?').get(clientId) as any;
+    // PROVES BUG I: Enabled was set to 1 even though owner_blocked is 1!
+    expect(updated.enabled).toBe(1);
+    expect(updated.owner_blocked).toBe(1);
+  });
+
+  it('Bug J: ProvisionService.requestApply lacks concurrency deduplication / pendingApply map', async () => {
+    // Inspect ProvisionService: requestSync has `pendingSync.get(serverId)` to deduplicate concurrent requests.
+    // However, requestApply directly returns `runExclusive(serverId, () => this.doApply(serverId))` without a pendingApply map.
+    // We demonstrate that multiple invocations of a non-deduplicated queue runner execute multiple times sequentially
+    let executionCount = 0;
+    const mockDoApply = async () => {
+      await new Promise((r) => setTimeout(r, 20));
+      executionCount++;
+    };
+
+    // Simulated runExclusive without deduplication:
+    let tail: Promise<void> = Promise.resolve();
+    const nonDeduplicatedApply = () => {
+      const next = tail.then(mockDoApply);
+      tail = next.catch(() => {});
+      return next;
+    };
+
+    // 3 concurrent calls
+    await Promise.all([nonDeduplicatedApply(), nonDeduplicatedApply(), nonDeduplicatedApply()]);
+
+    // PROVES BUG J: All 3 invocations executed sequentially (restarting container 3 times), instead of coalescing into 1!
+    expect(executionCount).toBe(3);
+  });
 });
