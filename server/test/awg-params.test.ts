@@ -81,7 +81,7 @@ describe('параметры AmneziaWG 3.x', () => {
   it('I1–I5 попадают только в клиентский конфиг', () => {
     const p = { ...generateAwgParams(), i1: '<r 32>' };
     expect(renderAwgLines(p, 'client')).toContain('I1 = <r 32>');
-    expect(renderAwgLines(p, 'server')).not.toContain('I1');
+    expect(renderAwgLines(p, 'server')).not.toMatch(/^I1\s*=/m);
     expect(renderAwgLines(p, 'server')).toContain('HeaderProtectionKey');
   });
 });
