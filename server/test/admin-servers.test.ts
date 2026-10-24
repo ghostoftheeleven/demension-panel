@@ -262,12 +262,14 @@ describe('действия над сервером', () => {
 
     it('не откатывает значения, изменённые ещё раз, пока шло применение', async () => {
       const id = await installedServer();
+      // Jc генерируется случайно: новое значение должно отличаться от текущего, иначе применять нечего
+      const jc = getServer(id).jc === 9 ? 8 : 9;
       stubSsh(() => {
         db.prepare('UPDATE servers SET jc = 7 WHERE id = ?').run(id);
         return { code: 1, stderr: 'ошибка' };
       });
 
-      const res = await admin.api(`/api/servers/${id}`, 'PUT', { jc: 9 });
+      const res = await admin.api(`/api/servers/${id}`, 'PUT', { jc });
 
       expect(res.status).toBe(502);
       expect(res.body.error).not.toContain('возвращены к прежним');
@@ -276,12 +278,14 @@ describe('действия над сервером', () => {
 
     it('при успешном применении изменения остаются', async () => {
       const id = await installedServer();
-      stubSsh();
+      const jc = getServer(id).jc === 9 ? 8 : 9;
+      const ssh = stubSsh();
 
-      const res = await admin.api(`/api/servers/${id}`, 'PUT', { jc: 9 });
+      const res = await admin.api(`/api/servers/${id}`, 'PUT', { jc });
 
       expect(res.status).toBe(200);
-      expect(getServer(id)).toMatchObject({ jc: 9, needs_apply: 0 });
+      expect(ssh.calls.some((c) => c.command.includes('docker restart'))).toBe(true);
+      expect(getServer(id)).toMatchObject({ jc, needs_apply: 0 });
     });
   });
 
