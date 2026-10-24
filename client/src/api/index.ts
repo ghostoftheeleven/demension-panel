@@ -17,6 +17,7 @@ import type {
   PartnerAuditEntry,
   RemotePanel,
   AmneziaImportResult,
+  VersionInfo,
 } from '../types';
 
 const API_BASE = '/api';
@@ -260,6 +261,10 @@ export const api = {
   // Panel settings
   getSettings(): Promise<PanelSettings> {
     return request(`${API_BASE}/settings`, {}, 'Ошибка загрузки настроек');
+  },
+
+  getVersion(refresh = false): Promise<VersionInfo> {
+    return request(`${API_BASE}/version${refresh ? '?refresh=1' : ''}`, {}, 'Ошибка проверки версии');
   },
 
   updateSettings(data: Partial<PanelSettings>): Promise<PanelSettings> {

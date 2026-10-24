@@ -295,6 +295,15 @@ const migrations: Array<() => void> = [
       );
     `);
   },
+
+  // v7: версии ПО AmneziaWG на ноде (собираются фоновым опросом)
+  () => {
+    addColumn('servers', 'node_awg_go TEXT');
+    addColumn('servers', 'node_awg_tools TEXT');
+    addColumn('servers', 'node_image TEXT');
+    addColumn('servers', 'node_image_created TEXT');
+    addColumn('servers', 'node_info_at TEXT');
+  },
 ];
 
 /**

@@ -21,6 +21,7 @@ SQLite (`node:sqlite`, Node ≥ 22.13), файл `data/demension.db`, режим
 | v4 | Параметры AWG 3.x, поля контейнера (`container_name`, `iface`, `conf_path`, `awg_tool`, `managed_by`), `clients.external` |
 | v5 | Партнёрский доступ: `partners`, `partner_nodes`, `partner_audit`, `remote_panels`; поля клиентов/серверов для партнёров |
 | v6 | Уникальный индекс `idx_clients_server_pubkey` (ключ клиента на ноде; не создаётся, если дубли уже есть — предупреждение в логе), таблица `trusted_login_ips` |
+| v7 | Версии ПО AmneziaWG на ноде: `node_awg_go`, `node_awg_tools`, `node_image`, `node_image_created`, `node_info_at` |
 
 ## Таблицы
 
@@ -42,6 +43,7 @@ SQLite (`node:sqlite`, Node ≥ 22.13), файл `data/demension.db`, режим
 | `managed_by` | `demension` — контейнер панели, `amnezia` — контейнер приложения Amnezia, `partner` — нода партнёра |
 | `sub_name`, `sub_order` | Отображаемое имя и порядок в подписке |
 | `remote_panel_id`, `remote_node_id` | Нода партнёрской панели (без SSH); каскадное удаление с `remote_panels` |
+| `node_awg_go`, `node_awg_tools`, `node_image`, `node_image_created`, `node_info_at` | Версии ПО AmneziaWG на ноде (amneziawg-go, утилиты, образ и дата его сборки) и время их чтения; `node_info_at = NULL` — перечитать при следующем опросе |
 
 ### `clients` — пиры
 | Поле | Смысл |

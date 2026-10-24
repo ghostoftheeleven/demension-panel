@@ -84,6 +84,25 @@ export interface Server {
   active_client_count?: number;
   last_seen?: string;
   created_at: string;
+  /** Версии ПО AmneziaWG на ноде (собираются фоновым опросом; у нод партнёра — null) */
+  node_awg_go: string | null;
+  node_awg_tools: string | null;
+  node_image: string | null;
+  node_image_created: string | null;
+  node_info_at: string | null;
+}
+
+/** Версия панели и последний релиз на GitHub (GET /api/version) */
+export interface VersionInfo {
+  current: string;
+  latest: string | null;
+  latest_url: string | null;
+  published_at: string | null;
+  update_available: boolean;
+  releases_url: string;
+  checked_at: string | null;
+  check_enabled: boolean;
+  error: string | null;
 }
 
 export interface ServerUpdate {

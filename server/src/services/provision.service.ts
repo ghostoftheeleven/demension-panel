@@ -22,6 +22,8 @@ const AWG_DIR = '/opt/amnezia/awg';
 const PANEL_CONF = `${AWG_DIR}/awg0.conf`;
 /** Сколько неудачных опросов подряд переводят сервер в offline */
 const OFFLINE_THRESHOLD = 3;
+/** Как часто перечитываются версии ПО AmneziaWG на ноде (после установки и подключения — сразу) */
+const NODE_INFO_TTL_MS = 12 * 60 * 60 * 1000;
 
 export interface OperationResult {
   success: boolean;
@@ -163,6 +165,31 @@ export function parseScanOutput(output: string): DetectedContainer[] {
     }
   }
   return containers;
+}
+
+export interface NodeInfo {
+  awg_go: string | null;
+  awg_tools: string | null;
+  image: string | null;
+  image_created: string | null;
+}
+
+/**
+ * Разбор вывода команды версий (строки IMAGE / CREATED / GO / TOOLS). Вывод приходит с ноды и показывается в интерфейсе,
+ * поэтому берутся только значения строго известного формата.
+ */
+export function parseNodeInfo(output: string): NodeInfo {
+  const line = (key: string) => new RegExp(`^${key} (.*)$`, 'm').exec(output)?.[1]?.trim() ?? '';
+  const go = /amneziawg-go\s+v?(\d[\w.+-]{0,40})/.exec(line('GO'))?.[1] ?? null;
+  const tools = /(amneziawg-tools|wireguard-tools)\s+v?(\d[\w.+-]{0,40})/.exec(line('TOOLS'));
+  const image = /^[\w./:@-]{1,200}$/.test(line('IMAGE')) ? line('IMAGE') : null;
+  const created = line('CREATED');
+  return {
+    awg_go: go,
+    awg_tools: tools ? `${tools[1]} ${tools[2]}` : null,
+    image,
+    image_created: /^\d{4}-\d{2}-\d{2}T/.test(created) && !Number.isNaN(Date.parse(created)) ? new Date(created).toISOString() : null,
+  };
 }
 
 export class ProvisionService {
@@ -334,7 +361,7 @@ export class ProvisionService {
         UPDATE servers SET ${assignments},
           awg_port = ?, deployed_port = ?, subnet = ?, server_private_key = ?, server_public_key = ?, preshared_key = ?,
           container_name = ?, iface = ?, conf_path = ?, awg_tool = ?, managed_by = ?,
-          status = 'online', needs_sync = 0, needs_apply = 0, fail_count = 0, last_error = NULL, last_seen = datetime('now')
+          status = 'online', needs_sync = 0, needs_apply = 0, fail_count = 0, last_error = NULL, last_seen = datetime('now'), node_info_at = NULL
         WHERE id = ?
       `).run(
         ...(Object.values(columns) as any[]),
@@ -502,7 +529,8 @@ export class ProvisionService {
             needs_apply = 0,
             fail_count = 0,
             last_error = NULL,
-            last_seen = datetime('now')
+            last_seen = datetime('now'),
+            node_info_at = NULL
         WHERE id = ?
       `).run(pubKey, privKey, psk, PANEL_CONTAINER, PANEL_CONF, serverId);
 
@@ -711,6 +739,9 @@ export class ProvisionService {
         WHERE id = ?
       `).run(serverId);
 
+      const infoAge = server.node_info_at ? Date.now() - Date.parse(server.node_info_at) : Infinity;
+      if (!(infoAge < NODE_INFO_TTL_MS)) await this.fetchNodeInfo(server);
+
       const fresh = db.prepare('SELECT needs_sync, needs_apply FROM servers WHERE id = ?').get(serverId) as any;
       if (fresh?.needs_apply) {
         this.requestApply(serverId).catch(() => {});
@@ -727,6 +758,35 @@ export class ProvisionService {
           status = CASE WHEN fail_count + 1 >= ? THEN 'offline' ELSE status END
         WHERE id = ?
       `).run(err.message, OFFLINE_THRESHOLD, serverId);
+    }
+  }
+
+  /**
+   * Версии ПО AmneziaWG на ноде: amneziawg-go, утилиты awg/wg и образ контейнера с датой сборки.
+   * Только чтение; ошибка не влияет на статус ноды (версии останутся прежними, повтор — при следующем опросе).
+   */
+  static async fetchNodeInfo(server: any): Promise<void> {
+    const c = this.container(server);
+    const script = [
+      `c=${shellQuote(c.name)}`,
+      'echo "IMAGE $(docker inspect -f "{{.Config.Image}}" "$c" 2>/dev/null)"',
+      'echo "CREATED $(docker image inspect -f "{{.Created}}" "$(docker inspect -f "{{.Image}}" "$c" 2>/dev/null)" 2>/dev/null)"',
+      `echo "GO $(docker exec "$c" sh -c 'amneziawg-go --version 2>/dev/null | head -n 1')"`,
+      `echo "TOOLS $(docker exec "$c" sh -c 'awg --version 2>/dev/null || wg --version 2>/dev/null' | head -n 1)"`,
+    ].join('\n');
+    try {
+      const credentials = this.getCredentials(server);
+      const result = await SshService.executeCommand(credentials, `${SshService.sudo(credentials)}sh -c ${shellQuote(script)}`, {
+        timeoutMs: 30000,
+      });
+      if (result.code !== 0) return;
+      const info = parseNodeInfo(result.stdout);
+      db.prepare(`
+        UPDATE servers SET node_awg_go = ?, node_awg_tools = ?, node_image = ?, node_image_created = ?, node_info_at = ?
+        WHERE id = ?
+      `).run(info.awg_go, info.awg_tools, info.image, info.image_created, new Date().toISOString(), server.id);
+    } catch {
+      // нода могла стать недоступной между запросами — версии перечитаются позже
     }
   }
 

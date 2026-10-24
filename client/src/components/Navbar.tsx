@@ -1,6 +1,7 @@
 import React from 'react';
 import { ShieldCheck, Plus, Server as ServerIcon, Users, Activity, LogOut, KeyRound, Lock, Palette, Handshake } from 'lucide-react';
 import type { Server, AdminUser } from '../types';
+import { PanelVersion } from './PanelVersion';
 
 export type AppTab = 'servers' | 'subscribers' | 'subscription' | 'partners' | 'security';
 
@@ -45,6 +46,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </span>
               </div>
               <p className="text-[11px] text-zinc-400">Панель управления нодами</p>
+              {user && <PanelVersion />}
             </div>
           </div>
 

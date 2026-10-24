@@ -38,6 +38,7 @@
 | `services/secrets.service.ts` | Шифрование секретов в БД (AES-256-GCM) |
 | `services/auth.service.ts` | Пароли (scrypt), сессии (SHA-256 токенов) |
 | `services/fail2ban.service.ts` | fail2ban на хосте панели |
+| `services/version.service.ts` | Версия панели (корневой `package.json`) и последний релиз GitHub с кэшем, см. [releases.md](releases.md) |
 | `utils/awg-params.ts` | Параметры AWG: генерация, проверка, рендер, разбор конфигов |
 | `utils/amnezia-key.ts` | Разбор ключей AmneziaVPN `vpn://` |
 | `utils/net.ts` | Подсети, выделение IP, `shellQuote`, проверки хостов/портов, адрес редиректа на HTTPS |

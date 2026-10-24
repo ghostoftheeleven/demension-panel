@@ -11,6 +11,7 @@ import { subscriptionSettingsRouter } from '../src/routes/subscription-settings.
 import { federationRouter } from '../src/routes/federation.js';
 import { partnersRouter } from '../src/routes/partners.js';
 import { remotePanelsRouter } from '../src/routes/remote-panels.js';
+import { versionRouter } from '../src/routes/version.js';
 import { requireAuth } from '../src/middleware/auth.middleware.js';
 import { errorHandler } from '../src/middleware/error-handler.js';
 import { securityHeaders } from '../src/middleware/security-headers.js';
@@ -37,6 +38,7 @@ export function createTestApp() {
   app.use('/api/subscription-settings', subscriptionSettingsRouter);
   app.use('/api/partners', partnersRouter);
   app.use('/api/remote-panels', remotePanelsRouter);
+  app.use('/api/version', versionRouter);
   app.use('/api', requireAuth, clientsRouter);
 
   // Тот же обработчик ошибок, что и в index.ts

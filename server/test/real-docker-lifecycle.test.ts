@@ -190,6 +190,11 @@ describe.skipIf(!dockerNodeAvailable)('Жизненный цикл ноды на
   it('опрос ноды читает интерфейс; неверный отпечаток SSH-хоста переводит сервер в error, сброс — возвращает online', async () => {
     await m.ProvisionService.fetchServerStats(serverId);
     expect(server()).toMatchObject({ status: 'online', fail_count: 0 });
+    // Версии ПО с настоящего контейнера образа amneziavpn/amneziawg-go
+    expect(server().node_awg_go).toMatch(/^\d+\.\d+\.\d+/);
+    expect(server().node_awg_tools).toMatch(/^amneziawg-tools \d+\.\d+/);
+    expect(server().node_image).toBe('amneziavpn/amneziawg-go:latest');
+    expect(server().node_image_created).toMatch(/^\d{4}-\d{2}-\d{2}T/);
 
     m.db.prepare("UPDATE servers SET host_key = 'SHA256:подделка' WHERE id = ?").run(serverId);
     await m.ProvisionService.fetchServerStats(serverId);

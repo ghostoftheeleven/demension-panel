@@ -47,6 +47,10 @@ HTTP-кодом. Тела — JSON.
 `GET /`, `POST /` (`name, server_ids, traffic_limit, expire_at`), `PUT /:id` (+ `enabled`), `DELETE /:id`,
 `POST /:id/reset-token` (новый токен и ключи), `POST /:id/reset-traffic`.
 
+## Версия
+- `GET /api/version[?refresh=1]` — `{current, latest, latest_url, published_at, update_available, releases_url, checked_at, check_enabled, error}`: версия панели и последний релиз GitHub, см. [releases.md](releases.md).
+- Серверы в `GET /api/servers` содержат версии ПО ноды: `node_awg_go`, `node_awg_tools`, `node_image`, `node_image_created`, `node_info_at`.
+
 ## Настройки
 - `GET/PUT /api/settings` — `public_url`, `client_dns`, `client_mtu`.
 - `GET/PUT /api/subscription-settings` — оформление подписки и `servers[{id, sub_name, sub_order}]`.

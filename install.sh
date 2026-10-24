@@ -387,6 +387,7 @@ echo -e "\n${GREEN}${BOLD}======================================================
 echo -e "${GREEN}${BOLD}🎉 УСПЕХ: Demension Panel установлена и запущена!${NC}"
 echo -e "${GREEN}${BOLD}======================================================================${NC}"
 echo -e "Адрес панели:         ${BOLD}${CYAN}http://${SERVER_IP}:${PANEL_PORT}${NC}"
+echo -e "Версия панели:        ${BOLD}v$(node -p "require('${INSTALL_DIR}/package.json').version" 2>/dev/null || echo '?')${NC}"
 if [ "$SET_CREDENTIALS" = true ]; then
   echo -e "Логин администратора: ${BOLD}${PANEL_USER}${NC}"
   if [ "$GENERATED_PASSWORD" = true ]; then

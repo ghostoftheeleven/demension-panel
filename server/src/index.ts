@@ -21,6 +21,8 @@ import { subscriptionSettingsRouter } from './routes/subscription-settings.js';
 import { federationRouter, cleanupFederationLimits } from './routes/federation.js';
 import { partnersRouter } from './routes/partners.js';
 import { remotePanelsRouter } from './routes/remote-panels.js';
+import { versionRouter } from './routes/version.js';
+import { PANEL_VERSION } from './services/version.service.js';
 import { PartnerService } from './services/partner.service.js';
 import { FederationClient } from './services/federation-client.service.js';
 import { ProvisionService } from './services/provision.service.js';
@@ -99,6 +101,7 @@ app.use('/api/settings', settingsRouter);
 app.use('/api/subscription-settings', subscriptionSettingsRouter);
 app.use('/api/partners', partnersRouter);
 app.use('/api/remote-panels', remotePanelsRouter);
+app.use('/api/version', versionRouter);
 app.use('/api', requireAuth, clientsRouter);
 
 // Unknown API routes must not fall through to the SPA
@@ -282,5 +285,5 @@ loadTls();
 
 const PORT = Number(process.env.PORT) || 3001;
 mainServer.listen(PORT, () => {
-  console.log(`🚀 Demension Panel Server running on port ${PORT} (${SslService.isActive() ? 'HTTPS + HTTP для подписок' : 'HTTP'})`);
+  console.log(`🚀 Demension Panel ${PANEL_VERSION} running on port ${PORT} (${SslService.isActive() ? 'HTTPS + HTTP для подписок' : 'HTTP'})`);
 });

@@ -87,6 +87,15 @@ echo "login status: $STATUS"
 STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$LOCAL_URL/api/auth/login" -H 'Content-Type: application/json' -d '{"username":"admin","password":"admin"}')
 [ "$STATUS" = "401" ] || fail "admin/admin не должен подходить, статус $STATUS"
 
+section "3a. Версия панели: в выводе установщика и в API совпадает с package.json"
+EXPECTED="v$(node -p "require('/work/package.json').version")"
+SHOWN=$(echo "$OUT" | sed -n 's/^Версия панели: *//p' | tail -1 | tr -d '[:space:]')
+echo "ожидается $EXPECTED, в выводе $SHOWN"
+[ "$SHOWN" = "$EXPECTED" ] || fail "установщик показал версию «$SHOWN»"
+TOKEN=$(node -p "JSON.parse(require('fs').readFileSync('/tmp/login.json','utf8')).token")
+API_VERSION=$(curl -s "$LOCAL_URL/api/version" -H "Authorization: Bearer $TOKEN" | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).current")
+[ "$API_VERSION" = "$EXPECTED" ] || fail "API вернул версию «$API_VERSION»"
+
 section "4. Безопасность установки"
 stat -c '%a %U %n' /opt/demension-panel/server/.env /opt/demension-panel/data
 grep -q "$PASS" /opt/demension-panel/server/.env && fail "пароль записан в .env"

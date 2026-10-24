@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { db, initDatabase } from '../src/db/index.js';
 import { AwgService } from '../src/services/awg.service.js';
-import { parseScanOutput, ProvisionService } from '../src/services/provision.service.js';
+import { parseNodeInfo, parseScanOutput, ProvisionService } from '../src/services/provision.service.js';
 import { HostKeyMismatchError } from '../src/services/ssh.service.js';
 import { getServer, insertClient, insertServer, insertSubscriber } from './helpers/db.js';
 import { stubSsh } from './helpers/ssh-stub.js';
@@ -254,6 +254,70 @@ describe('удаление контейнера (teardown)', () => {
     expect(ssh.calls[0].command).toContain('rm -rf /opt/amnezia/awg');
     expect(ssh.calls[1].command).toContain('docker rm -f amnezia-awg2');
     expect(ssh.calls[1].command).not.toContain('rm -rf');
+  });
+});
+
+describe('версии ПО AmneziaWG на ноде', () => {
+  const REAL_OUTPUT = [
+    'IMAGE amneziavpn/amneziawg-go:latest',
+    'CREATED 2026-08-28T15:50:06.566904559Z',
+    'GO amneziawg-go 0.0.20250522',
+    'TOOLS amneziawg-tools v3.1.20260812 - https://amnezia.org',
+  ].join('\n');
+
+  it('разбирает вывод образа amneziavpn/amneziawg-go', () => {
+    expect(parseNodeInfo(REAL_OUTPUT)).toEqual({
+      awg_go: '0.0.20250522',
+      awg_tools: 'amneziawg-tools 3.1.20260812',
+      image: 'amneziavpn/amneziawg-go:latest',
+      image_created: '2026-08-28T15:50:06.566Z',
+    });
+  });
+
+  it('контейнер без amneziawg-go (ядерный модуль, wireguard-tools) и пустой вывод', () => {
+    expect(parseNodeInfo('IMAGE amnezia-awg\nCREATED \nGO \nTOOLS wireguard-tools v1.0.20210914 - https://git.zx2c4.com')).toEqual({
+      awg_go: null,
+      awg_tools: 'wireguard-tools 1.0.20210914',
+      image: 'amnezia-awg',
+      image_created: null,
+    });
+    expect(parseNodeInfo('')).toEqual({ awg_go: null, awg_tools: null, image: null, image_created: null });
+  });
+
+  it('значения с ноды проверяются по формату (они показываются в интерфейсе)', () => {
+    const info = parseNodeInfo('IMAGE evil<img src=x>\nCREATED сегодня\nGO amneziawg-go 1.0<script>\nTOOLS awg $(reboot)');
+    expect(info).toEqual({ awg_go: '1.0', awg_tools: null, image: null, image_created: null });
+  });
+
+  it('опрос ноды читает версии один раз и сохраняет их; повтор — после установки', async () => {
+    const serverId = insertServer({ containerName: 'amnezia-awg2', managedBy: 'amnezia' });
+    const ssh = stubSsh((call) => (call.command.includes('amneziawg-go --version') ? { stdout: REAL_OUTPUT } : { stdout: 'iface' }));
+
+    await ProvisionService.fetchServerStats(serverId);
+    await ProvisionService.fetchServerStats(serverId);
+
+    const versionCalls = ssh.calls.filter((c) => c.command.includes('amneziawg-go --version'));
+    expect(versionCalls).toHaveLength(1);
+    expect(versionCalls[0].command).toContain("c='\\''amnezia-awg2'\\''");
+    expect(getServer(serverId)).toMatchObject({
+      node_awg_go: '0.0.20250522',
+      node_awg_tools: 'amneziawg-tools 3.1.20260812',
+      node_image: 'amneziavpn/amneziawg-go:latest',
+      status: 'online',
+    });
+    expect(getServer(serverId).node_info_at).toBeTruthy();
+  });
+
+  it('ошибка чтения версий не влияет на статус ноды', async () => {
+    const serverId = insertServer();
+    stubSsh((call) => {
+      if (call.command.includes('amneziawg-go --version')) throw new Error('connection reset');
+      return { stdout: 'iface' };
+    });
+
+    await ProvisionService.fetchServerStats(serverId);
+
+    expect(getServer(serverId)).toMatchObject({ status: 'online', fail_count: 0, last_error: null, node_info_at: null });
   });
 });
 

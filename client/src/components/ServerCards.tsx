@@ -371,6 +371,33 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
             </div>
           )}
 
+          {!selectedServer.remote_panel_id && selectedServer.status !== 'uninstalled' && (
+            <div className="bg-zinc-950/70 border border-zinc-800/80 rounded-xl p-3.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-zinc-400">
+              <span className="font-medium text-zinc-300">ПО ноды:</span>
+              {selectedServer.node_info_at ? (
+                <>
+                  <span>
+                    amneziawg-go <strong className="font-mono text-zinc-200">{selectedServer.node_awg_go || '—'}</strong>
+                  </span>
+                  <span>
+                    {selectedServer.node_awg_tools?.split(' ')[0] || 'утилиты'}{' '}
+                    <strong className="font-mono text-zinc-200">{selectedServer.node_awg_tools?.split(' ')[1] || '—'}</strong>
+                  </span>
+                  {selectedServer.node_image && (
+                    <span title="Образ контейнера AmneziaWG и дата его сборки. Свежий образ ставится при переустановке">
+                      образ <span className="font-mono text-zinc-300">{selectedServer.node_image}</span>
+                      {selectedServer.node_image_created && (
+                        <> от {new Date(selectedServer.node_image_created).toLocaleDateString('ru-RU')}</>
+                      )}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <span className="text-zinc-500">версии будут получены при следующем опросе ноды</span>
+              )}
+            </div>
+          )}
+
           {/* Obfuscation Badges Banner */}
           <div className="bg-zinc-950/70 border border-zinc-800/80 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2 text-zinc-400">
