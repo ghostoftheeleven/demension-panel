@@ -1,0 +1,166 @@
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { db, initDatabase } from '../src/db/index.js';
+import { AuthService } from '../src/services/auth.service.js';
+import { startTestServer } from './test-app.js';
+
+describe('API: Подписчики и подписки (интеграционное тестирование)', () => {
+  let testEnv: Awaited<ReturnType<typeof startTestServer>>;
+  let adminToken: string;
+  let serverId: number;
+
+  beforeAll(async () => {
+    initDatabase();
+    AuthService.resetAdmin('admin_sub_test', 'TestPassword123!');
+    const login = AuthService.login('admin_sub_test', 'TestPassword123!');
+    adminToken = login!.token;
+    testEnv = await startTestServer();
+
+    // Создаём тестовый сервер и переводим его в online
+    const res = await testEnv.request('/api/servers', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name: 'Финляндия #1',
+        host: '203.0.113.50',
+        ssh_port: 22,
+        ssh_password: 'test-ssh-password',
+        awg_port: 51820,
+        subnet: '10.9.0.1/24',
+      }),
+    });
+    const s = await res.json();
+    serverId = s.id;
+    // Имитируем успешную установку сервера
+    db.prepare("UPDATE servers SET status = 'online', sub_name = '🇫🇮 Хельсинки' WHERE id = ?").run(serverId);
+  });
+
+  afterAll(async () => {
+    await testEnv.close();
+  });
+
+  const authHeaders = () => ({
+    Authorization: `Bearer ${adminToken}`,
+    'Content-Type': 'application/json',
+  });
+
+  let subscriberId: number;
+  let subToken: string;
+
+  it('создаёт подписчика и автоматически генерирует для него клиента на выбранном сервере', async () => {
+    const res = await testEnv.request('/api/subscribers', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({
+        name: 'Иван Петров',
+        traffic_limit: 10 * 1024 * 1024 * 1024, // 10 GB
+        expire_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        server_ids: [serverId],
+      }),
+    });
+
+    expect(res.status).toBe(201);
+    const data = await res.json();
+    subscriberId = data.id;
+    subToken = data.token;
+
+    expect(data.name).toBe('Иван Петров');
+    expect(subToken).toMatch(/^sub_[a-f0-9]{32}$/);
+    expect(data.traffic_limit).toBe(10 * 1024 * 1024 * 1024);
+    expect(data.servers).toHaveLength(1);
+    expect(data.servers[0].id).toBe(serverId);
+    expect(data.servers[0].client_ip).toBe('10.9.0.2');
+  });
+
+  it('публичный эндпоинт подписки /sub/:token доступен без авторизации и возвращает конфиг Incy/AWG', async () => {
+    const res = await testEnv.request(`/sub/${subToken}`);
+    expect(res.status).toBe(200);
+
+    // Проверяем заголовки
+    expect(res.headers.get('subscription-userinfo')).toContain('total=10737418240');
+    expect(res.headers.get('profile-title')).toBeTruthy();
+    expect(res.headers.get('content-disposition')).toContain('.txt');
+
+    // Тело — base64 список awg:// ссылок
+    const text = await res.text();
+    const decoded = Buffer.from(text, 'base64').toString('utf-8');
+    expect(decoded).toContain('awg://');
+    expect(decoded).toContain(encodeURIComponent('🇫🇮 Хельсинки'));
+  });
+
+  it('поддерживает формат Clash/mihomo (?format=clash)', async () => {
+    const res = await testEnv.request(`/sub/${subToken}?format=clash`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/yaml');
+
+    const yaml = await res.text();
+    const config = JSON.parse(yaml);
+    expect(config.proxies).toHaveLength(1);
+    expect(config.proxies[0].name).toBe('🇫🇮 Хельсинки');
+    expect(config.proxies[0].type).toBe('wireguard');
+    expect(config.proxies[0]['amnezia-wg-option']).toBeDefined();
+    expect(config['proxy-groups']).toHaveLength(1);
+    expect(config.rules).toEqual(['MATCH,Demension']);
+  });
+
+  it('поддерживает формат JSON (?format=json)', async () => {
+    const res = await testEnv.request(`/sub/${subToken}?format=json`);
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.type).toBe('amneziawg');
+    expect(data.version).toBe(1);
+    expect(data.servers).toHaveLength(1);
+    expect(data.servers[0].name).toBe('🇫🇮 Хельсинки');
+    expect(typeof data.servers[0].config).toBe('string');
+  });
+
+  it('сброс токена подписчика делает старую ссылку недействительной', async () => {
+    const resetRes = await testEnv.request(`/api/subscribers/${subscriberId}/reset-token`, {
+      method: 'POST',
+      headers: authHeaders(),
+    });
+    expect(resetRes.status).toBe(200);
+    const data = await resetRes.json();
+    const newToken = data.token;
+    expect(newToken).not.toBe(subToken);
+
+    // Старый токен -> 404
+    const oldSubRes = await testEnv.request(`/sub/${subToken}`);
+    expect(oldSubRes.status).toBe(404);
+
+    // Новый токен -> 200
+    const newSubRes = await testEnv.request(`/sub/${newToken}`);
+    expect(newSubRes.status).toBe(200);
+    subToken = newToken;
+  });
+
+  it('отключение подписчика возвращает 403 в /sub/:token', async () => {
+    const disableRes = await testEnv.request(`/api/subscribers/${subscriberId}`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify({ enabled: false }),
+    });
+    expect(disableRes.status).toBe(200);
+
+    const subRes = await testEnv.request(`/sub/${subToken}`);
+    expect(subRes.status).toBe(403);
+    expect(await subRes.text()).toContain('Subscription is disabled');
+  });
+
+  it('удаление подписчика удаляет связанных клиентов с серверов', async () => {
+    const delRes = await testEnv.request(`/api/subscribers/${subscriberId}`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+    expect(delRes.status).toBe(200);
+
+    // Клиент подписчика был удалён с сервера
+    const clientsRes = await testEnv.request(`/api/servers/${serverId}/clients`, {
+      headers: authHeaders(),
+    });
+    const clients = await clientsRes.json();
+    expect(clients).toHaveLength(0);
+  });
+});
