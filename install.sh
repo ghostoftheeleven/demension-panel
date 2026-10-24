@@ -192,6 +192,16 @@ fi
 
 # 4. Clone or Update Repository
 echo -e "\n${CYAN}[3/7] Развертывание кодовой базы в ${INSTALL_DIR}...${NC}"
+# Новый код скачивается, пока панель ещё работает: при ошибке (нет сети, локальные правки) она остаётся запущенной
+if [ -d "$INSTALL_DIR/.git" ]; then
+  echo "Обновление существующей установки..."
+  if ! git -C "$INSTALL_DIR" pull --ff-only origin main; then
+    echo -e "${RED}[ERROR] Не удалось получить обновление (git pull). Панель продолжает работать на прежней версии.${NC}"
+    echo -e "Проверьте доступ к GitHub и локальные изменения: git -C ${INSTALL_DIR} status"
+    exit 1
+  fi
+fi
+
 if [ "$UPDATE" = true ]; then
   systemctl stop demension.service 2>/dev/null || true
   if [ -f "$INSTALL_DIR/data/demension.db" ]; then
@@ -207,8 +217,7 @@ if [ "$UPDATE" = true ]; then
 fi
 
 if [ -d "$INSTALL_DIR/.git" ]; then
-  echo "Обновление существующей установки..."
-  git -C "$INSTALL_DIR" pull --ff-only origin main
+  : # уже обновлено выше
 elif [ -f "$(pwd)/package.json" ] && [ -d "$(pwd)/server" ] && [ "$(pwd)" != "$INSTALL_DIR" ]; then
   echo "Копирование текущей директории в ${INSTALL_DIR}..."
   mkdir -p "$INSTALL_DIR"
@@ -230,13 +239,23 @@ npm run build
 mkdir -p "$INSTALL_DIR/data"
 chmod 700 "$INSTALL_DIR/data"
 
-# Пароль в .env не хранится: учётные данные записываются сразу в БД (только хэш)
+# Пароль в .env не хранится: учётные данные записываются сразу в БД (только хэш).
+# Добавленные вручную переменные (DEMENSION_SECRET_KEY, TRUST_PROXY и т.п.) сохраняются: без DEMENSION_SECRET_KEY панель
+# не расшифровала бы SSH-доступы к нодам. PANEL_USER/PANEL_PASSWORD от старых версий установщика удаляются.
 umask 077
-cat > "$INSTALL_DIR/server/.env" <<EOF
-PORT=${PANEL_PORT}
-NODE_ENV=production
-EOF
-chmod 600 "$INSTALL_DIR/server/.env"
+ENV_FILE="$INSTALL_DIR/server/.env"
+KEPT_ENV=""
+if [ -f "$ENV_FILE" ]; then
+  KEPT_ENV="$(grep -Ev '^[[:space:]]*(export[[:space:]]+)?(PORT|NODE_ENV|PANEL_USER|PANEL_PASSWORD)[[:space:]]*=' "$ENV_FILE" || true)"
+fi
+{
+  echo "PORT=${PANEL_PORT}"
+  echo "NODE_ENV=production"
+  if [ -n "$KEPT_ENV" ]; then printf '%s\n' "$KEPT_ENV"; fi
+} > "$ENV_FILE.new"
+chmod 600 "$ENV_FILE.new"
+mv -f "$ENV_FILE.new" "$ENV_FILE"
+unset KEPT_ENV
 
 if [ "$SET_CREDENTIALS" = true ]; then
   PANEL_USER="$PANEL_USER" PANEL_PASSWORD="$PANEL_PASSWORD" node "$INSTALL_DIR/server/dist/cli/reset-admin.js"

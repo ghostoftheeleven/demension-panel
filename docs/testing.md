@@ -34,7 +34,7 @@ npx vitest run --coverage --coverage.provider=v8 --coverage.include='src/**'
 | `real-docker-nodes.test.ts`, `real-docker-lifecycle.test.ts` | Реальные ноды в Docker: установка, переустановка, 1.x → 3.x, применение, смена порта, TOFU, удаление |
 | `real-docker-amnezia.test.ts` | Сервер с контейнером «как у приложения AmneziaVPN»: отказ установки поверх, подключение без перезапуска, синхронизация, применение, замена |
 | `real-federation-e2e.test.ts` | Две панели-процесса и реальная нода: получатель → владелец → Docker |
-| `test/install/run.sh` (не vitest) | `install.sh` целиком в чистом Ubuntu 24.04: случайные логин/пароль и вывод данных подключения, обновление, занятый порт, CLI сброса пароля (≈ 5 минут, нужны Docker и интернет) |
+| `test/install/run.sh` (не vitest) | `install.sh` целиком в чистом Ubuntu 24.04: случайные логин/пароль и вывод данных подключения, обновление (в т.ч. из git: при ошибке `git pull` служба не останавливается; сохранение переменных `.env`), занятый порт, CLI сброса пароля (≈ 5 минут, нужны Docker и интернет) |
 
 ## Хелперы (`test/helpers`)
 

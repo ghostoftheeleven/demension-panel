@@ -23,7 +23,8 @@
 ## Секреты
 - `encryptSecret`/`decryptSecret` (AES-256-GCM, формат `enc:v1:`), ключ — `DEMENSION_SECRET_KEY` (base64, 32 байта)
   или `data/secret.key` (создаётся с правами 600). **Без ключа зашифрованные данные не восстановить** — бэкап всего
-  `data/`.
+  `data/`. `install.sh` при обновлении переписывает в `server/.env` только `PORT` и `NODE_ENV`, добавленные вручную
+  переменные (`DEMENSION_SECRET_KEY`, `TRUST_PROXY`…) сохраняет, а `PANEL_USER`/`PANEL_PASSWORD` старых версий удаляет.
 - Шифруются: `servers.ssh_password`, `servers.ssh_key`, `settings.cf_token`, `remote_panels.token`.
 - Приватный ключ TLS — `data/ssl/privkey.pem` с правами 600. Каталог `data/` в `.gitignore`.
 

@@ -22,13 +22,13 @@ HTTP-кодом. Тела — JSON.
 | GET | `/`, `/:id` | Серверы (без секретов; `has_ssh_password`, `has_ssh_key`, параметры AWG, `remote_panel_name`…) |
 | POST | `/` | Создать: `name, host, ssh_port, ssh_user, ssh_password \| ssh_key, awg_port, subnet`. 409, если сервер с таким хостом и портом AmneziaWG уже есть (то же при смене хоста/порта в PUT) |
 | POST | `/import-amnezia` | `{keys}` — импорт по ключам AmneziaVPN, см. [amnezia-import.md](amnezia-import.md) |
-| PUT | `/:id` | Изменить: имя/хост/SSH (`auth_type` + секрет), `reset_host_key`, порт, подсеть, параметры AWG |
+| PUT | `/:id` | Изменить: имя/хост/SSH (`auth_type` + секрет), `reset_host_key`, порт, подсеть, параметры AWG. У установленного сервера смена порта/подсети/параметров ждёт применения на ноде; при неудаче — 502 `{success: false, error, server}`, порт и параметры возвращены к прежним (остальные правки сохранены) |
 | DELETE | `/:id?teardown=1&force=1` | Удалить (опционально с контейнером на ноде) |
 | POST | `/:id/test-ssh` | Проверка SSH |
 | POST | `/:id/scan` | Найти и подключить установленный AmneziaWG |
 | POST | `/:id/sync` | Синхронизировать пиры |
 | POST | `/:id/apply` | Применить параметры (перезапуск) |
-| POST | `/:id/randomize-params` | Новые параметры текущей версии + применение |
+| POST | `/:id/randomize-params` | Новые параметры текущей версии + применение (при неудаче — 502, как у PUT, параметры прежние) |
 | POST | `/:id/upgrade-protocol` | Переход на AWG 3.x + переустановка |
 
 Для нод партнёра всё, кроме GET и sync, возвращает 400.

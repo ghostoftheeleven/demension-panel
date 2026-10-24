@@ -136,6 +136,42 @@ PANEL_PASSWORD=short bash install.sh > /tmp/short.out 2>&1; [ $? -ne 0 ] && echo
 PANEL_USER='bad user!' PANEL_PASSWORD='LongEnough-123' bash install.sh > /tmp/baduser.out 2>&1; [ $? -ne 0 ] && echo "OK: некорректный логин отклонён" || fail "некорректный логин принят"
 PANEL_PORT=70000 bash install.sh > /tmp/badport.out 2>&1; [ $? -ne 0 ] && echo "OK: некорректный порт отклонён" || fail "некорректный порт принят"
 
+section "10. Обновление сохраняет добавленные вручную переменные .env и убирает пароль старых версий"
+ENVF=/opt/demension-panel/server/.env
+printf 'TRUST_PROXY=loopback\n# комментарий администратора\nPANEL_USER=old\nPANEL_PASSWORD=OldPlainPassword-1\n' >> "$ENVF"
+bash install.sh > /tmp/install5.out 2>&1 || fail "обновление с дополненным .env завершилось с ошибкой"
+cat "$ENVF"
+grep -qx 'TRUST_PROXY=loopback' "$ENVF" || fail "TRUST_PROXY потерян при обновлении"
+grep -qx '# комментарий администратора' "$ENVF" || fail "комментарий в .env потерян"
+grep -q 'PANEL_PASSWORD\|OldPlainPassword' "$ENVF" && fail "пароль старой версии остался в .env"
+[ "$(grep -c '^PORT=' "$ENVF")" = 1 ] || fail "PORT в .env не единственный"
+[ "$(stat -c '%a' "$ENVF")" = 600 ] || fail "права .env не 600"
+
+section "11. Обновление из git: код скачивается, пока панель работает"
+git config --global user.email test@example.com && git config --global user.name test
+rm -rf /tmp/origin && mkdir /tmp/origin && cp -a /work/. /tmp/origin/
+git -C /tmp/origin init -q -b main && git -C /tmp/origin add -A && git -C /tmp/origin commit -qm base
+git -C /opt/demension-panel init -q -b main
+git -C /opt/demension-panel remote add origin /tmp/origin
+git -C /opt/demension-panel fetch -q origin && git -C /opt/demension-panel reset -q origin/main
+echo marker > /tmp/origin/UPDATE_MARKER && git -C /tmp/origin add -A && git -C /tmp/origin commit -qm update
+bash install.sh > /tmp/install6.out 2>&1
+CODE=$?
+sed 's/\x1b\[[0-9;]*m//g' /tmp/install6.out | grep -E "Обновление|УСПЕХ|ERROR" || true
+[ "$CODE" -eq 0 ] || fail "обновление из git завершилось с ошибкой"
+[ -f /opt/demension-panel/UPDATE_MARKER ] || fail "git pull не выполнен"
+
+section "12. Ошибка git pull: панель не останавливается"
+git -C /opt/demension-panel remote set-url origin /nonexistent
+: > /var/log/systemctl-shim.log
+bash install.sh > /tmp/install7.out 2>&1
+CODE=$?
+sed 's/\x1b\[[0-9;]*m//g' /tmp/install7.out | tail -3
+[ "$CODE" -ne 0 ] || fail "обновление без доступа к репозиторию завершилось успехом"
+grep -q "продолжает работать" /tmp/install7.out || fail "нет сообщения, что панель продолжает работать"
+grep -q "stop" /var/log/systemctl-shim.log && fail "служба остановлена, хотя обновление не скачалось"
+curl -fsS --max-time 5 http://127.0.0.1:3001/api/health >/dev/null || fail "панель не отвечает после неудачного обновления"
+
 echo
 if [ "$FAILED" -eq 0 ]; then echo "=== ВСЕ ПРОВЕРКИ УСТАНОВКИ ПРОЙДЕНЫ ==="; else echo "=== ЕСТЬ ПРОВАЛЕННЫЕ ПРОВЕРКИ ==="; fi
 exit "$FAILED"

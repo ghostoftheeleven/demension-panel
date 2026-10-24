@@ -132,7 +132,7 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
       setLoading(true);
       const res = await api.upgradeProtocol(server.id);
       onUpdated(res.server);
-      if (!res.success) alert(`Параметры обновлены, но переустановка не удалась: ${res.error}`);
+      if (!res.success) alert(`Переустановка не удалась: ${res.error}`);
       onClose();
     } catch (err: any) {
       alert(err.message);

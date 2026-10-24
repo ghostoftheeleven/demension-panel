@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { db } from '../db/index.js';
+import { db, transaction } from '../db/index.js';
 import { AwgService, AwgParams } from '../services/awg.service.js';
 import { SshService } from '../services/ssh.service.js';
 import { ProvisionService } from '../services/provision.service.js';
@@ -101,6 +101,34 @@ function assertEndpointFree(host: string, awgPort: number, exceptId = 0): void {
     'SELECT id FROM servers WHERE LOWER(host) = LOWER(?) AND awg_port = ? AND remote_panel_id IS NULL AND id != ?'
   ).get(host, awgPort, exceptId);
   if (duplicate) throw new HttpError(409, `Сервер ${host} с портом AmneziaWG ${awgPort} уже добавлен в панель`);
+}
+
+const sameValue = (a: unknown, b: unknown) => (a ?? null) === (b ?? null) || (a != null && b != null && String(a) === String(b));
+
+/**
+ * Применяет на ноде изменённые порт, подсеть или параметры обфускации. Если применить не удалось, в БД возвращаются прежние
+ * значения: иначе подписки раздавали бы клиентам порт и параметры, которых на ноде нет, и VPN пропал бы у всех. Нода
+ * могла успеть получить часть изменений, поэтому needs_apply остаётся: фоновый опрос приведёт её к прежним параметрам.
+ * Возвращает текст ошибки или null.
+ */
+async function applyOrRollback(id: number, previous: Record<string, unknown>, written: Record<string, unknown>): Promise<string | null> {
+  const result = await ProvisionService.requestApply(id);
+  if (result.success) return null;
+
+  const keys = Object.keys(written);
+  const rolledBack = transaction(() => {
+    const row = db.prepare('SELECT * FROM servers WHERE id = ?').get(id) as any;
+    // Значения успели изменить ещё раз — откатывать чужую правку нельзя
+    if (!row || keys.some((k) => !sameValue(row[k], written[k]))) return false;
+    db.prepare(`UPDATE servers SET ${keys.map((k) => `${k} = ?`).join(', ')}, needs_apply = 1 WHERE id = ?`).run(
+      ...(keys.map((k) => previous[k] ?? null) as any[]),
+      id
+    );
+    return true;
+  });
+  return rolledBack
+    ? `Не удалось применить изменения на ноде: ${result.error}. Порт и параметры возвращены к прежним — клиенты продолжают работать.`
+    : `Не удалось применить изменения на ноде: ${result.error}`;
 }
 
 function validateKey(value: unknown): string {
@@ -259,7 +287,7 @@ serversRouter.post('/import-amnezia', asyncHandler(async (req, res) => {
 }));
 
 // PUT update server
-serversRouter.put('/:id', (req, res) => {
+serversRouter.put('/:id', asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   const server = getLocalServerOr404(id);
   const body = req.body ?? {};
@@ -344,13 +372,19 @@ serversRouter.put('/:id', (req, res) => {
     );
   }
 
-  const installed = server.status !== 'uninstalled';
-  if (interfaceChanged && installed) {
-    ProvisionService.requestApply(id).catch(() => {});
+  if (interfaceChanged && server.status !== 'uninstalled') {
+    const paramColumns = paramsToColumns(current);
+    const interfaceKeys = Object.keys(updates).filter((k) => k === 'awg_port' || k === 'subnet' || k in paramColumns);
+    const written = Object.fromEntries(interfaceKeys.map((k) => [k, updates[k]]));
+    const previous = Object.fromEntries(interfaceKeys.map((k) => [k, server[k]]));
+    const error = await applyOrRollback(id, previous, written);
+    if (error) {
+      return res.status(502).json({ success: false, error, server: serializeServer(selectServerWithCounts(id)) });
+    }
   }
 
   res.json(serializeServer(selectServerWithCounts(id)));
-});
+}));
 
 // DELETE server (?teardown=1 — остановить и удалить контейнер на ноде; ?force=1 — удалить из панели даже при ошибке)
 serversRouter.delete('/:id', asyncHandler(async (req, res) => {
@@ -380,7 +414,7 @@ serversRouter.post('/:id/test-ssh', asyncHandler(async (req, res) => {
 }));
 
 // POST randomize AWG parameters (and apply them on the node)
-serversRouter.post('/:id/randomize-params', (req, res) => {
+serversRouter.post('/:id/randomize-params', asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   const server = getLocalServerOr404(id);
 
@@ -399,11 +433,15 @@ serversRouter.post('/:id/randomize-params', (req, res) => {
   );
 
   if (server.status !== 'uninstalled') {
-    ProvisionService.requestApply(id).catch(() => {});
+    const previous = Object.fromEntries(Object.keys(columns).map((k) => [k, server[k]]));
+    const error = await applyOrRollback(id, previous, columns);
+    if (error) {
+      return res.status(502).json({ success: false, error, server: serializeServer(selectServerWithCounts(id)) });
+    }
   }
 
   res.json(serializeServer(selectServerWithCounts(id)));
-});
+}));
 
 // POST sync peers to server
 serversRouter.post('/:id/sync', asyncHandler(async (req, res) => {

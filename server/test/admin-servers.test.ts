@@ -210,6 +210,81 @@ describe('действия над сервером', () => {
     expect(getServer(id)).toMatchObject({ awg_version: 1, s3: null, h1: 1000 });
   });
 
+  describe('откат порта и параметров, если применить их на ноде не удалось', () => {
+    // Контейнер amnezia-awg без маркера панели: установка отказывается его трогать
+    const FOREIGN_SCAN = '---CONTAINER amnezia-awg|amneziavpn/amnezia-awg:latest|true\n---CONF /opt/amnezia/awg/wg0.conf\n[Interface]\nListenPort = 51820\n---ENDCONF\n---TOOL awg';
+
+    async function installedServer() {
+      const id = (await admin.api('/api/servers', 'POST', newServer())).body.id;
+      db.prepare("UPDATE servers SET status = 'online', deployed_port = awg_port WHERE id = ?").run(id);
+      return id;
+    }
+
+    it('смена порта: установка отказалась — порт в БД прежний, остальные правки сохранены', async () => {
+      const id = await installedServer();
+      const ssh = stubSsh((call) => (call.command.includes('docker ps -a') ? { stdout: FOREIGN_SCAN } : {}));
+
+      const res = await admin.api(`/api/servers/${id}`, 'PUT', { name: 'Новое имя', awg_port: 40000 });
+
+      expect(res.status).toBe(502);
+      expect(res.body.error).toContain('возвращены к прежним');
+      expect(res.body.server).toMatchObject({ awg_port: 51820, name: 'Новое имя' });
+      expect(getServer(id)).toMatchObject({ awg_port: 51820, deployed_port: 51820, name: 'Новое имя', needs_apply: 1 });
+      expect(ssh.calls.some((c) => c.command.includes('deploy-awg'))).toBe(false);
+    });
+
+    it('параметры обфускации: нода недоступна — подписки продолжают получать прежние значения', async () => {
+      const id = await installedServer();
+      const before = getServer(id);
+      stubSsh(() => ({ code: 255, stderr: 'Connection refused' }));
+
+      const res = await admin.api(`/api/servers/${id}`, 'PUT', { jc: before.jc === 9 ? 8 : 9, h1: before.h1 });
+
+      expect(res.status).toBe(502);
+      expect(res.body.error).toContain('Connection refused');
+      expect(getServer(id)).toMatchObject({ jc: before.jc, h1: before.h1, needs_apply: 1 });
+    });
+
+    it('randomize-params при ошибке ноды оставляет прежние параметры', async () => {
+      const id = await installedServer();
+      const before = getServer(id);
+      stubSsh(() => ({ code: 1, stderr: 'docker restart failed' }));
+
+      const res = await admin.api(`/api/servers/${id}/randomize-params`, 'POST');
+
+      expect(res.status).toBe(502);
+      expect(res.body.error).toContain('возвращены к прежним');
+      const after = getServer(id);
+      for (const key of ['jc', 'jmin', 'jmax', 's1', 's2', 's3', 's4', 'h1', 'h2', 'h3', 'h4', 'header_protection_key']) {
+        expect(after[key], key).toEqual(before[key]);
+      }
+    });
+
+    it('не откатывает значения, изменённые ещё раз, пока шло применение', async () => {
+      const id = await installedServer();
+      stubSsh(() => {
+        db.prepare('UPDATE servers SET jc = 7 WHERE id = ?').run(id);
+        return { code: 1, stderr: 'ошибка' };
+      });
+
+      const res = await admin.api(`/api/servers/${id}`, 'PUT', { jc: 9 });
+
+      expect(res.status).toBe(502);
+      expect(res.body.error).not.toContain('возвращены к прежним');
+      expect(getServer(id).jc).toBe(7);
+    });
+
+    it('при успешном применении изменения остаются', async () => {
+      const id = await installedServer();
+      stubSsh();
+
+      const res = await admin.api(`/api/servers/${id}`, 'PUT', { jc: 9 });
+
+      expect(res.status).toBe(200);
+      expect(getServer(id)).toMatchObject({ jc: 9, needs_apply: 0 });
+    });
+  });
+
   it('sync и apply возвращают 502 при ошибке ноды и 200 при успехе', async () => {
     const id = (await admin.api('/api/servers', 'POST', newServer())).body.id;
     db.prepare("UPDATE servers SET status = 'online', deployed_port = awg_port WHERE id = ?").run(id);
