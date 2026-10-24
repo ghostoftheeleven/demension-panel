@@ -1,11 +1,8 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
-import fs from 'node:fs';
-
-const dataDir = path.resolve(process.cwd(), 'data');
-if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
-}
+import { dataDir } from '../config.js';
+import { allocateIp } from '../utils/net.js';
+import { encryptSecret } from '../services/secrets.service.js';
 
 const dbPath = path.join(dataDir, 'demension.db');
 export const db = new DatabaseSync(dbPath);
@@ -13,90 +10,192 @@ export const db = new DatabaseSync(dbPath);
 // Enable WAL mode for better concurrency and performance
 db.exec('PRAGMA journal_mode = WAL;');
 db.exec('PRAGMA foreign_keys = ON;');
+db.exec('PRAGMA busy_timeout = 5000;');
+
+/**
+ * Выполняет функцию в транзакции; при исключении изменения откатываются.
+ */
+export function transaction<T>(fn: () => T): T {
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const result = fn();
+    db.exec('COMMIT');
+    return result;
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+export function getSetting(key: string): string | null {
+  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
+  return row ? row.value : null;
+}
+
+export function setSetting(key: string, value: string | null): void {
+  if (value === null) {
+    db.prepare('DELETE FROM settings WHERE key = ?').run(key);
+  } else {
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(key, value);
+  }
+}
+
+function hasColumn(table: string, column: string): boolean {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  return columns.some((c) => c.name === column);
+}
+
+function addColumn(table: string, definition: string): void {
+  const column = definition.split(/\s+/)[0];
+  if (!hasColumn(table, column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${definition};`);
+  }
+}
+
+const migrations: Array<() => void> = [
+  // v1: исходная схема
+  () => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS admins (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        salt TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS sessions (
+        token TEXT PRIMARY KEY,
+        admin_id INTEGER NOT NULL,
+        expires_at TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (admin_id) REFERENCES admins(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS subscribers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        token TEXT UNIQUE NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        traffic_limit INTEGER NOT NULL DEFAULT 0,
+        expire_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS servers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        host TEXT NOT NULL,
+        ssh_port INTEGER NOT NULL DEFAULT 22,
+        ssh_user TEXT NOT NULL DEFAULT 'root',
+        ssh_password TEXT,
+        ssh_key TEXT,
+        awg_port INTEGER NOT NULL DEFAULT 51820,
+        subnet TEXT NOT NULL DEFAULT '10.8.0.1/24',
+        server_public_key TEXT,
+        server_private_key TEXT,
+        preshared_key TEXT,
+        jc INTEGER NOT NULL DEFAULT 4,
+        jmin INTEGER NOT NULL DEFAULT 40,
+        jmax INTEGER NOT NULL DEFAULT 70,
+        s1 INTEGER NOT NULL DEFAULT 36,
+        s2 INTEGER NOT NULL DEFAULT 124,
+        h1 INTEGER NOT NULL DEFAULT 124357689,
+        h2 INTEGER NOT NULL DEFAULT 987654321,
+        h3 INTEGER NOT NULL DEFAULT 135792468,
+        h4 INTEGER NOT NULL DEFAULT 246813579,
+        status TEXT NOT NULL DEFAULT 'uninstalled',
+        last_seen TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS clients (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        server_id INTEGER NOT NULL,
+        subscriber_id INTEGER,
+        name TEXT NOT NULL,
+        client_ip TEXT NOT NULL,
+        client_public_key TEXT NOT NULL,
+        client_private_key TEXT NOT NULL,
+        preshared_key TEXT,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        total_rx INTEGER NOT NULL DEFAULT 0,
+        total_tx INTEGER NOT NULL DEFAULT 0,
+        last_handshake TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (server_id) REFERENCES servers(id) ON DELETE CASCADE,
+        FOREIGN KEY (subscriber_id) REFERENCES subscribers(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+    `);
+    addColumn('clients', 'subscriber_id INTEGER REFERENCES subscribers(id) ON DELETE CASCADE');
+  },
+
+  // v2: синхронизация, TOFU-ключи хостов, накопление трафика, лимиты, шифрование секретов
+  () => {
+    addColumn('servers', 'host_key TEXT');
+    addColumn('servers', 'needs_sync INTEGER NOT NULL DEFAULT 0');
+    addColumn('servers', 'needs_apply INTEGER NOT NULL DEFAULT 0');
+    addColumn('servers', 'deployed_port INTEGER');
+    addColumn('servers', 'last_error TEXT');
+    addColumn('servers', 'fail_count INTEGER NOT NULL DEFAULT 0');
+    addColumn('clients', 'rx_counter INTEGER NOT NULL DEFAULT 0');
+    addColumn('clients', 'tx_counter INTEGER NOT NULL DEFAULT 0');
+    addColumn('subscribers', 'suspended INTEGER NOT NULL DEFAULT 0');
+
+    // Уже установленные серверы считаем развёрнутыми на текущем порту
+    db.exec("UPDATE servers SET deployed_port = awg_port WHERE status != 'uninstalled' AND deployed_port IS NULL");
+
+    // Устранение дублей IP перед созданием уникального индекса
+    const duplicates = db.prepare(`
+      SELECT c.id, c.server_id, s.subnet FROM clients c
+      JOIN servers s ON s.id = c.server_id
+      WHERE EXISTS (
+        SELECT 1 FROM clients d
+        WHERE d.server_id = c.server_id AND d.client_ip = c.client_ip AND d.id < c.id
+      )
+    `).all() as { id: number; server_id: number; subnet: string }[];
+    for (const dup of duplicates) {
+      const used = (db.prepare('SELECT client_ip FROM clients WHERE server_id = ?').all(dup.server_id) as { client_ip: string }[])
+        .map((r) => r.client_ip);
+      db.prepare('UPDATE clients SET client_ip = ? WHERE id = ?').run(allocateIp(dup.subnet, used), dup.id);
+      db.prepare('UPDATE servers SET needs_sync = 1 WHERE id = ?').run(dup.server_id);
+      console.warn(`[DB] Клиент #${dup.id} имел дублирующийся IP — назначен новый адрес`);
+    }
+    db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_clients_server_ip ON clients(server_id, client_ip);');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_clients_subscriber ON clients(subscriber_id);');
+
+    // Шифрование ранее сохранённых SSH-секретов и токена Cloudflare
+    const servers = db.prepare('SELECT id, ssh_password, ssh_key FROM servers').all() as {
+      id: number;
+      ssh_password: string | null;
+      ssh_key: string | null;
+    }[];
+    for (const s of servers) {
+      db.prepare('UPDATE servers SET ssh_password = ?, ssh_key = ? WHERE id = ?').run(
+        encryptSecret(s.ssh_password),
+        encryptSecret(s.ssh_key),
+        s.id
+      );
+    }
+    const cfToken = getSetting('cf_token');
+    if (cfToken) setSetting('cf_token', encryptSecret(cfToken));
+
+    // Токены сессий теперь хранятся в виде SHA-256 — старые сессии недействительны
+    db.exec('DELETE FROM sessions;');
+  },
+];
 
 export function initDatabase() {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS admins (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
-      salt TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS sessions (
-      token TEXT PRIMARY KEY,
-      admin_id INTEGER NOT NULL,
-      expires_at TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (admin_id) REFERENCES admins(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS subscribers (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      token TEXT UNIQUE NOT NULL,
-      enabled INTEGER NOT NULL DEFAULT 1,
-      traffic_limit INTEGER NOT NULL DEFAULT 0,
-      expire_at TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS servers (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      host TEXT NOT NULL,
-      ssh_port INTEGER NOT NULL DEFAULT 22,
-      ssh_user TEXT NOT NULL DEFAULT 'root',
-      ssh_password TEXT,
-      ssh_key TEXT,
-      awg_port INTEGER NOT NULL DEFAULT 51820,
-      subnet TEXT NOT NULL DEFAULT '10.8.0.1/24',
-      server_public_key TEXT,
-      server_private_key TEXT,
-      preshared_key TEXT,
-      jc INTEGER NOT NULL DEFAULT 4,
-      jmin INTEGER NOT NULL DEFAULT 40,
-      jmax INTEGER NOT NULL DEFAULT 70,
-      s1 INTEGER NOT NULL DEFAULT 36,
-      s2 INTEGER NOT NULL DEFAULT 124,
-      h1 INTEGER NOT NULL DEFAULT 124357689,
-      h2 INTEGER NOT NULL DEFAULT 987654321,
-      h3 INTEGER NOT NULL DEFAULT 135792468,
-      h4 INTEGER NOT NULL DEFAULT 246813579,
-      status TEXT NOT NULL DEFAULT 'uninstalled',
-      last_seen TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS clients (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      server_id INTEGER NOT NULL,
-      subscriber_id INTEGER,
-      name TEXT NOT NULL,
-      client_ip TEXT NOT NULL,
-      client_public_key TEXT NOT NULL,
-      client_private_key TEXT NOT NULL,
-      preshared_key TEXT,
-      enabled INTEGER NOT NULL DEFAULT 1,
-      total_rx INTEGER NOT NULL DEFAULT 0,
-      total_tx INTEGER NOT NULL DEFAULT 0,
-      last_handshake TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (server_id) REFERENCES servers(id) ON DELETE CASCADE,
-      FOREIGN KEY (subscriber_id) REFERENCES subscribers(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS settings (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    );
-  `);
-
-  // Ensure subscriber_id exists if clients table was previously created without it
-  try {
-    db.exec('ALTER TABLE clients ADD COLUMN subscriber_id INTEGER REFERENCES subscribers(id) ON DELETE CASCADE;');
-  } catch {
-    // Column already exists
+  const current = (db.prepare('PRAGMA user_version').get() as { user_version: number }).user_version;
+  for (let version = current; version < migrations.length; version++) {
+    transaction(() => {
+      migrations[version]();
+      db.exec(`PRAGMA user_version = ${version + 1}`);
+    });
   }
 }

@@ -1,25 +1,66 @@
+import crypto from 'node:crypto';
 import { Client, ConnectConfig } from 'ssh2';
 
 export interface SshCredentials {
   host: string;
   port?: number;
   username?: string;
-  password?: string;
-  privateKey?: string;
+  password?: string | null;
+  privateKey?: string | null;
+  /** Сохранённый отпечаток ключа хоста (SHA256:...). Если не задан — доверяем при первом подключении (TOFU). */
+  hostKey?: string | null;
+  /** Вызывается с отпечатком ключа хоста при первом успешном подключении */
+  onNewHostKey?: (fingerprint: string) => void;
+}
+
+export interface CommandOptions {
+  /** Данные, передаваемые в stdin удалённой команды */
+  input?: string;
+  onData?: (chunk: string) => void;
+  timeoutMs?: number;
+}
+
+export class HostKeyMismatchError extends Error {
+  constructor(public expected: string, public actual: string) {
+    super(
+      `Ключ SSH-хоста изменился (ожидался ${expected}, получен ${actual}). ` +
+        'Возможна атака «человек посередине». Если сервер был переустановлен, сбросьте сохранённый ключ в настройках сервера.'
+    );
+  }
+}
+
+export function fingerprintHostKey(key: Buffer): string {
+  return 'SHA256:' + crypto.createHash('sha256').update(key).digest('base64').replace(/=+$/, '');
 }
 
 export class SshService {
   /**
-   * Test SSH connection
+   * Префикс для команд, требующих root: для не-root пользователя используется sudo без запроса пароля.
    */
-  static async testConnection(credentials: SshCredentials): Promise<{ success: boolean; message?: string }> {
-    return new Promise((resolve) => {
+  static sudo(credentials: SshCredentials): string {
+    return (credentials.username || 'root') === 'root' ? '' : 'sudo -n ';
+  }
+
+  private static connect(credentials: SshCredentials, readyTimeout: number): Promise<Client> {
+    return new Promise((resolve, reject) => {
       const conn = new Client();
+      let mismatch: HostKeyMismatchError | null = null;
+      let seenFingerprint: string | null = null;
+
       const config: ConnectConfig = {
         host: credentials.host,
         port: credentials.port || 22,
         username: credentials.username || 'root',
-        readyTimeout: 10000,
+        readyTimeout,
+        keepaliveInterval: 15000,
+        hostVerifier: (key: Buffer) => {
+          seenFingerprint = fingerprintHostKey(key);
+          if (credentials.hostKey && credentials.hostKey !== seenFingerprint) {
+            mismatch = new HostKeyMismatchError(credentials.hostKey, seenFingerprint);
+            return false;
+          }
+          return true;
+        },
       };
 
       if (credentials.privateKey && credentials.privateKey.trim().length > 0) {
@@ -30,14 +71,27 @@ export class SshService {
 
       conn
         .on('ready', () => {
-          conn.end();
-          resolve({ success: true, message: 'Подключение успешно установлено!' });
+          if (!credentials.hostKey && seenFingerprint && credentials.onNewHostKey) {
+            credentials.onNewHostKey(seenFingerprint);
+          }
+          resolve(conn);
         })
-        .on('error', (err) => {
-          resolve({ success: false, message: `Ошибка подключения: ${err.message}` });
-        })
+        .on('error', (err) => reject(mismatch || err))
         .connect(config);
     });
+  }
+
+  /**
+   * Test SSH connection
+   */
+  static async testConnection(credentials: SshCredentials): Promise<{ success: boolean; message?: string }> {
+    try {
+      const conn = await this.connect(credentials, 10000);
+      conn.end();
+      return { success: true, message: 'Подключение успешно установлено!' };
+    } catch (err: any) {
+      return { success: false, message: `Ошибка подключения: ${err.message}` };
+    }
   }
 
   /**
@@ -46,105 +100,64 @@ export class SshService {
   static async executeCommand(
     credentials: SshCredentials,
     command: string,
-    onData?: (chunk: string) => void
+    options: CommandOptions | ((chunk: string) => void) = {}
   ): Promise<{ code: number; stdout: string; stderr: string }> {
+    const opts: CommandOptions = typeof options === 'function' ? { onData: options } : options;
+    const conn = await this.connect(credentials, 15000);
+
     return new Promise((resolve, reject) => {
-      const conn = new Client();
       let stdout = '';
       let stderr = '';
+      let settled = false;
+      const timer = opts.timeoutMs
+        ? setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            conn.end();
+            reject(new Error(`Превышено время выполнения команды (${Math.round(opts.timeoutMs! / 1000)} с)`));
+          }, opts.timeoutMs)
+        : null;
 
-      const config: ConnectConfig = {
-        host: credentials.host,
-        port: credentials.port || 22,
-        username: credentials.username || 'root',
-        readyTimeout: 15000,
-      };
+      conn.on('error', (err) => {
+        if (settled) return;
+        settled = true;
+        if (timer) clearTimeout(timer);
+        reject(err);
+      });
 
-      if (credentials.privateKey && credentials.privateKey.trim().length > 0) {
-        config.privateKey = credentials.privateKey;
-      } else if (credentials.password) {
-        config.password = credentials.password;
-      }
+      conn.exec(command, (err, stream) => {
+        if (err) {
+          settled = true;
+          if (timer) clearTimeout(timer);
+          conn.end();
+          return reject(err);
+        }
 
-      conn
-        .on('ready', () => {
-          conn.exec(command, (err, stream) => {
-            if (err) {
-              conn.end();
-              return reject(err);
-            }
-
-            stream
-              .on('close', (code: number) => {
-                conn.end();
-                resolve({ code, stdout, stderr });
-              })
-              .on('data', (data: Buffer) => {
-                const text = data.toString('utf-8');
-                stdout += text;
-                if (onData) onData(text);
-              })
-              .stderr.on('data', (data: Buffer) => {
-                const text = data.toString('utf-8');
-                stderr += text;
-                if (onData) onData(text);
-              });
+        stream
+          .on('close', (code: number | null) => {
+            if (timer) clearTimeout(timer);
+            conn.end();
+            if (settled) return;
+            settled = true;
+            resolve({ code: code ?? -1, stdout, stderr });
+          })
+          .on('data', (data: Buffer) => {
+            const text = data.toString('utf-8');
+            stdout += text;
+            if (opts.onData) opts.onData(text);
+          })
+          .stderr.on('data', (data: Buffer) => {
+            const text = data.toString('utf-8');
+            stderr += text;
+            if (opts.onData) opts.onData(text);
           });
-        })
-        .on('error', (err) => {
-          reject(err);
-        })
-        .connect(config);
-    });
-  }
 
-  /**
-   * Upload file content directly via SFTP
-   */
-  static async uploadContent(
-    credentials: SshCredentials,
-    remotePath: string,
-    content: string
-  ): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const conn = new Client();
-      const config: ConnectConfig = {
-        host: credentials.host,
-        port: credentials.port || 22,
-        username: credentials.username || 'root',
-        readyTimeout: 15000,
-      };
-
-      if (credentials.privateKey && credentials.privateKey.trim().length > 0) {
-        config.privateKey = credentials.privateKey;
-      } else if (credentials.password) {
-        config.password = credentials.password;
-      }
-
-      conn
-        .on('ready', () => {
-          conn.sftp((err, sftp) => {
-            if (err) {
-              conn.end();
-              return reject(err);
-            }
-
-            const writeStream = sftp.createWriteStream(remotePath);
-            writeStream.on('close', () => {
-              conn.end();
-              resolve();
-            });
-            writeStream.on('error', (wErr: any) => {
-              conn.end();
-              reject(wErr);
-            });
-            writeStream.end(content);
-          });
-        })
-        .on('error', (err) => {
-          reject(err);
-        })
-        .connect(config);
+        if (opts.input !== undefined) {
+          stream.end(opts.input);
+        } else {
+          stream.end();
+        }
+      });
     });
   }
 }

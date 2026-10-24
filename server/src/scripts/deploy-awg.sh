@@ -1,13 +1,30 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 # ==============================================================================
 # Demension Panel - AmneziaWG Remote Deployment Script
+#
+# Скрипт передаётся панелью через stdin (не сохраняется на диск) с переменными:
+#   AWG_PORT      - UDP-порт AmneziaWG
+#   AWG_NETWORK   - адрес сети туннеля (для NAT), например 10.8.0.0/24
+#   AWG_CONF_B64  - полный awg0.conf (интерфейс + пиры) в base64
+#   AWG_IMAGE     - Docker-образ AmneziaWG
+#   PANEL_IP      - IP панели (исключается из блокировок fail2ban)
 # ==============================================================================
 
 export DEBIAN_FRONTEND=noninteractive
+umask 077
 
-echo "[1/6] Проверка системных требований и окружения..."
+: "${AWG_PORT:?AWG_PORT не задан}"
+: "${AWG_NETWORK:?AWG_NETWORK не задан}"
+: "${AWG_CONF_B64:?AWG_CONF_B64 не задан}"
+
+CONTAINER_NAME="amnezia-awg"
+IMAGE_NAME="${AWG_IMAGE:-amneziavpn/amneziawg-go:0.2.19}"
+PANEL_IP="${PANEL_IP:-}"
+AWG_DIR="/opt/amnezia/awg"
+
+echo "[1/7] Проверка системных требований и окружения..."
 if [ "$EUID" -ne 0 ]; then
   echo "Ошибка: скрипт должен выполняться с правами root (sudo)!"
   exit 1
@@ -25,203 +42,175 @@ else
   PM="unknown"
 fi
 
-echo "[2/6] Проверка и установка Docker..."
+ARCH=$(uname -m)
+if [ "$ARCH" != "x86_64" ] && [ "$ARCH" != "amd64" ]; then
+  echo "Ошибка: архитектура $ARCH не поддерживается — образ $IMAGE_NAME собран только для amd64."
+  exit 1
+fi
+
+echo "[2/7] Проверка и установка Docker..."
 if ! command -v docker >/dev/null 2>&1; then
   echo "Docker не найден. Запуск автоматической установки Docker..."
   if [ "$PM" = "apt" ]; then
-    apt-get update -y
-    apt-get install -y ca-certificates curl gnupg lsb-release iptables
+    apt-get update -y </dev/null
+    apt-get install -y ca-certificates curl gnupg </dev/null
     install -m 0755 -d /etc/apt/keyrings
-    curl -fsSL https://download.docker.com/linux/$(. /etc/os-release && echo "$ID")/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg --yes
+    OS_ID=$(. /etc/os-release && echo "$ID")
+    OS_CODENAME=$(. /etc/os-release && echo "${UBUNTU_CODENAME:-${VERSION_CODENAME:-}}")
+    # Производные дистрибутивы (Mint, Pop!_OS и т.п.) используют репозиторий родительского
+    case "$OS_ID" in
+      ubuntu|debian) ;;
+      *) if grep -qi ubuntu /etc/os-release; then OS_ID=ubuntu; else OS_ID=debian; fi ;;
+    esac
+    curl -fsSL "https://download.docker.com/linux/${OS_ID}/gpg" | gpg --dearmor -o /etc/apt/keyrings/docker.gpg --yes
     chmod a+r /etc/apt/keyrings/docker.gpg
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$(. /etc/os-release && echo "$ID") $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-    apt-get update -y
-    apt-get install -y docker-ce docker-ce-cli containerd.io
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/${OS_ID} ${OS_CODENAME} stable" > /etc/apt/sources.list.d/docker.list
+    chmod 644 /etc/apt/sources.list.d/docker.list
+    apt-get update -y </dev/null
+    apt-get install -y docker-ce docker-ce-cli containerd.io </dev/null
+  elif [ "$PM" = "dnf" ] || [ "$PM" = "yum" ]; then
+    # get.docker.com не поддерживает AlmaLinux — подключаем репозиторий Docker CE для EL
+    $PM install -y dnf-plugins-core </dev/null >/dev/null 2>&1 || $PM install -y yum-utils </dev/null >/dev/null 2>&1 || true
+    if command -v dnf >/dev/null 2>&1; then
+      dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+    else
+      yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+    fi
+    $PM install -y docker-ce docker-ce-cli containerd.io </dev/null
   else
     curl -fsSL https://get.docker.com | sh
   fi
-  systemctl enable docker
-  systemctl start docker
+  systemctl enable --now docker
   echo "Docker успешно установлен!"
 else
   echo "Docker уже установлен: $(docker --version)"
 fi
 
-echo "[3/6] Настройка сетевого стека ядра (sysctl)..."
+echo "[3/7] Настройка сетевого стека ядра (sysctl)..."
 mkdir -p /etc/sysctl.d
 cat > /etc/sysctl.d/99-amneziawg.conf <<EOF
 net.ipv4.ip_forward = 1
-net.ipv6.conf.all.forwarding = 1
 net.ipv4.conf.all.src_valid_mark = 1
 EOF
-sysctl --system >/dev/null 2>&1 || true
+chmod 644 /etc/sysctl.d/99-amneziawg.conf
+sysctl -p /etc/sysctl.d/99-amneziawg.conf >/dev/null 2>&1 || true
 
-echo "[4/6] Загрузка официального образа AmneziaWG..."
-CONTAINER_NAME="amnezia-awg"
-IMAGE_NAME="amneziavpn/amneziawg-go:latest"
+echo "[4/7] Загрузка официального образа AmneziaWG..."
+docker pull "$IMAGE_NAME"
 
-docker pull $IMAGE_NAME
+echo "[5/7] Подготовка конфигурации AmneziaWG..."
+mkdir -p "$AWG_DIR"
+chmod 700 "$AWG_DIR"
+echo "$AWG_CONF_B64" | base64 -d > "$AWG_DIR/awg0.conf.new"
+mv -f "$AWG_DIR/awg0.conf.new" "$AWG_DIR/awg0.conf"
+printf 'AWG_NETWORK=%s\nAWG_PORT=%s\n' "$AWG_NETWORK" "$AWG_PORT" > "$AWG_DIR/demension.env"
+# Устаревшие файлы ключей от предыдущих версий панели
+rm -f "$AWG_DIR"/wireguard_*.key
 
-echo "[5/6] Подготовка директорий и конфигурации AmneziaWG..."
-mkdir -p /opt/amnezia/awg
-cd /opt/amnezia/awg
-
-# Read arguments or environment variables
-AWG_PORT=${AWG_PORT:-51820}
-AWG_SUBNET=${AWG_SUBNET:-"10.8.0.1/24"}
-JC=${AWG_JC:-4}
-JMIN=${AWG_JMIN:-40}
-JMAX=${AWG_JMAX:-70}
-S1=${AWG_S1:-36}
-S2=${AWG_S2:-124}
-H1=${AWG_H1:-124357689}
-H2=${AWG_H2:-987654321}
-H3=${AWG_H3:-135792468}
-H4=${AWG_H4:-246813579}
-
-# Generate or use passed keys
-if [ -z "$AWG_SERVER_PRIV_KEY" ]; then
-  echo "Генерация новых ключей сервера..."
-  AWG_SERVER_PRIV_KEY=$(docker run --rm $IMAGE_NAME awg genkey)
-fi
-
-AWG_SERVER_PUB_KEY=$(echo "$AWG_SERVER_PRIV_KEY" | docker run --rm -i $IMAGE_NAME awg pubkey)
-
-if [ -z "$AWG_PSK" ]; then
-  AWG_PSK=$(docker run --rm $IMAGE_NAME awg genpsk)
-fi
-
-echo "$AWG_SERVER_PRIV_KEY" > /opt/amnezia/awg/wireguard_server_private_key.key
-echo "$AWG_SERVER_PUB_KEY" > /opt/amnezia/awg/wireguard_server_public_key.key
-echo "$AWG_PSK" > /opt/amnezia/awg/wireguard_psk.key
-chmod 600 /opt/amnezia/awg/*.key
-
-# Determine default WAN interface for NAT
-WAN_IFACE=$(ip route get 8.8.8.8 2>/dev/null | awk '{print $5; exit}')
-if [ -z "$WAN_IFACE" ]; then
-  WAN_IFACE="eth0"
-fi
-echo "Основной сетевой интерфейс: $WAN_IFACE"
-
-# Generate awg0.conf
-cat > /opt/amnezia/awg/awg0.conf <<EOF
-[Interface]
-PrivateKey = $AWG_SERVER_PRIV_KEY
-Address = $AWG_SUBNET
-ListenPort = $AWG_PORT
-Jc = $JC
-Jmin = $JMIN
-Jmax = $JMAX
-S1 = $S1
-S2 = $S2
-H1 = $H1
-H2 = $H2
-H3 = $H3
-H4 = $H4
-EOF
-
-# Create startup script for inside the container
-cat > /opt/amnezia/awg/start.sh <<'EOF'
-#!/bin/bash
+# Скрипт запуска внутри контейнера (POSIX sh: образ может не содержать bash).
+# Правила iptables добавляются идемпотентно, чтобы не дублироваться при перезапусках.
+cat > "$AWG_DIR/start.sh" <<'EOF'
+#!/bin/sh
 set -e
+. /opt/amnezia/awg/demension.env
 
-# Stop existing interface if any
+rule() {
+  table="$1"; shift
+  iptables -t "$table" -C "$@" 2>/dev/null || iptables -t "$table" -A "$@"
+}
+
 awg-quick down /opt/amnezia/awg/awg0.conf 2>/dev/null || true
-
-# Start AmneziaWG interface
 awg-quick up /opt/amnezia/awg/awg0.conf
 
-# Setup forwarding & NAT
-iptables -A INPUT -i awg0 -j ACCEPT
-iptables -A FORWARD -i awg0 -j ACCEPT
-iptables -A OUTPUT -o awg0 -j ACCEPT
-iptables -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
+rule filter INPUT -i awg0 -j ACCEPT
+rule filter FORWARD -i awg0 -j ACCEPT
+rule filter OUTPUT -o awg0 -j ACCEPT
+rule filter FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
+rule nat POSTROUTING -s "$AWG_NETWORK" -j MASQUERADE
 
-# Allow forwarding from awg0 to any outgoing interface
-iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -j MASQUERADE
-
-echo "AmneziaWG interface awg0 started successfully inside container."
-tail -f /dev/null
+echo "AmneziaWG interface awg0 started (network $AWG_NETWORK, port $AWG_PORT)."
+trap 'awg-quick down /opt/amnezia/awg/awg0.conf; exit 0' TERM INT
+while true; do sleep 3600 & wait $!; done
 EOF
-chmod +x /opt/amnezia/awg/start.sh
+chmod 700 "$AWG_DIR/start.sh"
 
-# Stop and remove existing container if running
 if docker ps -a --format '{{.Names}}' | grep -Eq "^${CONTAINER_NAME}\$"; then
   echo "Остановка и удаление старого контейнера $CONTAINER_NAME..."
-  docker stop $CONTAINER_NAME >/dev/null 2>&1 || true
-  docker rm $CONTAINER_NAME >/dev/null 2>&1 || true
+  docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
 fi
 
-echo "[6/6] Запуск контейнера $CONTAINER_NAME..."
+echo "[6/7] Запуск контейнера $CONTAINER_NAME..."
 docker run -d \
-  --name $CONTAINER_NAME \
+  --name "$CONTAINER_NAME" \
   --restart always \
-  --privileged \
   --cap-add=NET_ADMIN \
   --cap-add=SYS_MODULE \
-  -p ${AWG_PORT}:${AWG_PORT}/udp \
+  --device /dev/net/tun:/dev/net/tun \
+  -p "${AWG_PORT}:${AWG_PORT}/udp" \
   -v /lib/modules:/lib/modules:ro \
-  -v /opt/amnezia/awg:/opt/amnezia/awg \
+  -v "$AWG_DIR:$AWG_DIR" \
   --sysctl="net.ipv4.conf.all.src_valid_mark=1" \
   --sysctl="net.ipv4.ip_forward=1" \
-  --entrypoint "/opt/amnezia/awg/start.sh" \
-  $IMAGE_NAME
+  --entrypoint "$AWG_DIR/start.sh" \
+  "$IMAGE_NAME" >/dev/null
 
-sleep 2
+# Открытие UDP-порта в активном фаерволе хоста
+if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q "Status: active"; then
+  ufw allow "${AWG_PORT}/udp" >/dev/null 2>&1 || true
+elif command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then
+  firewall-cmd --permanent --add-port="${AWG_PORT}/udp" >/dev/null 2>&1 || true
+  firewall-cmd --reload >/dev/null 2>&1 || true
+fi
 
 echo "[7/7] Настройка защиты SSH от перебора паролей (fail2ban)..."
 if ! command -v fail2ban-client >/dev/null 2>&1; then
   if [ "$PM" = "apt" ]; then
-    apt-get install -y fail2ban || true
+    apt-get install -y fail2ban </dev/null || true
   elif [ "$PM" = "dnf" ] || [ "$PM" = "yum" ]; then
-    $PM install -y fail2ban || true
+    $PM install -y epel-release </dev/null >/dev/null 2>&1 || true
+    $PM install -y fail2ban </dev/null || true
   fi
 fi
 
 if command -v fail2ban-client >/dev/null 2>&1; then
+  SSH_PORT=$(sshd -T 2>/dev/null | awk '$1 == "port" {print $2; exit}')
+  SSH_PORT=${SSH_PORT:-ssh}
+  if [ -f /var/log/auth.log ] || [ -f /var/log/secure ]; then BACKEND=auto; else BACKEND=systemd; fi
+  IGNORE_IP="127.0.0.1/8 ::1"
+  case "$PANEL_IP" in
+    *[!0-9a-fA-F.:]*|"") ;;
+    *) IGNORE_IP="$IGNORE_IP $PANEL_IP" ;;
+  esac
   mkdir -p /etc/fail2ban/jail.d
-  cat > /etc/fail2ban/jail.d/demension-sshd.local <<'EOF'
+  cat > /etc/fail2ban/jail.d/demension-sshd.local <<EOF
 [sshd]
 enabled = true
-port = ssh
+port = ${SSH_PORT}
 filter = sshd
+backend = ${BACKEND}
+ignoreip = ${IGNORE_IP}
 maxretry = 4
 findtime = 600
 bantime = 86400
 EOF
+  chmod 644 /etc/fail2ban/jail.d/demension-sshd.local
   systemctl enable fail2ban >/dev/null 2>&1 || true
   systemctl restart fail2ban >/dev/null 2>&1 || true
-  echo "✓ Защита SSH (fail2ban) успешно активирована (maxretry=4, bantime=24h)!"
+  echo "✓ Защита SSH (fail2ban) активирована (порт ${SSH_PORT}, maxretry=4, bantime=24h)"
 fi
 
-# Verify awg status inside container
-if docker exec $CONTAINER_NAME awg show awg0 >/dev/null 2>&1; then
-  echo "================================================================="
-  echo "🎉 УСПЕХ: AmneziaWG успешно запущен и работает!"
-  echo "================================================================="
-else
-  echo "Внимание: Интерфейс запускается, проверяем логи..."
-  docker logs $CONTAINER_NAME | tail -n 10
-fi
+# Ожидание поднятия интерфейса
+for i in 1 2 3 4 5 6 7 8 9 10; do
+  if docker exec "$CONTAINER_NAME" awg show awg0 >/dev/null 2>&1; then
+    echo "================================================================="
+    echo "🎉 УСПЕХ: AmneziaWG успешно запущен и работает!"
+    echo "================================================================="
+    echo "---DEMENSION_OK---"
+    exit 0
+  fi
+  sleep 2
+done
 
-# Print machine-readable JSON for Demension Panel
-cat <<JSON_END
----DEMENSION_RESULT_START---
-{
-  "status": "success",
-  "serverPublicKey": "$AWG_SERVER_PUB_KEY",
-  "presharedKey": "$AWG_PSK",
-  "port": $AWG_PORT,
-  "subnet": "$AWG_SUBNET",
-  "jc": $JC,
-  "jmin": $JMIN,
-  "jmax": $JMAX,
-  "s1": $S1,
-  "s2": $S2,
-  "h1": $H1,
-  "h2": $H2,
-  "h3": $H3,
-  "h4": $H4
-}
----DEMENSION_RESULT_END---
-JSON_END
+echo "Ошибка: интерфейс awg0 не поднялся. Логи контейнера:"
+docker logs --tail 30 "$CONTAINER_NAME" 2>&1 || true
+exit 1

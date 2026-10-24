@@ -1,0 +1,50 @@
+interface Bucket {
+  failures: number;
+  resetAt: number;
+}
+
+/**
+ * Простой счётчик неудачных попыток в памяти (на ключ — IP или логин).
+ */
+export class FailureLimiter {
+  private buckets = new Map<string, Bucket>();
+
+  constructor(private maxFailures: number, private windowMs: number) {}
+
+  /** Сколько миллисекунд осталось до разблокировки (0 — не заблокирован) */
+  blockedFor(key: string): number {
+    const bucket = this.buckets.get(key);
+    if (!bucket) return 0;
+    const now = Date.now();
+    if (bucket.resetAt <= now) {
+      this.buckets.delete(key);
+      return 0;
+    }
+    return bucket.failures >= this.maxFailures ? bucket.resetAt - now : 0;
+  }
+
+  registerFailure(key: string): void {
+    const now = Date.now();
+    const bucket = this.buckets.get(key);
+    if (!bucket || bucket.resetAt <= now) {
+      this.buckets.set(key, { failures: 1, resetAt: now + this.windowMs });
+    } else {
+      bucket.failures++;
+    }
+  }
+
+  reset(key: string): void {
+    this.buckets.delete(key);
+  }
+
+  cleanup(): void {
+    const now = Date.now();
+    for (const [key, bucket] of this.buckets) {
+      if (bucket.resetAt <= now) this.buckets.delete(key);
+    }
+  }
+}
+
+// 5 неудачных попыток за 15 минут с одного IP, 10 — на один логин
+export const loginIpLimiter = new FailureLimiter(5, 15 * 60 * 1000);
+export const loginUserLimiter = new FailureLimiter(10, 15 * 60 * 1000);

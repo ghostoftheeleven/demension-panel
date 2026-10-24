@@ -2,10 +2,28 @@ import { Router } from 'express';
 import { SslService } from '../services/ssl.service.js';
 import { Fail2banService } from '../services/fail2ban.service.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
+import { asyncHandler, HttpError } from '../utils/http.js';
 
 export const securityRouter = Router();
 
 securityRouter.use(requireAuth);
+
+function requireString(value: unknown, message: string): string {
+  if (typeof value !== 'string' || !value.trim()) throw new HttpError(400, message);
+  return value.trim();
+}
+
+/**
+ * Ошибки валидации/внешних сервисов отдаются как 400 с понятным текстом
+ */
+function wrap<T>(fn: () => Promise<T> | T) {
+  return Promise.resolve()
+    .then(fn)
+    .catch((err: any) => {
+      if (err instanceof HttpError) throw err;
+      throw new HttpError(400, err.message || 'Ошибка операции');
+    });
+}
 
 // ==============================================================================
 // SSL / HTTPS Routes
@@ -13,143 +31,78 @@ securityRouter.use(requireAuth);
 
 // GET SSL status
 securityRouter.get('/ssl', (req, res) => {
-  const status = SslService.getStatus();
-  res.json(status);
+  res.json(SslService.getStatus());
 });
 
 // Verify Cloudflare Token
-securityRouter.post('/ssl/verify-cf', async (req, res) => {
-  const { token } = req.body;
-  if (!token) return res.status(400).json({ error: 'Токен Cloudflare обязателен' });
-
-  const result = await SslService.verifyCloudflareToken(token);
-  res.json(result);
-});
+securityRouter.post('/ssl/verify-cf', asyncHandler(async (req, res) => {
+  const token = requireString(req.body?.token, 'Токен Cloudflare обязателен');
+  res.json(await SslService.verifyCloudflareToken(token));
+}));
 
 // Get Cloudflare Zones
-securityRouter.post('/ssl/cf-zones', async (req, res) => {
-  const { token } = req.body;
-  if (!token) return res.status(400).json({ error: 'Токен Cloudflare обязателен' });
-
-  try {
-    const zones = await SslService.getCloudflareZones(token);
-    res.json(zones);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
+securityRouter.post('/ssl/cf-zones', asyncHandler(async (req, res) => {
+  const token = requireString(req.body?.token, 'Токен Cloudflare обязателен');
+  res.json(await wrap(() => SslService.getCloudflareZones(token)));
+}));
 
 // Issue Let's Encrypt via Cloudflare DNS-01
-securityRouter.post('/ssl/issue-cf', async (req, res) => {
-  const { domain, email, token, createARecord = true } = req.body;
+securityRouter.post('/ssl/issue-cf', asyncHandler(async (req, res) => {
+  const { domain, email, token, createARecord = true } = req.body ?? {};
   if (!domain || !email || !token) {
-    return res.status(400).json({ error: 'Домен, email и токен Cloudflare обязательны' });
+    throw new HttpError(400, 'Домен, email и токен Cloudflare обязательны');
   }
-
-  try {
-    const result = await SslService.issueLetsEncryptCloudflare(domain, email, token, createARecord);
-    res.json(result);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
+  res.json(await wrap(() => SslService.issueLetsEncryptCloudflare(domain, email, String(token), Boolean(createARecord))));
+}));
 
 // Issue Let's Encrypt via HTTP-01
-securityRouter.post('/ssl/issue-http', async (req, res) => {
-  const { domain, email } = req.body;
-  if (!domain || !email) {
-    return res.status(400).json({ error: 'Домен и email обязательны' });
-  }
-
-  try {
-    const result = await SslService.issueLetsEncryptHttp(domain, email);
-    res.json(result);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
+securityRouter.post('/ssl/issue-http', asyncHandler(async (req, res) => {
+  const { domain, email } = req.body ?? {};
+  if (!domain || !email) throw new HttpError(400, 'Домен и email обязательны');
+  res.json(await wrap(() => SslService.issueLetsEncryptHttp(domain, email)));
+}));
 
 // Issue Self-Signed IP Certificate
-securityRouter.post('/ssl/issue-ip', async (req, res) => {
-  const { ip } = req.body;
-  if (!ip) return res.status(400).json({ error: 'IP адрес или домен обязателен' });
-
-  try {
-    const result = await SslService.generateSelfSignedIpCert(ip);
-    res.json(result);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
+securityRouter.post('/ssl/issue-ip', asyncHandler(async (req, res) => {
+  const ip = requireString(req.body?.ip, 'IP адрес или домен обязателен');
+  res.json(await wrap(() => SslService.generateSelfSignedIpCert(ip)));
+}));
 
 // Save Custom Certificate
-securityRouter.post('/ssl/custom', (req, res) => {
-  const { cert, key, domain } = req.body;
-  if (!cert || !key) {
-    return res.status(400).json({ error: 'Сертификат (fullchain) и ключ обязательны' });
-  }
-
-  try {
-    SslService.saveCustomCertificate(cert, key, domain);
-    res.json({ success: true, message: 'Сертификат успешно сохранен' });
-  } catch (err: any) {
-    res.status(400).json({ error: err.message });
-  }
-});
+securityRouter.post('/ssl/custom', asyncHandler(async (req, res) => {
+  const { cert, key, domain } = req.body ?? {};
+  if (!cert || !key) throw new HttpError(400, 'Сертификат (fullchain) и ключ обязательны');
+  await wrap(() => SslService.saveCustomCertificate(cert, key, typeof domain === 'string' ? domain : undefined));
+  res.json({ success: true, message: 'Сертификат успешно сохранен' });
+}));
 
 // Toggle SSL
-securityRouter.post('/ssl/toggle', (req, res) => {
-  const { enabled } = req.body;
-  try {
-    SslService.toggleSsl(Boolean(enabled));
-    res.json({ success: true, enabled: Boolean(enabled) });
-  } catch (err: any) {
-    res.status(400).json({ error: err.message });
-  }
-});
+securityRouter.post('/ssl/toggle', asyncHandler(async (req, res) => {
+  const enabled = Boolean(req.body?.enabled);
+  await wrap(() => SslService.toggleSsl(enabled));
+  res.json({ success: true, enabled });
+}));
 
 // ==============================================================================
 // Fail2ban Routes
 // ==============================================================================
 
 // GET Fail2ban status
-securityRouter.get('/fail2ban', async (req, res) => {
-  const status = await Fail2banService.getStatus();
-  res.json(status);
-});
+securityRouter.get('/fail2ban', asyncHandler(async (req, res) => {
+  res.json(await Fail2banService.getStatus());
+}));
 
 // Unban IP
-securityRouter.post('/fail2ban/unban', async (req, res) => {
-  const { ip } = req.body;
-  if (!ip) return res.status(400).json({ error: 'IP адрес обязателен' });
-
-  try {
-    const result = await Fail2banService.unbanIp(ip);
-    res.json(result);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
+securityRouter.post('/fail2ban/unban', asyncHandler(async (req, res) => {
+  res.json(await wrap(() => Fail2banService.unbanIp(req.body?.ip)));
+}));
 
 // Ban IP
-securityRouter.post('/fail2ban/ban', async (req, res) => {
-  const { ip } = req.body;
-  if (!ip) return res.status(400).json({ error: 'IP адрес обязателен' });
-
-  try {
-    const result = await Fail2banService.banIp(ip);
-    res.json(result);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
+securityRouter.post('/fail2ban/ban', asyncHandler(async (req, res) => {
+  res.json(await wrap(() => Fail2banService.banIp(req.body?.ip)));
+}));
 
 // Setup local Fail2ban
-securityRouter.post('/fail2ban/setup', async (req, res) => {
-  try {
-    const result = await Fail2banService.setupLocal();
-    res.json(result);
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
+securityRouter.post('/fail2ban/setup', asyncHandler(async (req, res) => {
+  res.json(await wrap(() => Fail2banService.setupLocal()));
+}));

@@ -1,219 +1,245 @@
 import { Router } from 'express';
 import crypto from 'node:crypto';
-import { db } from '../db/index.js';
+import { db, transaction } from '../db/index.js';
 import { AwgService } from '../services/awg.service.js';
 import { ProvisionService } from '../services/provision.service.js';
+import { SubscriptionService } from '../services/subscription.service.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
+import { HttpError, parseId } from '../utils/http.js';
 
 export const subscribersRouter = Router();
 
 // All routes here require authentication
 subscribersRouter.use(requireAuth);
 
+function newToken(): string {
+  return 'sub_' + crypto.randomBytes(16).toString('hex');
+}
+
+function validateName(name: unknown): string {
+  if (typeof name !== 'string' || !name.trim()) throw new HttpError(400, 'Имя пользователя обязательно');
+  if (name.trim().length > 64) throw new HttpError(400, 'Имя пользователя не длиннее 64 символов');
+  return name.trim();
+}
+
+function validateServerIds(value: unknown): number[] {
+  if (!Array.isArray(value)) throw new HttpError(400, 'server_ids должен быть массивом');
+  const ids = value.map((v) => Number(v));
+  if (ids.some((id) => !Number.isInteger(id) || id <= 0)) throw new HttpError(400, 'Некорректный идентификатор сервера');
+  return [...new Set(ids)];
+}
+
+function validateTrafficLimit(value: unknown): number {
+  const limit = Number(value);
+  if (!Number.isFinite(limit) || limit < 0 || !Number.isInteger(limit)) {
+    throw new HttpError(400, 'Лимит трафика должен быть целым неотрицательным числом байт');
+  }
+  return limit;
+}
+
+function validateExpireAt(value: unknown): string | null {
+  if (value === null || value === '') return null;
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) throw new HttpError(400, 'Некорректная дата окончания подписки');
+  return date.toISOString();
+}
+
+function serializeSubscriber(sub: any) {
+  const usage = SubscriptionService.getUsage(sub.id);
+  const peers = db.prepare(`
+    SELECT c.id, c.server_id, c.client_ip, c.enabled, s.name as server_name, s.host
+    FROM clients c
+    JOIN servers s ON c.server_id = s.id
+    WHERE c.subscriber_id = ?
+  `).all(sub.id) as any[];
+
+  return {
+    ...sub,
+    suspended: Boolean(sub.suspended),
+    expired: SubscriptionService.isExpired(sub),
+    total_rx: usage.upload,
+    total_tx: usage.download,
+    traffic_used: usage.used,
+    peer_count: peers.length,
+    server_ids: peers.map((p) => p.server_id),
+    servers: peers.map((p) => ({
+      id: p.server_id,
+      name: p.server_name,
+      host: p.host,
+      client_ip: p.client_ip,
+      enabled: p.enabled,
+    })),
+  };
+}
+
+function addPeer(subscriberId: number, subscriberName: string, enabled: number, server: any): void {
+  const keyPair = AwgService.generateKeyPair();
+  const psk = AwgService.generatePresharedKey();
+  const clientIp = AwgService.getNextClientIp(server.id, server.subnet);
+  db.prepare(`
+    INSERT INTO clients (
+      server_id, subscriber_id, name, client_ip, client_public_key, client_private_key, preshared_key, enabled
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(server.id, subscriberId, `${subscriberName} (${server.name})`, clientIp, keyPair.publicKey, keyPair.privateKey, psk, enabled);
+}
+
+function syncServers(serverIds: Iterable<number>): void {
+  for (const sId of serverIds) {
+    const server = db.prepare('SELECT status FROM servers WHERE id = ?').get(sId) as any;
+    if (server && server.status !== 'uninstalled') {
+      ProvisionService.requestSync(sId).catch((err) => console.error(`Ошибка синхронизации сервера #${sId}:`, err));
+    }
+  }
+}
+
+function loadServers(ids: number[]): any[] {
+  return ids.map((id) => {
+    const server = db.prepare('SELECT * FROM servers WHERE id = ?').get(id);
+    if (!server) throw new HttpError(400, `Сервер #${id} не найден`);
+    return server;
+  });
+}
+
 // GET /api/subscribers
 subscribersRouter.get('/', (req, res) => {
-  const subscribers = db.prepare(`
-    SELECT 
-      s.*,
-      COALESCE(SUM(c.total_rx), 0) as total_rx,
-      COALESCE(SUM(c.total_tx), 0) as total_tx,
-      COUNT(c.id) as peer_count
-    FROM subscribers s
-    LEFT JOIN clients c ON c.subscriber_id = s.id
-    GROUP BY s.id
-    ORDER BY s.id DESC
-  `).all() as any[];
-
-  // Attach server_ids and server details for each subscriber
-  const result = subscribers.map((sub) => {
-    const peers = db.prepare(`
-      SELECT c.id, c.server_id, c.client_ip, c.enabled, s.name as server_name, s.host
-      FROM clients c
-      JOIN servers s ON c.server_id = s.id
-      WHERE c.subscriber_id = ?
-    `).all(sub.id) as any[];
-
-    return {
-      ...sub,
-      server_ids: peers.map((p) => p.server_id),
-      servers: peers.map((p) => ({
-        id: p.server_id,
-        name: p.server_name,
-        host: p.host,
-        client_ip: p.client_ip,
-        enabled: p.enabled,
-      })),
-    };
-  });
-
-  res.json(result);
+  const subscribers = db.prepare('SELECT * FROM subscribers ORDER BY id DESC').all() as any[];
+  res.json(subscribers.map(serializeSubscriber));
 });
 
 // POST /api/subscribers
-subscribersRouter.post('/', async (req, res) => {
-  const { name, server_ids = [] } = req.body;
-  if (!name || !name.trim()) {
-    return res.status(400).json({ error: 'Имя пользователя обязательно' });
-  }
+subscribersRouter.post('/', (req, res) => {
+  const body = req.body ?? {};
+  const name = validateName(body.name);
+  const serverIds = validateServerIds(body.server_ids ?? []);
+  const trafficLimit = body.traffic_limit === undefined ? 0 : validateTrafficLimit(body.traffic_limit);
+  const expireAt = body.expire_at === undefined ? null : validateExpireAt(body.expire_at);
+  const servers = loadServers(serverIds);
 
-  const token = 'sub_' + crypto.randomBytes(16).toString('hex');
+  const subscriberId = transaction(() => {
+    const result = db.prepare(`
+      INSERT INTO subscribers (name, token, enabled, traffic_limit, expire_at)
+      VALUES (?, ?, 1, ?, ?)
+    `).run(name, newToken(), trafficLimit, expireAt);
+    const id = Number(result.lastInsertRowid);
+    for (const server of servers) addPeer(id, name, 1, server);
+    return id;
+  });
 
-  const subStmt = db.prepare(`
-    INSERT INTO subscribers (name, token, enabled)
-    VALUES (?, ?, 1)
-  `);
-  const subResult = subStmt.run(name.trim(), token);
-  const subscriberId = Number(subResult.lastInsertRowid);
+  SubscriptionService.refreshSuspension(subscriberId);
+  syncServers(serverIds);
 
-  // Generate peer on each selected server
-  const affectedServers: number[] = [];
-
-  for (const sId of server_ids) {
-    const server = db.prepare('SELECT * FROM servers WHERE id = ?').get(sId) as any;
-    if (server) {
-      try {
-        const keyPair = AwgService.generateKeyPair();
-        const psk = AwgService.generatePresharedKey();
-        const clientIp = AwgService.getNextClientIp(server.id, server.subnet);
-
-        db.prepare(`
-          INSERT INTO clients (
-            server_id, subscriber_id, name, client_ip, client_public_key, client_private_key, preshared_key, enabled
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, 1)
-        `).run(server.id, subscriberId, `${name.trim()} (${server.name})`, clientIp, keyPair.publicKey, keyPair.privateKey, psk);
-
-        affectedServers.push(server.id);
-      } catch (err) {
-        console.error(`Ошибка добавления пира на сервер #${sId}:`, err);
-      }
-    }
-  }
-
-  // Hot-sync peers on all affected servers
-  for (const sId of affectedServers) {
-    const server = db.prepare('SELECT status FROM servers WHERE id = ?').get(sId) as any;
-    if (server && server.status === 'online') {
-      ProvisionService.syncPeers(sId).catch((err) =>
-        console.error(`Ошибка синхронизации сервера #${sId}:`, err)
-      );
-    }
-  }
-
-  const newSub = db.prepare('SELECT * FROM subscribers WHERE id = ?').get(subscriberId) as any;
-  res.status(201).json({ ...newSub, server_ids: affectedServers });
+  const created = db.prepare('SELECT * FROM subscribers WHERE id = ?').get(subscriberId);
+  res.status(201).json(serializeSubscriber(created));
 });
 
 // PUT /api/subscribers/:id
-subscribersRouter.put('/:id', async (req, res) => {
-  const subscriberId = Number(req.params.id);
+subscribersRouter.put('/:id', (req, res) => {
+  const subscriberId = parseId(req.params.id);
   const subscriber = db.prepare('SELECT * FROM subscribers WHERE id = ?').get(subscriberId) as any;
-  if (!subscriber) return res.status(404).json({ error: 'Пользователь не найден' });
+  if (!subscriber) throw new HttpError(404, 'Пользователь не найден');
 
-  const { name, enabled, server_ids } = req.body;
+  const body = req.body ?? {};
+  const name = body.name === undefined ? subscriber.name : validateName(body.name);
+  const enabled = body.enabled === undefined ? subscriber.enabled : body.enabled ? 1 : 0;
+  const trafficLimit = body.traffic_limit === undefined ? subscriber.traffic_limit : validateTrafficLimit(body.traffic_limit);
+  const expireAt = body.expire_at === undefined ? subscriber.expire_at : validateExpireAt(body.expire_at);
+  const targetIds = body.server_ids === undefined ? null : validateServerIds(body.server_ids);
+  const targetServers = targetIds ? loadServers(targetIds) : [];
 
-  db.prepare(`
-    UPDATE subscribers SET
-      name = COALESCE(?, name),
-      enabled = COALESCE(?, enabled)
-    WHERE id = ?
-  `).run(name ?? null, enabled ?? null, subscriberId);
+  const affectedServers = new Set<number>();
 
-  const affectedServers: Set<number> = new Set();
+  transaction(() => {
+    db.prepare('UPDATE subscribers SET name = ?, enabled = ?, traffic_limit = ?, expire_at = ? WHERE id = ?').run(
+      name, enabled, trafficLimit, expireAt, subscriberId
+    );
 
-  // If enabled changed, update enabled state on all clients of this subscriber
-  if (enabled !== undefined) {
-    db.prepare('UPDATE clients SET enabled = ? WHERE subscriber_id = ?').run(enabled ? 1 : 0, subscriberId);
     const existingPeers = db.prepare('SELECT server_id FROM clients WHERE subscriber_id = ?').all(subscriberId) as any[];
-    existingPeers.forEach((p) => affectedServers.add(p.server_id));
-  }
+    const currentServerIds = new Set<number>(existingPeers.map((p) => p.server_id));
 
-  // Update server node access if server_ids passed
-  if (Array.isArray(server_ids)) {
-    const existingPeers = db.prepare('SELECT server_id FROM clients WHERE subscriber_id = ?').all(subscriberId) as any[];
-    const currentServerIds = new Set(existingPeers.map((p) => p.server_id));
-    const targetServerIds = new Set(server_ids);
-
-    // Servers to remove
-    for (const curId of currentServerIds) {
-      if (!targetServerIds.has(curId)) {
-        db.prepare('DELETE FROM clients WHERE subscriber_id = ? AND server_id = ?').run(subscriberId, curId);
-        affectedServers.add(curId);
-      }
+    if (enabled !== subscriber.enabled) {
+      currentServerIds.forEach((id) => affectedServers.add(id));
     }
 
-    // Servers to add
-    for (const tgtId of targetServerIds) {
-      if (!currentServerIds.has(tgtId)) {
-        const server = db.prepare('SELECT * FROM servers WHERE id = ?').get(tgtId) as any;
-        if (server) {
-          try {
-            const keyPair = AwgService.generateKeyPair();
-            const psk = AwgService.generatePresharedKey();
-            const clientIp = AwgService.getNextClientIp(server.id, server.subnet);
+    if (name !== subscriber.name) {
+      db.prepare(`
+        UPDATE clients SET name = ? || ' (' || (SELECT s.name FROM servers s WHERE s.id = clients.server_id) || ')'
+        WHERE subscriber_id = ?
+      `).run(name, subscriberId);
+    }
 
-            db.prepare(`
-              INSERT INTO clients (
-                server_id, subscriber_id, name, client_ip, client_public_key, client_private_key, preshared_key, enabled
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            `).run(server.id, subscriberId, `${subscriber.name} (${server.name})`, clientIp, keyPair.publicKey, keyPair.privateKey, psk, subscriber.enabled);
-
-            affectedServers.add(server.id);
-          } catch (err) {
-            console.error(`Ошибка добавления пира на сервер #${tgtId}:`, err);
-          }
+    if (targetIds) {
+      const targetSet = new Set(targetIds);
+      for (const curId of currentServerIds) {
+        if (!targetSet.has(curId)) {
+          db.prepare('DELETE FROM clients WHERE subscriber_id = ? AND server_id = ?').run(subscriberId, curId);
+          affectedServers.add(curId);
+        }
+      }
+      for (const server of targetServers) {
+        if (!currentServerIds.has(server.id)) {
+          addPeer(subscriberId, name, 1, server);
+          affectedServers.add(server.id);
         }
       }
     }
-  }
+  });
 
-  // Hot-sync peers on all affected servers
-  for (const sId of affectedServers) {
-    const server = db.prepare('SELECT status FROM servers WHERE id = ?').get(sId) as any;
-    if (server && server.status === 'online') {
-      ProvisionService.syncPeers(sId).catch((err) =>
-        console.error(`Ошибка синхронизации сервера #${sId}:`, err)
-      );
-    }
-  }
+  // Пересчёт срока/лимита сам синхронизирует ноды при смене статуса
+  SubscriptionService.refreshSuspension(subscriberId);
+  syncServers(affectedServers);
 
   const updated = db.prepare('SELECT * FROM subscribers WHERE id = ?').get(subscriberId);
-  res.json(updated);
+  res.json(serializeSubscriber(updated));
+});
+
+// POST /api/subscribers/:id/reset-traffic
+subscribersRouter.post('/:id/reset-traffic', (req, res) => {
+  const subscriberId = parseId(req.params.id);
+  const subscriber = db.prepare('SELECT * FROM subscribers WHERE id = ?').get(subscriberId);
+  if (!subscriber) throw new HttpError(404, 'Пользователь не найден');
+
+  db.prepare('UPDATE clients SET total_rx = 0, total_tx = 0 WHERE subscriber_id = ?').run(subscriberId);
+  SubscriptionService.refreshSuspension(subscriberId);
+  res.json(serializeSubscriber(db.prepare('SELECT * FROM subscribers WHERE id = ?').get(subscriberId)));
 });
 
 // DELETE /api/subscribers/:id
-subscribersRouter.delete('/:id', async (req, res) => {
-  const subscriberId = Number(req.params.id);
-  const subscriber = db.prepare('SELECT * FROM subscribers WHERE id = ?').get(subscriberId) as any;
-  if (!subscriber) return res.status(404).json({ error: 'Пользователь не найден' });
+subscribersRouter.delete('/:id', (req, res) => {
+  const subscriberId = parseId(req.params.id);
+  const subscriber = db.prepare('SELECT * FROM subscribers WHERE id = ?').get(subscriberId);
+  if (!subscriber) throw new HttpError(404, 'Пользователь не найден');
 
   // Find all affected server IDs before deleting
-  const peers = db.prepare('SELECT server_id FROM clients WHERE subscriber_id = ?').all(subscriberId) as any[];
-  const affectedServers = [...new Set(peers.map((p) => p.server_id))];
+  const peers = db.prepare('SELECT DISTINCT server_id FROM clients WHERE subscriber_id = ?').all(subscriberId) as any[];
 
   // Delete subscriber (cascades to clients)
   db.prepare('DELETE FROM subscribers WHERE id = ?').run(subscriberId);
-
-  // Hot-sync servers to remove peer
-  for (const sId of affectedServers) {
-    const server = db.prepare('SELECT status FROM servers WHERE id = ?').get(sId) as any;
-    if (server && server.status === 'online') {
-      ProvisionService.syncPeers(sId).catch((err) =>
-        console.error(`Ошибка синхронизации сервера #${sId}:`, err)
-      );
-    }
-  }
+  syncServers(peers.map((p) => p.server_id));
 
   res.json({ success: true, message: 'Пользователь и его пиры удалены' });
 });
 
 // POST /api/subscribers/:id/reset-token
 subscribersRouter.post('/:id/reset-token', (req, res) => {
-  const subscriberId = Number(req.params.id);
-  const subscriber = db.prepare('SELECT * FROM subscribers WHERE id = ?').get(subscriberId) as any;
-  if (!subscriber) return res.status(404).json({ error: 'Пользователь не найден' });
+  const subscriberId = parseId(req.params.id);
+  const subscriber = db.prepare('SELECT * FROM subscribers WHERE id = ?').get(subscriberId);
+  if (!subscriber) throw new HttpError(404, 'Пользователь не найден');
 
-  const newToken = 'sub_' + crypto.randomBytes(16).toString('hex');
-  db.prepare('UPDATE subscribers SET token = ? WHERE id = ?').run(newToken, subscriberId);
+  // Вместе со ссылкой перевыпускаются ключи пиров: иначе тот, кто успел скачать старую подписку,
+  // сохранил бы доступ к VPN
+  const token = newToken();
+  const peers = db.prepare('SELECT id, server_id FROM clients WHERE subscriber_id = ?').all(subscriberId) as any[];
+  transaction(() => {
+    db.prepare('UPDATE subscribers SET token = ? WHERE id = ?').run(token, subscriberId);
+    for (const peer of peers) {
+      const keyPair = AwgService.generateKeyPair();
+      db.prepare(`
+        UPDATE clients SET client_public_key = ?, client_private_key = ?, preshared_key = ?, rx_counter = 0, tx_counter = 0
+        WHERE id = ?
+      `).run(keyPair.publicKey, keyPair.privateKey, AwgService.generatePresharedKey(), peer.id);
+    }
+  });
+  syncServers(new Set(peers.map((p) => p.server_id)));
 
-  res.json({ success: true, token: newToken });
+  res.json({ success: true, token });
 });
