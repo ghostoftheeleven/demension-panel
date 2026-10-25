@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Palette, Save, Loader2, ArrowUp, ArrowDown, Smartphone, Eye, Link2, Server as ServerIcon, Info } from 'lucide-react';
+import { Palette, Save, Loader2, ArrowUp, ArrowDown, Smartphone, Eye, Link2, Server as ServerIcon } from 'lucide-react';
 import type { Subscriber, SubscriptionServer, SubscriptionSettings } from '../types';
 import { api } from '../api';
 import { copyToClipboard } from '../utils';
+import { AwgClientsGuide } from './AwgClientsGuide';
 
 const TITLE_MAX = 25;
 const ANNOUNCE_MAX = 200;
@@ -17,16 +18,6 @@ function renderTitle(template: string, user: string): string {
   const chars = [...title];
   return chars.length > TITLE_MAX ? chars.slice(0, TITLE_MAX - 1).join('') + '…' : title;
 }
-
-const CLIENTS: { name: string; platforms: string; format: string; note?: string }[] = [
-  { name: 'Incy', platforms: 'iOS, Android', format: 'Основная ссылка', note: 'Поддерживает все заголовки этой страницы' },
-  { name: 'Clash Verge Rev', platforms: 'Windows, macOS, Linux', format: 'Ссылка mihomo', note: 'Определяется автоматически' },
-  { name: 'FlClash', platforms: 'Android, Windows, macOS, Linux', format: 'Ссылка mihomo', note: 'Определяется автоматически' },
-  { name: 'Mihomo Party', platforms: 'Windows, macOS, Linux', format: 'Ссылка mihomo' },
-  { name: 'Clash Meta for Android', platforms: 'Android', format: 'Ссылка mihomo' },
-  { name: 'AmneziaWG / Amnezia VPN', platforms: 'все', format: '—', note: 'Подписки не поддерживают — только .conf или QR отдельного клиента' },
-  { name: 'HAPP, v2rayNG, Karing', platforms: '—', format: '—', note: 'AmneziaWG не поддерживают' },
-];
 
 export const SubscriptionSettingsView: React.FC<{ subscribers: Subscriber[]; publicUrl: string | null }> = ({
   subscribers,
@@ -347,30 +338,21 @@ export const SubscriptionSettingsView: React.FC<{ subscribers: Subscriber[]; pub
             )}
           </div>
 
-          <div className={cardClass}>
-            <h3 className="text-sm font-semibold text-ink flex items-center gap-2">
-              <Info className="w-4 h-4 text-info" />
-              <span>Клиенты с поддержкой AmneziaWG</span>
-            </h3>
-            <div className="space-y-2.5">
-              {CLIENTS.map((c) => (
-                <div key={c.name} className="text-xs">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-ink">{c.name}</span>
-                    <span className="text-[10px] text-faint text-right">{c.format}</span>
-                  </div>
-                  <p className="text-[11px] text-faint">
-                    {c.platforms}
-                    {c.note ? ` · ${c.note}` : ''}
-                  </p>
-                </div>
-              ))}
-            </div>
-            <p className="text-[11px] text-faint">
-              Клиенты mihomo распознаются по User-Agent и получают свой формат по основной ссылке. Заголовки оформления понимает только Incy.
-            </p>
-          </div>
         </div>
+      </div>
+
+      <div className={cardClass}>
+        <div>
+          <h3 className="text-sm font-semibold text-ink flex items-center gap-2">
+            <Smartphone className="w-4 h-4 text-info" />
+            <span>Приложения для подписки AmneziaWG</span>
+          </h3>
+          <p className="text-xs text-muted mt-1">
+            Что установить пользователю на каждом устройстве: приложения, которые принимают ссылку подписки (серверы обновляются
+            сами), и приложения, куда конфигурацию нужно добавить вручную.
+          </p>
+        </div>
+        <AwgClientsGuide />
       </div>
     </form>
   );

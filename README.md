@@ -129,7 +129,7 @@ http(s)://<ВАШ_СЕРВЕР>:<ПОРТ>/sub/<ТОКЕН>
 | Формат | Как получить | Для каких клиентов |
 |---|---|---|
 | `awg://<base64url(.conf)>#<имя>`, список в base64 ([спецификация Incy](https://docs.incy.cc/en/subscription-format/)) | по умолчанию | Incy (iOS, Android) |
-| YAML mihomo с `amnezia-wg-option` | автоматически по User-Agent или `?format=clash` | Clash Verge Rev, FlClash, Mihomo Party, Clash Meta for Android |
+| YAML mihomo с `amnezia-wg-option` | автоматически по User-Agent или `?format=clash` | FlClash, Clash Verge Rev, Clash Party, Clash Meta for Android (AWG 3.x — с ядра mihomo 1.19.30) |
 | JSON-контейнер Incy | `?format=json` | Incy |
 
 Название, описание, объявление, ссылки поддержки, сортировка и отображаемые имена серверов (например, с эмодзи флага) настраиваются на странице **«Оформление подписки»**. Заголовки оформления понимает Incy; клиенты mihomo используют только имена серверов.

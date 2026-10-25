@@ -25,9 +25,27 @@
 `AllowedIPs = 0.0.0.0/0, ::/0` — намеренно: у нод нет IPv6, и маршрут `::/0` в туннель не даёт IPv6-трафику клиента идти
 мимо VPN (утечка реального адреса); так же настроены конфиги приложения AmneziaVPN. Не убирайте `::/0`.
 
-Клиенты с поддержкой AmneziaWG из подписки: **Incy** (iOS, Android), клиенты на ядре **mihomo** (Clash Verge Rev,
-FlClash, Mihomo Party, Clash Meta for Android). HAPP, v2rayNG, Karing AmneziaWG не поддерживают; приложения
-AmneziaWG/AmneziaVPN не умеют подписки по ссылке.
+### Приложения по платформам
+
+Справочник показывается в панели («Оформление подписки» и окно ссылки подписки пользователя); данные —
+`client/src/data/awgClients.ts`. Проверено в октябре 2026 — при изменениях в приложениях обновляйте файл и эту таблицу.
+
+| Платформа | По ссылке подписки | Только вручную (.conf / QR клиента) |
+|---|---|---|
+| Windows | FlClash, Clash Verge Rev, Clash Party | AmneziaVPN, AmneziaWG |
+| macOS | FlClash, Clash Verge Rev, Clash Party | AmneziaVPN, AmneziaWG |
+| Linux | FlClash, Clash Verge Rev, Clash Party | AmneziaVPN, amneziawg-tools (`awg-quick`) |
+| iPhone / iPad | **Incy** (единственный) | AmneziaVPN, AmneziaWG, DefaultVPN |
+| Android | **Incy**, FlClash, Clash Meta for Android | AmneziaVPN, AmneziaWG, WG Tunnel |
+
+- **Incy** принимает основную ссылку (`awg://`) и JSON-контейнер только на iOS и Android; настольная версия Incy AmneziaWG
+  не поддерживает. Движок — amneziawg-go 3.1, параметры 3.x (`HeaderProtectionKey` и др.) понимает.
+- **Клиенты mihomo** узнаются по User-Agent и получают YAML с `amnezia-wg-option` по основной ссылке (или `?format=clash`).
+  AmneziaWG 3.x (`version: 3`, `header-protection-key`) — с ядра **mihomo 1.19.30** (август 2026); старые сборки
+  подключаются только к нодам 1.x. На iPhone клиента mihomo с AmneziaWG нет: в Clash Mi ядро собрано без него.
+- AmneziaVPN поддерживает AWG 3.x с версии 5.0.1.5; приложения Amnezia подписки по ссылке не принимают.
+- Не подходят: Happ, v2rayN, v2rayNG (только Xray), Karing (нет AmneziaWG), Clash Mi (ядро без AmneziaWG), Hiddify
+  (AmneziaWG заявлен, но формат подписок панели не принимает).
 
 ## Заголовки
 

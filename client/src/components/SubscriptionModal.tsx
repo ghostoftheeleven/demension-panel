@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import { X, Link2, Copy, Check, QrCode, RefreshCw, Server as ServerIcon, Smartphone } from 'lucide-react';
 import type { Subscriber } from '../types';
 import { api } from '../api';
+import { AwgClientsGuide } from './AwgClientsGuide';
 import { copyToClipboard } from '../utils';
 
 interface SubscriptionModalProps {
@@ -164,17 +165,14 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
             </div>
           )}
 
-          {/* HAPP & Incy Compatibility Notice */}
-          <div className="p-4 bg-paper border border-line rounded-2xl space-y-2 text-xs text-muted">
+          {/* Какие приложения принимают эту ссылку */}
+          <div className="p-4 bg-paper border border-line rounded-2xl space-y-3 text-xs text-muted">
             <div className="flex items-center gap-2 text-ok font-semibold">
               <Smartphone className="w-4 h-4" />
-              <span>Автоматическое обновление серверов (Auto-sync)</span>
+              <span>В каком приложении открыть ссылку</span>
             </div>
-            <p>
-              При добавлении или удалении серверов в панели список в приложении <strong>Incy</strong> обновится автоматически.
-              Та же ссылка работает в Clash Verge Rev, FlClash и других клиентах на ядре mihomo (формат подбирается автоматически).
-              HAPP не поддерживает AmneziaWG.
-            </p>
+            <p>При добавлении или удалении серверов в панели список в приложении обновится сам.</p>
+            <AwgClientsGuide compact />
           </div>
         </div>
 
