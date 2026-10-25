@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ExternalLink, RefreshCw, FileDown, Ban } from 'lucide-react';
-import { AWG_CLIENTS, AWG_PLATFORMS, AWG_UNSUPPORTED } from '../data/awgClients';
-import type { AwgPlatform } from '../data/awgClients';
+import { AWG_CLIENTS, AWG_PLATFORMS, AWG_UNSUPPORTED } from '../awgClients';
+import type { AwgPlatform } from '../awgClients';
 
 /** Платформа по User-Agent браузера администратора — с неё удобнее начать */
 function detectPlatform(): AwgPlatform {
@@ -15,7 +15,7 @@ function detectPlatform(): AwgPlatform {
 
 /**
  * Какие приложения подключаются к нодам AmneziaWG и как: по ссылке подписки (серверы обновляются сами) или вручную
- * (.conf / QR отдельного клиента). Данные — client/src/data/awgClients.ts.
+ * (.conf / QR отдельного клиента). Данные — client/src/awgClients.ts.
  */
 export const AwgClientsGuide: React.FC<{ compact?: boolean }> = ({ compact = false }) => {
   const [platform, setPlatform] = useState<AwgPlatform>(detectPlatform);
