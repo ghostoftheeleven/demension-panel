@@ -46,6 +46,10 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq >/dev/null 2>&1
 apt-get install -y -qq iproute2 netcat-openbsd >/dev/null 2>&1   # ss и nc для проверок; сам install.sh ставит curl/git
 
+# grep -q с pipefail ненадёжен: найдя строку, grep выходит сразу, и пишущая сторона конвейера (echo большого вывода, sed)
+# получает SIGPIPE — проверка «проваливается», хотя строка есть. grep_q дочитывает ввод до конца.
+grep_q() { grep "$@" > /dev/null; }
+
 section() { echo; echo "################ $*"; }
 fail() { echo "ТЕСТ ПРОВАЛЕН: $*"; FAILED=1; }
 FAILED=0

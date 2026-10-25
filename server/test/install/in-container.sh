@@ -14,7 +14,7 @@ PANEL_PORT=3099 bash install.sh > /tmp/busy.out 2>&1
 CODE=$?
 tail -5 /tmp/busy.out
 [ "$CODE" -ne 0 ] || fail "установка при занятом порту завершилась успехом"
-grep -q "уже занят" /tmp/busy.out || fail "нет сообщения о занятом порте"
+grep_q "уже занят" /tmp/busy.out || fail "нет сообщения о занятом порте"
 [ ! -d /opt/dementia-panel ] || fail "каталог установки создан, хотя порт занят"
 pkill -f "nc -l -p 3099" || true
 
@@ -34,7 +34,7 @@ echo "--- разобрано: login=[$LOGIN] password_len=${#PASS} url=[$URL]"
 [ "$LOGIN" != "admin" ] || fail "логин admin"
 [[ "$PASS" =~ ^[A-Za-z0-9]{20}$ ]] || fail "пароль неверного формата"
 [[ "$URL" =~ ^http://[0-9.]+:3001$ ]] || fail "адрес панели не похож на http://IP:3001: $URL"
-echo "$OUT" | grep -q "amnezia-awg (amneziavpn" && echo "OK: список существующих контейнеров Amnezia показан" || fail "нет списка контейнеров Amnezia"
+echo "$OUT" | grep_q "amnezia-awg (amneziavpn" && echo "OK: список существующих контейнеров Amnezia показан" || fail "нет списка контейнеров Amnezia"
 
 section "3. Вход с выданными логином и паролем (через адрес из вывода, с заменой IP на localhost)"
 LOCAL_URL="http://127.0.0.1:3001"
@@ -55,9 +55,9 @@ API_VERSION=$(curl -s "$LOCAL_URL/api/version" -H "Authorization: Bearer $TOKEN"
 
 section "4. Безопасность установки"
 stat -c '%a %U %n' /opt/dementia-panel/server/.env /opt/dementia-panel/data
-grep -q "$PASS" /opt/dementia-panel/server/.env && fail "пароль записан в .env"
+grep_q "$PASS" /opt/dementia-panel/server/.env && fail "пароль записан в .env"
 grep -rq "$PASS" /opt/dementia-panel/data 2>/dev/null && fail "пароль в открытом виде найден в data/"
-grep -q "$PASS" /var/log/dementia.log 2>/dev/null && fail "пароль попал в журнал службы"
+grep_q "$PASS" /var/log/dementia.log 2>/dev/null && fail "пароль попал в журнал службы"
 cat /opt/dementia-panel/server/.env
 cat /etc/systemd/system/dementia.service | sed -n 1,20p
 grep -c "dementia" /var/log/systemctl-shim.log | sed 's/^/вызовов systemctl: /'
@@ -67,7 +67,7 @@ bash install.sh > /tmp/install2.out 2>&1
 CODE=$?
 sed 's/\x1b\[[0-9;]*m//g' /tmp/install2.out | tail -14
 [ "$CODE" -eq 0 ] || fail "обновление завершилось с ошибкой"
-sed 's/\x1b\[[0-9;]*m//g' /tmp/install2.out | grep -q "не менялись" || fail "нет сообщения, что учётные данные не менялись"
+sed 's/\x1b\[[0-9;]*m//g' /tmp/install2.out | grep_q "не менялись" || fail "нет сообщения, что учётные данные не менялись"
 STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$LOCAL_URL/api/auth/login" -H 'Content-Type: application/json' -d "{\"username\":\"$LOGIN\",\"password\":\"$PASS\"}")
 [ "$STATUS" = "200" ] || fail "после обновления прежние логин/пароль не работают"
 
@@ -88,7 +88,7 @@ section "7. Свои значения через окружение: парол�
 PANEL_USER=my.login PANEL_PASSWORD='MyOwnPassword-123' bash install.sh > /tmp/install4.out 2>&1
 OUT4=$(sed 's/\x1b\[[0-9;]*m//g' /tmp/install4.out)
 echo "$OUT4" | grep -E "^(Логин|Пароль)" || true
-echo "$OUT4" | grep -q "MyOwnPassword-123" && fail "заданный пароль напечатан в консоль"
+echo "$OUT4" | grep_q "MyOwnPassword-123" && fail "заданный пароль напечатан в консоль"
 STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$LOCAL_URL/api/auth/login" -H 'Content-Type: application/json' -d '{"username":"my.login","password":"MyOwnPassword-123"}')
 [ "$STATUS" = "200" ] || fail "заданные логин/пароль не подходят"
 
@@ -109,9 +109,9 @@ ENVF=/opt/dementia-panel/server/.env
 printf 'TRUST_PROXY=loopback\n# комментарий администратора\nPANEL_USER=old\nPANEL_PASSWORD=OldPlainPassword-1\n' >> "$ENVF"
 bash install.sh > /tmp/install5.out 2>&1 || fail "обновление с дополненным .env завершилось с ошибкой"
 cat "$ENVF"
-grep -qx 'TRUST_PROXY=loopback' "$ENVF" || fail "TRUST_PROXY потерян при обновлении"
-grep -qx '# комментарий администратора' "$ENVF" || fail "комментарий в .env потерян"
-grep -q 'PANEL_PASSWORD\|OldPlainPassword' "$ENVF" && fail "пароль старой версии остался в .env"
+grep_q -x 'TRUST_PROXY=loopback' "$ENVF" || fail "TRUST_PROXY потерян при обновлении"
+grep_q -x '# комментарий администратора' "$ENVF" || fail "комментарий в .env потерян"
+grep_q 'PANEL_PASSWORD\|OldPlainPassword' "$ENVF" && fail "пароль старой версии остался в .env"
 [ "$(grep -c '^PORT=' "$ENVF")" = 1 ] || fail "PORT в .env не единственный"
 [ "$(stat -c '%a' "$ENVF")" = 600 ] || fail "права .env не 600"
 
@@ -139,8 +139,8 @@ bash install.sh > /tmp/install7.out 2>&1
 CODE=$?
 sed 's/\x1b\[[0-9;]*m//g' /tmp/install7.out | tail -3
 [ "$CODE" -ne 0 ] || fail "обновление без доступа к репозиторию завершилось успехом"
-grep -q "продолжает работать" /tmp/install7.out || fail "нет сообщения, что панель продолжает работать"
-grep -q "stop" /var/log/systemctl-shim.log && fail "служба остановлена, хотя обновление не скачалось"
+grep_q "продолжает работать" /tmp/install7.out || fail "нет сообщения, что панель продолжает работать"
+grep_q "stop" /var/log/systemctl-shim.log && fail "служба остановлена, хотя обновление не скачалось"
 curl -fsS --max-time 5 http://127.0.0.1:3001/api/health >/dev/null || fail "панель не отвечает после неудачного обновления"
 
 echo

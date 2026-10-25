@@ -22,7 +22,7 @@ login_status() { curl -s -o /tmp/login.json -w '%{http_code}' -X POST "$1/api/au
 section "S0. Архив переноса файлом (так делает кнопка «Скачать архив файлом»)"
 curl -fsS -H "X-Migration-Auth: $MIGRATION_AUTH" http://mig-old:3001/api/migration/archive -o /root/migration.dpm || fail "архив не получен"
 [ "$(head -c 8 /root/migration.dpm)" = "DMPANEL1" ] || fail "файл не похож на архив переноса"
-grep -q "seed-ssh-password" /root/migration.dpm && fail "SSH-пароль виден в архиве открытым текстом"
+grep_q "seed-ssh-password" /root/migration.dpm && fail "SSH-пароль виден в архиве открытым текстом"
 ls -l /root/migration.dpm
 
 section "S1. Интерактивный перенос из файла в терминале: режим, источник, код, порт, сертификат на IP"
@@ -43,17 +43,17 @@ CODE=$?
 STRIP < /tmp/interactive.log | tr -d '\r' | grep -vE "^(npm|added|found|up to)" | tail -45
 [ "$CODE" -eq 0 ] || fail "интерактивный перенос завершился с ошибкой ($CODE)"
 OUT=$(STRIP < /tmp/interactive.log | tr -d '\r')
-echo "$OUT" | grep -q "Что нужно сделать?" || fail "не показан вопрос о режиме"
-echo "$OUT" | grep -q "Как получить сертификат для панели?" || fail "не показано меню сертификата"
-echo "$OUT" | grep -q "ПОДПИСКИ ПО https:// РАБОТАТЬ НЕ БУДУТ" || fail "нет предупреждения, что подписки с сертификатом на IP работать не будут"
-echo "$OUT" | grep -q "панель перенесена на этот сервер" || fail "нет сообщения об успешном переносе"
-echo "$OUT" | grep -q "Прежняя панель ещё не отключена" || fail "установщик не напомнил, что прежняя панель не отключена (перенос из файла)"
-grep -q "$MIGRATION_CODE" /tmp/interactive.log && fail "код переноса виден в журнале терминала (ввод должен быть скрыт)"
-echo "$OUT" | grep -E '^Адрес панели:' | grep -qE 'http://[0-9.]+:3001' && fail "после выбора HTTPS адрес панели остался http://"
-echo "$OUT" | grep -E '^Адрес панели:' | grep -qE 'https://[0-9.]+:3001' || fail "адрес панели не https://IP:3001: $(echo "$OUT" | grep '^Адрес панели')"
+echo "$OUT" | grep_q "Что нужно сделать?" || fail "не показан вопрос о режиме"
+echo "$OUT" | grep_q "Как получить сертификат для панели?" || fail "не показано меню сертификата"
+echo "$OUT" | grep_q "ПОДПИСКИ ПО https:// РАБОТАТЬ НЕ БУДУТ" || fail "нет предупреждения, что подписки с сертификатом на IP работать не будут"
+echo "$OUT" | grep_q "панель перенесена на этот сервер" || fail "нет сообщения об успешном переносе"
+echo "$OUT" | grep_q "Прежняя панель ещё не отключена" || fail "установщик не напомнил, что прежняя панель не отключена (перенос из файла)"
+grep_q "$MIGRATION_CODE" /tmp/interactive.log && fail "код переноса виден в журнале терминала (ввод должен быть скрыт)"
+echo "$OUT" | grep -E '^Адрес панели:' | grep_q -E 'http://[0-9.]+:3001' && fail "после выбора HTTPS адрес панели остался http://"
+echo "$OUT" | grep -E '^Адрес панели:' | grep_q -E 'https://[0-9.]+:3001' || fail "адрес панели не https://IP:3001: $(echo "$OUT" | grep '^Адрес панели')"
 HEALTH=$(curl -s "$LOCAL/api/health")
 echo "health по HTTP: $HEALTH"
-echo "$HEALTH" | grep -q '"https":true' || fail "HTTPS не включён"
+echo "$HEALTH" | grep_q '"https":true' || fail "HTTPS не включён"
 STATUS=$(curl -sk -o /tmp/login.json -w '%{http_code}' -X POST https://127.0.0.1:3001/api/auth/login -H 'Content-Type: application/json' -d "{\"username\":\"$ADMIN\",\"password\":\"$PASSWORD\"}")
 [ "$STATUS" = 200 ] || fail "прежние логин и пароль не подходят по HTTPS ($STATUS)"
 [ "$(curl -s -o /dev/null -w '%{http_code}' "$LOCAL/sub/$EXPECT_SUB_TOKEN")" = 200 ] || fail "подписка по HTTP не работает при включённом HTTPS"
@@ -67,7 +67,7 @@ MIGRATE_FROM=http://mig-old:3001 MIGRATION_CODE='AAAAA-BBBBB-CCCCC-DDDDD-EEEEE' 
 CODE=$?
 STRIP < /tmp/wrong.out | tail -6
 [ "$CODE" -ne 0 ] || fail "перенос с неверным кодом завершился успехом"
-STRIP < /tmp/wrong.out | grep -q "Неверный или просроченный код" || fail "нет сообщения о неверном коде"
+STRIP < /tmp/wrong.out | grep_q "Неверный или просроченный код" || fail "нет сообщения о неверном коде"
 [ "$(sha256sum $INSTALL/data/secret.key | cut -d' ' -f1)" = "$SECRET_HASH" ] || fail "данные изменились после неверного кода"
 ls $INSTALL/data/dementia.db > /dev/null || fail "база пропала после неверного кода"
 
@@ -75,8 +75,8 @@ MIGRATE_FROM=http://mig-old:3001 PANEL_CERT_MODE=none bash install.sh > /tmp/ref
 CODE=$?
 STRIP < /tmp/refused.out | tail -6
 [ "$CODE" -ne 0 ] || fail "перенос поверх панели с данными без подтверждения завершился успехом"
-STRIP < /tmp/refused.out | grep -q "Перенос отменён" || fail "нет сообщения об отмене переноса"
-STRIP < /tmp/refused.out | grep -q "systemctl start dementia" || fail "нет подсказки, как запустить остановленную панель"
+STRIP < /tmp/refused.out | grep_q "Перенос отменён" || fail "нет сообщения об отмене переноса"
+STRIP < /tmp/refused.out | grep_q "systemctl start dementia" || fail "нет подсказки, как запустить остановленную панель"
 [ "$(sha256sum $INSTALL/data/secret.key | cut -d' ' -f1)" = "$SECRET_HASH" ] || fail "данные изменились без подтверждения замены"
 ls -d $INSTALL/data/backups/pre-migration-* > /dev/null 2>&1 && fail "копия «до замены» создана, хотя замена не подтверждена"
 systemctl start dementia.service
@@ -88,21 +88,21 @@ CODE=$?
 STRIP < /tmp/migrate.out | tail -32
 [ "$CODE" -eq 0 ] || fail "перенос завершился с ошибкой"
 OUT=$(STRIP < /tmp/migrate.out)
-echo "$OUT" | grep -q "панель перенесена на этот сервер" || fail "нет сообщения об успешном переносе"
-echo "$OUT" | grep -q "Логин администратора: ${ADMIN}" || fail "установщик не показал прежний логин"
-echo "$OUT" | grep -q "Пароль администратора: прежний" || fail "установщик не сообщил, что пароль прежний"
-echo "$OUT" | grep -q "Прежняя панель заморожена" || fail "прежняя панель не заморожена"
-echo "$OUT" | grep -E '^Адрес панели:' | grep -qE 'http://[0-9.]+:3001' || fail "адрес новой панели не показан: $(echo "$OUT" | grep '^Адрес панели')"
+echo "$OUT" | grep_q "панель перенесена на этот сервер" || fail "нет сообщения об успешном переносе"
+echo "$OUT" | grep_q "Логин администратора: ${ADMIN}" || fail "установщик не показал прежний логин"
+echo "$OUT" | grep_q "Пароль администратора: прежний" || fail "установщик не сообщил, что пароль прежний"
+echo "$OUT" | grep_q "Прежняя панель заморожена" || fail "прежняя панель не заморожена"
+echo "$OUT" | grep -E '^Адрес панели:' | grep_q -E 'http://[0-9.]+:3001' || fail "адрес новой панели не показан: $(echo "$OUT" | grep '^Адрес панели')"
 ls -d $INSTALL/data/backups/pre-migration-* > /dev/null 2>&1 || fail "копия прежних данных перед заменой не создана"
-curl -s "$LOCAL/api/health" | grep -q '"https":false' || fail "HTTPS должен быть выключен выбором PANEL_CERT_MODE=none"
+curl -s "$LOCAL/api/health" | grep_q '"https":false' || fail "HTTPS должен быть выключен выбором PANEL_CERT_MODE=none"
 
 [ "$(login_status $LOCAL)" = 200 ] || fail "прежние логин и пароль не подходят на новой панели"
 TOKEN=$(node -p "JSON.parse(require('fs').readFileSync('/tmp/login.json','utf8')).token")
 SERVERS=$(curl -s "$LOCAL/api/servers" -H "Authorization: Bearer $TOKEN")
-echo "$SERVERS" | grep -q '"Seed Node"' || fail "нода не перенесена: $SERVERS"
-echo "$SERVERS" | grep -q '"has_ssh_password":true' || fail "SSH-доступ ноды потерян"
-echo "$SERVERS" | grep -q 'seed-ssh-password' && fail "SSH-пароль утёк в ответ API"
-curl -s "$LOCAL/api/subscribers" -H "Authorization: Bearer $TOKEN" | grep -q '"seed-user"' || fail "пользователь не перенесён"
+echo "$SERVERS" | grep_q '"Seed Node"' || fail "нода не перенесена: $SERVERS"
+echo "$SERVERS" | grep_q '"has_ssh_password":true' || fail "SSH-доступ ноды потерян"
+echo "$SERVERS" | grep_q 'seed-ssh-password' && fail "SSH-пароль утёк в ответ API"
+curl -s "$LOCAL/api/subscribers" -H "Authorization: Bearer $TOKEN" | grep_q '"seed-user"' || fail "пользователь не перенесён"
 [ "$(curl -s -o /dev/null -w '%{http_code}' "$LOCAL/sub/$EXPECT_SUB_TOKEN")" = 200 ] || fail "ссылка подписки не работает на новой панели"
 PUBLIC_URL=$(curl -s "$LOCAL/api/settings" -H "Authorization: Bearer $TOKEN" | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).public_url")
 echo "публичный адрес после переноса: $PUBLIC_URL"
@@ -112,12 +112,12 @@ section "S3b. Ключ шифрования переехал, код перен�
 [ "$(cat $INSTALL/data/secret.key)" = "$EXPECT_SECRET_KEY" ] || fail "ключ шифрования отличается от прежнего"
 ENVF=$INSTALL/server/.env
 cat "$ENVF"
-grep -q DEMENTIA_SECRET_KEY "$ENVF" && fail "ключ шифрования записан в .env"
+grep_q DEMENTIA_SECRET_KEY "$ENVF" && fail "ключ шифрования записан в .env"
 [ "$(stat -c '%a' "$ENVF")" = 600 ] || fail "права .env не 600"
 [ "$(stat -c '%a' $INSTALL/data/secret.key)" = 600 ] || fail "права secret.key не 600"
 BARE=$(echo "$MIGRATION_CODE" | tr -d '-')
 grep -rqE "$MIGRATION_CODE|$BARE" $INSTALL/data $INSTALL/server/.env /var/log/dementia.log 2>/dev/null && fail "код переноса остался в данных или журнале"
-grep -q "$MIGRATION_CODE" /tmp/migrate.out && fail "код переноса напечатан в консоль"
+grep_q "$MIGRATION_CODE" /tmp/migrate.out && fail "код переноса напечатан в консоль"
 LEFT=$(cd $INSTALL && node -e "const { DatabaseSync } = require('node:sqlite'); const db = new DatabaseSync('data/dementia.db', { readOnly: true }); console.log(db.prepare(\"SELECT COUNT(*) AS c FROM settings WHERE substr(key, 1, 9) = 'migration'\").get().c)")
 [ "$LEFT" = 0 ] || fail "служебные настройки переноса остались в БД ($LEFT)"
 
@@ -128,7 +128,7 @@ systemctl restart dementia.service
 sleep 4
 HEALTH=$(curl -s "$LOCAL/api/health")
 echo "health по HTTP при включённом HTTPS: $HEALTH"
-echo "$HEALTH" | grep -q '"https":true' || fail "HTTPS не включился"
+echo "$HEALTH" | grep_q '"https":true' || fail "HTTPS не включился"
 bash install.sh > /tmp/update-https.out 2>&1
 CODE=$?
 STRIP < /tmp/update-https.out | tail -8

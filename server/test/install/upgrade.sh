@@ -61,7 +61,7 @@ bash install.sh > /tmp/update.out 2>&1
 CODE=$?
 STRIP < /tmp/update.out | tail -22
 [ "$CODE" -eq 0 ] || fail "обновление завершилось с ошибкой ($CODE)"
-STRIP < /tmp/update.out | grep -q "не менялись" || fail "установщик не сообщил, что логин и пароль не менялись"
+STRIP < /tmp/update.out | grep_q "не менялись" || fail "установщик не сообщил, что логин и пароль не менялись"
 NEW_VERSION=$(node -p "require('/work/package.json').version")
 
 section "U4. Данные после обновления"
@@ -81,12 +81,12 @@ ls /opt/dementia-panel/data/backups/demension.db.* > /dev/null 2>&1 || fail "р�
 [ -d /opt/dementia-panel ] && [ ! -L /opt/dementia-panel ] || fail "панель не перенесена в /opt/dementia-panel"
 [ "$(readlink /opt/demension-panel)" = /opt/dementia-panel ] || fail "/opt/demension-panel не стал ссылкой на новый каталог"
 [ -f /etc/systemd/system/dementia.service ] || fail "нет службы dementia.service"
-grep -qx 'Alias=demension.service' /etc/systemd/system/dementia.service || fail "у службы нет псевдонима demension.service"
+grep_q -x 'Alias=demension.service' /etc/systemd/system/dementia.service || fail "у службы нет псевдонима demension.service"
 [ ! -f /etc/systemd/system/demension.service ] || fail "осталась служба прежнего имени"
 [ -f /opt/dementia-panel/data/dementia.db ] && [ ! -e /opt/dementia-panel/data/demension.db ] || fail "файл БД не переименован в dementia.db"
-grep -qx 'DEMENTIA_SELF_UPDATE=1' /opt/dementia-panel/server/.env || fail "переменная DEMENSION_* не переименована в .env"
+grep_q -x 'DEMENTIA_SELF_UPDATE=1' /opt/dementia-panel/server/.env || fail "переменная DEMENSION_* не переименована в .env"
 ENVF=/opt/dementia-panel/server/.env
-grep -qx 'TRUST_PROXY=loopback' "$ENVF" || fail "переменная .env потеряна при обновлении"
+grep_q -x 'TRUST_PROXY=loopback' "$ENVF" || fail "переменная .env потеряна при обновлении"
 [ "$(stat -c '%a' "$ENVF")" = 600 ] || fail "права .env не 600"
 
 section "U5. Работа после обновления: вход со старой сессией и паролем, HTTPS, подписки, новые разделы"
@@ -95,16 +95,16 @@ STATUS=$(curl -sk -o /tmp/login2.json -w '%{http_code}' -X POST "$LOCAL/api/auth
 [ "$STATUS" = 200 ] || fail "прежний пароль не подходит ($STATUS)"
 HEALTH=$(curl -s http://127.0.0.1:3001/api/health)
 echo "health по HTTP: $HEALTH"
-echo "$HEALTH" | grep -q '"https":true' || fail "HTTPS не работает после обновления"
+echo "$HEALTH" | grep_q '"https":true' || fail "HTTPS не работает после обновления"
 [ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:3001/sub/$SUB_TOKEN")" = 200 ] || fail "ссылка подписки по HTTP не работает"
 [ "$(curl -sk -o /dev/null -w '%{http_code}' "$LOCAL/sub/$SUB_TOKEN?format=clash")" = 200 ] || fail "подписка mihomo не работает"
 VERSION=$(api GET /api/version | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).current")
 echo "версия в панели: $VERSION (было $OLD_VERSION)"
 [ "$VERSION" = "v$NEW_VERSION" ] || fail "панель не перезапущена на новой версии: $VERSION"
 SERVERS=$(api GET /api/servers)
-echo "$SERVERS" | grep -q '"Upgrade Node"' || fail "нода пропала"
-echo "$SERVERS" | grep -q '"probes":\[\]' || fail "у сервера нет поля probes"
-echo "$SERVERS" | grep -q 'upgrade-ssh-secret' && fail "SSH-пароль утёк в API"
+echo "$SERVERS" | grep_q '"Upgrade Node"' || fail "нода пропала"
+echo "$SERVERS" | grep_q '"probes":\[\]' || fail "у сервера нет поля probes"
+echo "$SERVERS" | grep_q 'upgrade-ssh-secret' && fail "SSH-пароль утёк в API"
 [ "$(api GET /api/migration/status | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).state")" = idle ] || fail "раздел переноса не отвечает"
 [ "$(api GET /api/probes | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).settings.enabled")" = false ] || fail "проверка из стран должна быть выключена по умолчанию"
 SUBLINK=$(curl -s "http://127.0.0.1:3001/sub/$SUB_TOKEN" | base64 -d 2>/dev/null | head -c 200)
@@ -134,21 +134,21 @@ CODE=$?
 STRIP < "$PANEL/data/update/update.log" | tail -12
 cat "$PANEL/data/update/status.json"
 [ "$CODE" -eq 0 ] || fail "обновление из панели завершилось с ошибкой ($CODE)"
-grep -q '"state":"success"' "$PANEL/data/update/status.json" || fail "состояние обновления не success"
+grep_q '"state":"success"' "$PANEL/data/update/status.json" || fail "состояние обновления не success"
 VERSION=$(api GET /api/version | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).current")
 [ "$VERSION" = "$NEXT" ] || fail "после обновления из панели версия $VERSION, ожидалась $NEXT"
 [ "$(curl -sk -o /dev/null -w '%{http_code}' "$LOCAL/api/auth/me" -H "Authorization: Bearer $TOKEN")" = 200 ] || fail "сессия не пережила обновление из панели"
 [ "$(api GET /api/version/update | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).state")" = success ] || fail "API не показывает результат обновления"
 node /harness/dump-db.mjs "$PANEL/data/dementia.db" > /tmp/after6.json
 node /harness/compare-dumps.mjs /tmp/before6.json /tmp/after6.json sessions || fail "данные изменились при обновлении из панели"
-grep -qx 'TRUST_PROXY=loopback' "$PANEL/server/.env" || fail "переменная .env потеряна при обновлении из панели"
+grep_q -x 'TRUST_PROXY=loopback' "$PANEL/server/.env" || fail "переменная .env потеряна при обновлении из панели"
 
 bash "$PANEL/server/dist/scripts/update-panel.sh" "$PANEL" "$PANEL/data/update" "$BROKEN" "$NEXT"
 CODE=$?
 STRIP < "$PANEL/data/update/update.log" | tail -8
 cat "$PANEL/data/update/status.json"
 [ "$CODE" -ne 0 ] || fail "несобираемый релиз установился без ошибки"
-grep -q '"state":"rolled_back"' "$PANEL/data/update/status.json" || fail "после неудачного обновления нет отката"
+grep_q '"state":"rolled_back"' "$PANEL/data/update/status.json" || fail "после неудачного обновления нет отката"
 VERSION=$(api GET /api/version | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).current")
 [ "$VERSION" = "$NEXT" ] || fail "после отката версия $VERSION, ожидалась $NEXT"
 [ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:3001/sub/$SUB_TOKEN")" = 200 ] || fail "подписка не работает после отката"
