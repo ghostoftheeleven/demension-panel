@@ -4,7 +4,7 @@ import type { PanelSettings } from '../types';
 import { api } from '../api';
 
 const inputClass =
-  'w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500 transition text-sm';
+  'w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-ink transition text-sm';
 
 export const PanelSettingsCard: React.FC<{ onSaved?: (settings: PanelSettings) => void }> = ({ onSaved }) => {
   const [form, setForm] = useState<PanelSettings | null>(null);
@@ -39,18 +39,18 @@ export const PanelSettingsCard: React.FC<{ onSaved?: (settings: PanelSettings) =
   };
 
   return (
-    <form onSubmit={handleSave} className="bg-zinc-900/70 border border-zinc-800/80 rounded-2xl p-6 shadow-xl space-y-4">
+    <form onSubmit={handleSave} className="bg-card border-2 border-ink rounded-2xl p-6 shadow-brutal space-y-4">
       <div className="flex items-center gap-2">
-        <Settings2 className="w-5 h-5 text-emerald-400" />
-        <h3 className="text-base font-semibold text-white">Настройки панели</h3>
+        <Settings2 className="w-5 h-5 text-ok" />
+        <h3 className="text-base font-semibold text-ink">Настройки панели</h3>
       </div>
 
       {message && (
         <div
-          className={`p-3 rounded-xl border text-xs ${
+          className={`p-3 rounded-xl border-2 text-xs ${
             message.type === 'success'
-              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
-              : 'bg-red-500/10 border-red-500/20 text-red-300'
+              ? 'bg-ok-soft border-ink text-ok'
+              : 'bg-bad-soft border-ink text-bad'
           }`}
         >
           {message.text}
@@ -59,7 +59,7 @@ export const PanelSettingsCard: React.FC<{ onSaved?: (settings: PanelSettings) =
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="md:col-span-2">
-          <label className="block text-xs font-medium text-zinc-400 mb-1">Публичный адрес панели (для ссылок подписок)</label>
+          <label className="block text-xs font-medium text-muted mb-1">Публичный адрес панели (для ссылок подписок)</label>
           <input
             type="url"
             placeholder={window.location.origin}
@@ -67,18 +67,18 @@ export const PanelSettingsCard: React.FC<{ onSaved?: (settings: PanelSettings) =
             onChange={(e) => update('public_url', e.target.value)}
             className={inputClass}
           />
-          <p className="text-[11px] text-zinc-500 mt-1">
+          <p className="text-[11px] text-faint mt-1">
             Укажите, если панель открыта через SSH-туннель, localhost или внутренний адрес — иначе пользователи получат нерабочую ссылку.
           </p>
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-zinc-400 mb-1">DNS для клиентов</label>
+          <label className="block text-xs font-medium text-muted mb-1">DNS для клиентов</label>
           <input value={form.client_dns} onChange={(e) => update('client_dns', e.target.value)} className={inputClass} />
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-zinc-400 mb-1">MTU клиентов</label>
+          <label className="block text-xs font-medium text-muted mb-1">MTU клиентов</label>
           <input
             type="number"
             min={576}
@@ -95,7 +95,7 @@ export const PanelSettingsCard: React.FC<{ onSaved?: (settings: PanelSettings) =
         <button
           type="submit"
           disabled={saving}
-          className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-medium text-sm px-5 py-2 rounded-xl transition"
+          className="flex items-center gap-2 bg-mint hover:bg-mint disabled:opacity-50 text-ink font-bold text-sm px-5 py-2 rounded-xl transition border-2 border-ink shadow-brutal-sm btn-press"
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           <span>Сохранить</span>

@@ -7,7 +7,7 @@ import { copyToClipboard } from '../utils';
 const INSTALL_COMMAND = 'curl -sSL https://raw.githubusercontent.com/ghostoftheeleven/demension-panel/main/install.sh | sudo bash';
 
 const inputClass =
-  'w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500 transition text-sm';
+  'w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-ink transition text-sm';
 
 const CopyRow: React.FC<{ label: string; value: string; secret?: boolean }> = ({ label, value, secret }) => {
   const [copied, setCopied] = useState(false);
@@ -21,15 +21,15 @@ const CopyRow: React.FC<{ label: string; value: string; secret?: boolean }> = ({
   };
   return (
     <div className="space-y-1">
-      <span className="text-[11px] text-zinc-500">{label}</span>
+      <span className="text-[11px] text-faint">{label}</span>
       <button
         type="button"
         onClick={copy}
-        className="w-full flex items-center gap-2 text-left bg-zinc-950 border border-zinc-800 hover:border-emerald-500/40 rounded-xl px-3 py-2 transition"
+        className="w-full flex items-center gap-2 text-left bg-paper border-2 border-ink hover:border-ink rounded-xl px-3 py-2 transition"
         title="Скопировать"
       >
-        <span className={`flex-1 font-mono break-all ${secret ? 'text-lg tracking-widest text-emerald-300' : 'text-xs text-zinc-200'}`}>{value}</span>
-        {copied ? <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" /> : <Copy className="w-4 h-4 text-zinc-500 flex-shrink-0" />}
+        <span className={`flex-1 font-mono break-all ${secret ? 'text-lg tracking-widest text-ok' : 'text-xs text-ink'}`}>{value}</span>
+        {copied ? <Check className="w-4 h-4 text-ok flex-shrink-0" /> : <Copy className="w-4 h-4 text-faint flex-shrink-0" />}
       </button>
     </div>
   );
@@ -120,14 +120,14 @@ export const MigrationCard: React.FC<{ publicUrl: string | null; onStateChange?:
   const expires = status.expiresAt ? new Date(status.expiresAt).toLocaleString() : '';
 
   return (
-    <div className="bg-zinc-900/70 border border-zinc-800/80 rounded-3xl p-6 sm:p-8 shadow-xl space-y-6">
-      <div className="flex items-center gap-3 pb-4 border-b border-zinc-800/80">
-        <div className="w-10 h-10 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center">
-          <ArrowRightLeft className="w-5 h-5 text-purple-400" />
+    <div className="bg-card border-2 border-ink rounded-2xl p-6 sm:p-8 shadow-brutal space-y-6">
+      <div className="flex items-center gap-3 pb-4 border-b-2 border-ink">
+        <div className="w-10 h-10 rounded-2xl bg-accent-soft border-2 border-ink flex items-center justify-center">
+          <ArrowRightLeft className="w-5 h-5 text-accent" />
         </div>
         <div>
-          <h2 className="text-lg font-bold text-white tracking-wide">Перенос панели на другой сервер</h2>
-          <p className="text-xs text-zinc-400">
+          <h2 className="text-lg font-bold text-ink tracking-wide">Перенос панели на другой сервер</h2>
+          <p className="text-xs text-muted">
             Администратор, ноды, клиенты, пользователи, подписки, партнёры и ключ шифрования переезжают целиком
           </p>
         </div>
@@ -135,10 +135,10 @@ export const MigrationCard: React.FC<{ publicUrl: string | null; onStateChange?:
 
       {message && (
         <div
-          className={`p-3 rounded-xl border text-xs ${
+          className={`p-3 rounded-xl border-2 text-xs ${
             message.type === 'success'
-              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
-              : 'bg-red-500/10 border-red-500/20 text-red-300'
+              ? 'bg-ok-soft border-ink text-ok'
+              : 'bg-bad-soft border-ink text-bad'
           }`}
         >
           {message.text}
@@ -146,13 +146,13 @@ export const MigrationCard: React.FC<{ publicUrl: string | null; onStateChange?:
       )}
 
       {status.state === 'migrated' && (
-        <div className="p-3 rounded-xl border bg-amber-500/10 border-amber-500/20 text-amber-300 text-xs">
+        <div className="p-3 rounded-xl border-2 bg-warn-soft border-ink text-warn text-xs">
           Панель перенесена{status.newUrl ? <> на <span className="font-mono">{status.newUrl}</span></> : ''}.
         </div>
       )}
 
       {status.state === 'exporting' && (
-        <div className="p-4 rounded-2xl border bg-amber-500/10 border-amber-500/20 text-amber-200 text-xs space-y-3">
+        <div className="p-4 rounded-2xl border-2 bg-warn-soft border-ink text-warn text-xs space-y-3">
           <div className="flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
             <span>
@@ -163,9 +163,9 @@ export const MigrationCard: React.FC<{ publicUrl: string | null; onStateChange?:
           <button
             onClick={handleCancel}
             disabled={busy}
-            className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-100 font-medium text-xs px-4 py-2 rounded-xl transition"
+            className="flex items-center gap-2 bg-soft hover:bg-soft-2 disabled:opacity-50 text-ink font-medium text-xs px-4 py-2 rounded-xl transition border-2 border-ink"
           >
-            <XCircle className="w-3.5 h-3.5 text-red-400" />
+            <XCircle className="w-3.5 h-3.5 text-bad" />
             <span>Отменить перенос</span>
           </button>
         </div>
@@ -173,7 +173,7 @@ export const MigrationCard: React.FC<{ publicUrl: string | null; onStateChange?:
 
       {status.state === 'idle' && !asking && (
         <div className="space-y-3">
-          <ol className="text-xs text-zinc-400 space-y-1 list-decimal list-inside">
+          <ol className="text-xs text-muted space-y-1 list-decimal list-inside">
             <li>Нажмите «Подготовить перенос» — панель покажет код (действует час).</li>
             <li>На новом сервере запустите установщик и выберите «Перенос панели», введите адрес этой панели и код.</li>
             <li>В терминале выберите способ получения сертификата для нового сервера (новый домен, IP или готовые файлы).</li>
@@ -181,7 +181,7 @@ export const MigrationCard: React.FC<{ publicUrl: string | null; onStateChange?:
           </ol>
           <button
             onClick={() => setAsking(true)}
-            className="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 text-white font-medium text-xs px-5 py-2.5 rounded-xl transition shadow-lg shadow-purple-600/20"
+            className="flex items-center gap-2 bg-violet hover:bg-violet text-ink font-bold text-xs px-5 py-2.5 rounded-xl transition shadow-brutal-sm border-2 border-ink btn-press"
           >
             <ArrowRightLeft className="w-3.5 h-3.5" />
             <span>Подготовить перенос</span>
@@ -192,11 +192,11 @@ export const MigrationCard: React.FC<{ publicUrl: string | null; onStateChange?:
       {(asking || (status.state === 'prepared' && !issued)) && status.state !== 'exporting' && (
         <form onSubmit={handlePrepare} className="space-y-3">
           {status.state === 'prepared' && !issued && (
-            <p className="text-xs text-zinc-400">
+            <p className="text-xs text-muted">
               Код переноса уже выдан и действует до {expires}, но показывается только один раз. Выдайте новый — прежний перестанет действовать.
             </p>
           )}
-          <label className="block text-xs font-medium text-zinc-400">Пароль администратора для подтверждения</label>
+          <label className="block text-xs font-medium text-muted">Пароль администратора для подтверждения</label>
           <input
             type="password"
             required
@@ -209,7 +209,7 @@ export const MigrationCard: React.FC<{ publicUrl: string | null; onStateChange?:
             <button
               type="submit"
               disabled={busy || !password}
-              className="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-medium text-xs px-5 py-2.5 rounded-xl transition"
+              className="flex items-center gap-2 bg-violet hover:bg-violet disabled:opacity-50 text-ink font-bold text-xs px-5 py-2.5 rounded-xl transition border-2 border-ink shadow-brutal-sm btn-press"
             >
               {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <KeyRound className="w-3.5 h-3.5" />}
               <span>Выдать код переноса</span>
@@ -220,12 +220,12 @@ export const MigrationCard: React.FC<{ publicUrl: string | null; onStateChange?:
                 setAsking(false);
                 setPassword('');
               }}
-              className="text-xs text-zinc-400 hover:text-white px-2 py-2"
+              className="text-xs text-muted hover:text-ink px-2 py-2"
             >
               Отмена
             </button>
             {status.state === 'prepared' && (
-              <button type="button" onClick={handleCancel} disabled={busy} className="text-xs text-red-400 hover:text-red-300 px-2 py-2">
+              <button type="button" onClick={handleCancel} disabled={busy} className="text-xs text-bad hover:text-bad px-2 py-2">
                 Отменить перенос
               </button>
             )}
@@ -235,7 +235,7 @@ export const MigrationCard: React.FC<{ publicUrl: string | null; onStateChange?:
 
       {status.state === 'prepared' && issued && (
         <div className="space-y-4">
-          <div className="p-3 rounded-xl border bg-amber-500/10 border-amber-500/20 text-amber-300 text-xs flex items-start gap-2">
+          <div className="p-3 rounded-xl border-2 bg-warn-soft border-ink text-warn text-xs flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
             <span>Код показан один раз и действует до {new Date(issued.expiresAt).toLocaleString()}. Он расшифровывает данные переноса — не публикуйте его.</span>
           </div>
@@ -244,13 +244,13 @@ export const MigrationCard: React.FC<{ publicUrl: string | null; onStateChange?:
           <CopyRow label="Адрес этой панели (укажите его на новом сервере)" value={panelAddress} />
           <CopyRow label="Команда для нового сервера (выберите «2) Перенос панели»)" value={INSTALL_COMMAND} />
 
-          <div className="p-3 rounded-xl bg-zinc-950/60 border border-zinc-800 text-[11px] text-zinc-400 space-y-1">
+          <div className="p-3 rounded-xl bg-paper border-2 border-ink text-[11px] text-muted space-y-1">
             <p>
-              <b className="text-zinc-300">Если новый сервер не достучится до этой панели</b> — скачайте архив файлом, скопируйте на новый сервер
+              <b className="text-ink">Если новый сервер не достучится до этой панели</b> — скачайте архив файлом, скопируйте на новый сервер
               (например, scp) и в установщике укажите путь к файлу вместо адреса.
             </p>
             <p>
-              <b className="text-zinc-300">Адрес и ссылки подписок.</b> Они содержат домен и порт панели. Если домен останется прежним — переключите его
+              <b className="text-ink">Адрес и ссылки подписок.</b> Они содержат домен и порт панели. Если домен останется прежним — переключите его
               запись A на IP нового сервера, ссылки продолжат работать. Если домен новый — пока этот сервер включён, его ссылки подписок перенаправляются на новый адрес.
             </p>
           </div>
@@ -259,15 +259,15 @@ export const MigrationCard: React.FC<{ publicUrl: string | null; onStateChange?:
             <button
               onClick={handleDownload}
               disabled={busy}
-              className="flex items-center gap-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-100 font-medium text-xs px-4 py-2 rounded-xl transition"
+              className="flex items-center gap-2 bg-soft hover:bg-soft-2 disabled:opacity-50 text-ink font-medium text-xs px-4 py-2 rounded-xl transition border-2 border-ink"
             >
-              <Download className="w-3.5 h-3.5 text-purple-400" />
+              <Download className="w-3.5 h-3.5 text-accent" />
               <span>Скачать архив файлом</span>
             </button>
             <button
               onClick={handleCancel}
               disabled={busy}
-              className="flex items-center gap-2 text-xs text-red-400 hover:text-red-300 px-2 py-2"
+              className="flex items-center gap-2 text-xs text-bad hover:text-bad px-2 py-2"
             >
               <XCircle className="w-3.5 h-3.5" />
               <span>Отменить перенос</span>

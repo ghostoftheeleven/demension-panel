@@ -21,13 +21,13 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
   render() {
     if (!this.state.error) return this.props.children;
     return (
-      <div className="min-h-screen bg-[#090a0f] flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-zinc-900 border border-red-500/30 rounded-2xl p-6 space-y-4 text-center">
-          <h1 className="text-lg font-semibold text-white">Что-то пошло не так</h1>
-          <p className="text-sm text-zinc-400 break-words">{this.state.error.message}</p>
+      <div className="min-h-screen bg-paper flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-card border-2 border-ink rounded-2xl p-6 space-y-4 text-center">
+          <h1 className="text-lg font-semibold text-ink">Что-то пошло не так</h1>
+          <p className="text-sm text-muted break-words">{this.state.error.message}</p>
           <button
             onClick={() => window.location.reload()}
-            className="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-5 py-2 rounded-xl transition"
+            className="bg-mint hover:bg-mint text-ink text-sm font-bold px-5 py-2 rounded-xl transition border-2 border-ink shadow-brutal-sm btn-press"
           >
             Перезагрузить страницу
           </button>

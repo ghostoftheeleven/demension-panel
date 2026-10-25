@@ -8,9 +8,9 @@ const TITLE_MAX = 25;
 const ANNOUNCE_MAX = 200;
 
 const inputClass =
-  'w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500 transition text-sm';
-const labelClass = 'block text-xs font-medium text-zinc-400 mb-1';
-const cardClass = 'bg-zinc-900/70 border border-zinc-800/80 rounded-2xl p-6 shadow-xl space-y-4';
+  'w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-ink transition text-sm';
+const labelClass = 'block text-xs font-medium text-muted mb-1';
+const cardClass = 'bg-card border-2 border-ink rounded-2xl p-6 shadow-brutal space-y-4';
 
 function renderTitle(template: string, user: string): string {
   const title = (template || '{user}').split('{user}').join(user);
@@ -58,9 +58,9 @@ export const SubscriptionSettingsView: React.FC<{ subscribers: Subscriber[]; pub
 
   if (!settings) {
     return message ? (
-      <div className="p-4 rounded-2xl border bg-red-500/10 border-red-500/20 text-red-300 text-xs">{message.text}</div>
+      <div className="p-4 rounded-2xl border-2 bg-bad-soft border-ink text-bad text-xs">{message.text}</div>
     ) : (
-      <div className="flex items-center justify-center py-24 text-zinc-500 text-sm">Загрузка настроек подписки...</div>
+      <div className="flex items-center justify-center py-24 text-faint text-sm">Загрузка настроек подписки...</div>
     );
   }
 
@@ -117,18 +117,18 @@ export const SubscriptionSettingsView: React.FC<{ subscribers: Subscriber[]; pub
     <form onSubmit={handleSave} className="space-y-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-            <Palette className="w-5 h-5 text-purple-400" />
+          <h2 className="text-lg font-semibold text-ink flex items-center gap-2">
+            <Palette className="w-5 h-5 text-accent" />
             <span>Оформление подписки</span>
           </h2>
-          <p className="text-xs text-zinc-400 mt-0.5">
+          <p className="text-xs text-muted mt-0.5">
             Как подписка выглядит в приложении Incy: название, объявление, ссылки поддержки и имена серверов
           </p>
         </div>
         <button
           type="submit"
           disabled={saving}
-          className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-medium text-sm px-5 py-2.5 rounded-xl transition shadow-lg shadow-emerald-600/20"
+          className="flex items-center justify-center gap-2 bg-mint hover:bg-mint disabled:opacity-50 text-ink font-bold text-sm px-5 py-2.5 rounded-xl transition shadow-brutal-sm border-2 border-ink btn-press"
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           <span>Сохранить</span>
@@ -137,10 +137,10 @@ export const SubscriptionSettingsView: React.FC<{ subscribers: Subscriber[]; pub
 
       {message && (
         <div
-          className={`p-4 rounded-2xl border text-xs ${
+          className={`p-4 rounded-2xl border-2 text-xs ${
             message.type === 'success'
-              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300'
-              : 'bg-red-500/10 border-red-500/20 text-red-300'
+              ? 'bg-ok-soft border-ink text-ok'
+              : 'bg-bad-soft border-ink text-bad'
           }`}
         >
           {message.text}
@@ -151,15 +151,15 @@ export const SubscriptionSettingsView: React.FC<{ subscribers: Subscriber[]; pub
         <div className="lg:col-span-2 space-y-6">
           {/* Appearance */}
           <div className={cardClass}>
-            <h3 className="text-sm font-semibold text-white">Внешний вид</h3>
+            <h3 className="text-sm font-semibold text-ink">Внешний вид</h3>
 
             <div>
               <label className={labelClass}>
-                Название подписки <span className="text-zinc-600">({titleLength}/{TITLE_MAX}, без учёта {'{user}'})</span>
+                Название подписки <span className="text-faint">({titleLength}/{TITLE_MAX}, без учёта {'{user}'})</span>
               </label>
               <input value={settings.title} onChange={(e) => update('title', e.target.value)} className={inputClass} placeholder="{user}" />
-              <p className="text-[11px] text-zinc-500 mt-1">
-                <code className="text-zinc-400">{'{user}'}</code> заменяется именем пользователя. Длинные названия обрезаются до 25 символов.
+              <p className="text-[11px] text-faint mt-1">
+                <code className="text-muted">{'{user}'}</code> заменяется именем пользователя. Длинные названия обрезаются до 25 символов.
               </p>
             </div>
 
@@ -176,7 +176,7 @@ export const SubscriptionSettingsView: React.FC<{ subscribers: Subscriber[]; pub
 
             <div>
               <label className={labelClass}>
-                Объявление на главном экране <span className="text-zinc-600">({announceLength}/{ANNOUNCE_MAX})</span>
+                Объявление на главном экране <span className="text-faint">({announceLength}/{ANNOUNCE_MAX})</span>
               </label>
               <textarea
                 rows={3}
@@ -213,7 +213,7 @@ export const SubscriptionSettingsView: React.FC<{ subscribers: Subscriber[]; pub
                   <option value="name">По имени</option>
                 </select>
               </div>
-              <label className="flex items-end gap-2 text-xs text-zinc-400 pb-2 cursor-pointer">
+              <label className="flex items-end gap-2 text-xs text-muted pb-2 cursor-pointer">
                 <input type="checkbox" checked={settings.hide_url} onChange={(e) => update('hide_url', e.target.checked)} />
                 <span>Скрыть ссылку подписки от пользователя</span>
               </label>
@@ -222,7 +222,7 @@ export const SubscriptionSettingsView: React.FC<{ subscribers: Subscriber[]; pub
 
           {/* Links */}
           <div className={cardClass}>
-            <h3 className="text-sm font-semibold text-white">Ссылки и поддержка</h3>
+            <h3 className="text-sm font-semibold text-ink">Ссылки и поддержка</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>Поддержка (Telegram, сайт)</label>
@@ -246,28 +246,28 @@ export const SubscriptionSettingsView: React.FC<{ subscribers: Subscriber[]; pub
           {/* Servers */}
           <div className={cardClass}>
             <div>
-              <h3 className="text-sm font-semibold text-white">Серверы в подписке</h3>
-              <p className="text-[11px] text-zinc-500 mt-0.5">
+              <h3 className="text-sm font-semibold text-ink">Серверы в подписке</h3>
+              <p className="text-[11px] text-faint mt-0.5">
                 Имя, которое увидит пользователь (можно с эмодзи флага), и порядок в списке. Пустое поле — имя сервера в панели.
               </p>
             </div>
             {servers.length === 0 ? (
-              <p className="text-xs text-zinc-500">Серверы ещё не добавлены.</p>
+              <p className="text-xs text-faint">Серверы ещё не добавлены.</p>
             ) : (
               <div className="space-y-2">
                 {servers.map((s, i) => (
                   <div key={s.id} className="flex items-center gap-2">
                     <div className="flex flex-col">
-                      <button type="button" onClick={() => moveServer(i, -1)} disabled={i === 0} className="p-0.5 text-zinc-500 hover:text-white disabled:opacity-30" title="Выше">
+                      <button type="button" onClick={() => moveServer(i, -1)} disabled={i === 0} className="p-0.5 text-faint hover:text-ink disabled:opacity-30" title="Выше">
                         <ArrowUp className="w-3.5 h-3.5" />
                       </button>
-                      <button type="button" onClick={() => moveServer(i, 1)} disabled={i === servers.length - 1} className="p-0.5 text-zinc-500 hover:text-white disabled:opacity-30" title="Ниже">
+                      <button type="button" onClick={() => moveServer(i, 1)} disabled={i === servers.length - 1} className="p-0.5 text-faint hover:text-ink disabled:opacity-30" title="Ниже">
                         <ArrowDown className="w-3.5 h-3.5" />
                       </button>
                     </div>
                     <div className="w-40 flex-shrink-0 min-w-0">
-                      <p className="text-xs font-medium text-zinc-200 truncate">{s.name}</p>
-                      <p className="text-[10px] font-mono text-zinc-500 truncate">{s.host}</p>
+                      <p className="text-xs font-medium text-ink truncate">{s.name}</p>
+                      <p className="text-[10px] font-mono text-faint truncate">{s.host}</p>
                     </div>
                     <input
                       value={s.sub_name || ''}
@@ -286,8 +286,8 @@ export const SubscriptionSettingsView: React.FC<{ subscribers: Subscriber[]; pub
         {/* Preview & compatibility */}
         <div className="space-y-6">
           <div className={cardClass}>
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-              <Eye className="w-4 h-4 text-emerald-400" />
+            <h3 className="text-sm font-semibold text-ink flex items-center gap-2">
+              <Eye className="w-4 h-4 text-ok" />
               <span>Предпросмотр</span>
             </h3>
             {subscribers.length > 0 && (
@@ -303,24 +303,24 @@ export const SubscriptionSettingsView: React.FC<{ subscribers: Subscriber[]; pub
                 ))}
               </select>
             )}
-            <div className="rounded-2xl bg-zinc-950 border border-zinc-800 p-4 space-y-3">
+            <div className="rounded-2xl bg-paper border-2 border-ink p-4 space-y-3">
               <div className="flex items-center gap-2">
-                <Smartphone className="w-4 h-4 text-zinc-500" />
-                <span className="text-sm font-semibold text-white">{renderTitle(settings.title, previewSubscriber?.name || 'Пользователь')}</span>
+                <Smartphone className="w-4 h-4 text-faint" />
+                <span className="text-sm font-semibold text-ink">{renderTitle(settings.title, previewSubscriber?.name || 'Пользователь')}</span>
               </div>
-              {settings.description && <p className="text-xs text-zinc-400 whitespace-pre-line">{settings.description}</p>}
+              {settings.description && <p className="text-xs text-muted whitespace-pre-line">{settings.description}</p>}
               {settings.announce && (
-                <p className="text-xs text-amber-200 bg-amber-500/10 border border-amber-500/20 rounded-lg p-2 whitespace-pre-line line-clamp-5">
+                <p className="text-xs text-warn bg-warn-soft border-2 border-ink rounded-lg p-2 whitespace-pre-line line-clamp-5">
                   {settings.announce}
                 </p>
               )}
               <div className="space-y-1">
                 {previewServers.length === 0 ? (
-                  <p className="text-[11px] text-zinc-600">Нет серверов</p>
+                  <p className="text-[11px] text-faint">Нет серверов</p>
                 ) : (
                   previewServers.map((s) => (
-                    <div key={s.id} className="flex items-center gap-2 text-xs text-zinc-200 bg-zinc-900 rounded-lg px-2.5 py-1.5">
-                      <ServerIcon className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                    <div key={s.id} className="flex items-center gap-2 text-xs text-ink bg-card rounded-lg px-2.5 py-1.5">
+                      <ServerIcon className="w-3.5 h-3.5 text-ok flex-shrink-0" />
                       <span className="truncate">{s.sub_name || s.name}</span>
                     </div>
                   ))
@@ -335,12 +335,12 @@ export const SubscriptionSettingsView: React.FC<{ subscribers: Subscriber[]; pub
                     key={link.label}
                     type="button"
                     onClick={() => copyToClipboard(link.url).then((ok) => !ok && alert(link.url))}
-                    className="w-full flex items-center gap-2 text-left text-[11px] bg-zinc-950 border border-zinc-800 hover:border-emerald-500/40 rounded-lg px-2.5 py-2 transition"
+                    className="w-full flex items-center gap-2 text-left text-[11px] bg-paper border-2 border-ink hover:border-ink rounded-lg px-2.5 py-2 transition"
                     title="Скопировать ссылку"
                   >
-                    <Link2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                    <span className="text-zinc-300 font-medium flex-shrink-0">{link.label}</span>
-                    <span className="text-zinc-600 font-mono truncate">{link.url}</span>
+                    <Link2 className="w-3.5 h-3.5 text-ok flex-shrink-0" />
+                    <span className="text-ink font-medium flex-shrink-0">{link.label}</span>
+                    <span className="text-faint font-mono truncate">{link.url}</span>
                   </button>
                 ))}
               </div>
@@ -348,25 +348,25 @@ export const SubscriptionSettingsView: React.FC<{ subscribers: Subscriber[]; pub
           </div>
 
           <div className={cardClass}>
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-              <Info className="w-4 h-4 text-cyan-400" />
+            <h3 className="text-sm font-semibold text-ink flex items-center gap-2">
+              <Info className="w-4 h-4 text-info" />
               <span>Клиенты с поддержкой AmneziaWG</span>
             </h3>
             <div className="space-y-2.5">
               {CLIENTS.map((c) => (
                 <div key={c.name} className="text-xs">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-zinc-200">{c.name}</span>
-                    <span className="text-[10px] text-zinc-500 text-right">{c.format}</span>
+                    <span className="font-medium text-ink">{c.name}</span>
+                    <span className="text-[10px] text-faint text-right">{c.format}</span>
                   </div>
-                  <p className="text-[11px] text-zinc-500">
+                  <p className="text-[11px] text-faint">
                     {c.platforms}
                     {c.note ? ` · ${c.note}` : ''}
                   </p>
                 </div>
               ))}
             </div>
-            <p className="text-[11px] text-zinc-600">
+            <p className="text-[11px] text-faint">
               Клиенты mihomo распознаются по User-Agent и получают свой формат по основной ссылке. Заголовки оформления понимает только Incy.
             </p>
           </div>

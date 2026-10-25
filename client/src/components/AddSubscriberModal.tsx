@@ -109,24 +109,24 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/60 animate-in fade-in duration-200">
+      <div className="bg-card border-2 border-ink rounded-2xl w-full max-w-lg shadow-brutal overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-zinc-900/60">
+        <div className="flex items-center justify-between px-6 py-4 border-b-2 border-ink bg-card">
           <div className="flex items-center gap-2.5">
-            <UserPlus className="w-5 h-5 text-emerald-400" />
+            <UserPlus className="w-5 h-5 text-ok" />
             <div>
-              <h2 className="text-base font-semibold text-white">
+              <h2 className="text-base font-semibold text-ink">
                 {editingSubscriber ? 'Редактировать пользователя' : 'Новый пользователь (Подписка)'}
               </h2>
-              <p className="text-xs text-zinc-400">
+              <p className="text-xs text-muted">
                 {editingSubscriber ? editingSubscriber.name : 'Мультисерверная подписка AmneziaWG (Incy)'}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-zinc-400 hover:text-white transition p-1 rounded-lg hover:bg-zinc-800"
+            className="text-muted hover:text-ink transition p-1 rounded-lg hover:bg-soft border-2 border-ink"
           >
             <X className="w-5 h-5" />
           </button>
@@ -135,13 +135,13 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto">
           {error && (
-            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs">
+            <div className="p-3 bg-bad-soft border-2 border-ink rounded-xl text-bad text-xs">
               {error}
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">
+            <label className="block text-xs font-medium text-muted mb-1.5">
               Имя пользователя / Клиента
             </label>
             <input
@@ -151,13 +151,13 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
               placeholder="например: Иван, Alex-iOS, Client-01"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500 transition text-sm"
+              className="w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2.5 text-ink placeholder-faint focus:outline-none focus:border-ink transition text-sm"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Лимит трафика, ГБ</label>
+              <label className="block text-xs font-medium text-muted mb-1.5">Лимит трафика, ГБ</label>
               <input
                 type="number"
                 min="0"
@@ -165,16 +165,16 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
                 placeholder="без лимита"
                 value={limitGb}
                 onChange={(e) => setLimitGb(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500 transition text-sm"
+                className="w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2.5 text-ink placeholder-faint focus:outline-none focus:border-ink transition text-sm"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1.5">Действует до</label>
+              <label className="block text-xs font-medium text-muted mb-1.5">Действует до</label>
               <input
                 type="date"
                 value={expireDate}
                 onChange={(e) => setExpireDate(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-white focus:outline-none focus:border-emerald-500 transition text-sm"
+                className="w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2.5 text-ink focus:outline-none focus:border-ink transition text-sm"
               />
             </div>
           </div>
@@ -182,8 +182,8 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
           {/* Node Selection Checkboxes */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-medium text-zinc-300 flex items-center gap-1.5">
-                <ServerIcon className="w-3.5 h-3.5 text-emerald-400" />
+              <label className="text-xs font-medium text-ink flex items-center gap-1.5">
+                <ServerIcon className="w-3.5 h-3.5 text-ok" />
                 <span>Доступные ноды (серверы):</span>
               </label>
 
@@ -191,15 +191,15 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
                 <button
                   type="button"
                   onClick={selectAll}
-                  className="text-emerald-400 hover:text-emerald-300 transition"
+                  className="text-ok hover:text-ok transition"
                 >
                   Выбрать все
                 </button>
-                <span className="text-zinc-600">&bull;</span>
+                <span className="text-faint">&bull;</span>
                 <button
                   type="button"
                   onClick={deselectAll}
-                  className="text-zinc-500 hover:text-zinc-400 transition"
+                  className="text-faint hover:text-muted transition"
                 >
                   Снять все
                 </button>
@@ -207,7 +207,7 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
             </div>
 
             {servers.length === 0 ? (
-              <div className="p-4 bg-zinc-950/60 border border-dashed border-zinc-800 rounded-2xl text-center text-xs text-zinc-500">
+              <div className="p-4 bg-paper border-2 border-dashed border-ink rounded-2xl text-center text-xs text-faint">
                 Нет добавленных серверов. Сначала добавьте хотя бы один сервер AmneziaWG.
               </div>
             ) : (
@@ -220,36 +220,36 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
                     <div
                       key={s.id}
                       onClick={() => toggleServer(s.id)}
-                      className={`flex items-center justify-between p-3 rounded-2xl border cursor-pointer transition select-none ${
+                      className={`flex items-center justify-between p-3 rounded-2xl border-2 cursor-pointer transition select-none ${
                         isChecked
-                          ? 'bg-zinc-800/80 border-emerald-500/40 text-white'
-                          : 'bg-zinc-950/50 border-zinc-800/80 text-zinc-400 hover:bg-zinc-900/60'
+                          ? 'bg-soft border-ink text-ink'
+                          : 'bg-paper border-ink text-muted hover:bg-card'
                       }`}
                     >
                       <div className="flex items-center gap-3">
                         {isChecked ? (
-                          <CheckSquare className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                          <CheckSquare className="w-4 h-4 text-ok flex-shrink-0" />
                         ) : (
-                          <Square className="w-4 h-4 text-zinc-600 flex-shrink-0" />
+                          <Square className="w-4 h-4 text-faint flex-shrink-0" />
                         )}
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-white">{s.name}</span>
+                            <span className="text-xs font-semibold text-ink">{s.name}</span>
                             <span
                               className={`w-1.5 h-1.5 rounded-full ${
-                                isOnline ? 'bg-emerald-400' : 'bg-zinc-600'
+                                isOnline ? 'bg-mint' : 'bg-faint'
                               }`}
                             />
                           </div>
-                          <p className="text-[11px] font-mono text-zinc-500">
+                          <p className="text-[11px] font-mono text-faint">
                             {s.host}:{s.awg_port}
-                            {s.remote_panel_name && <span className="font-sans text-amber-400/80"> · партнёр: {s.remote_panel_name}</span>}
+                            {s.remote_panel_name && <span className="font-sans text-warn"> · партнёр: {s.remote_panel_name}</span>}
                           </p>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1.5 text-[10px] font-mono text-zinc-500">
-                        <Shield className="w-3 h-3 text-emerald-400" />
+                      <div className="flex items-center gap-1.5 text-[10px] font-mono text-faint">
+                        <Shield className="w-3 h-3 text-ok" />
                         <span>AWG</span>
                       </div>
                     </div>
@@ -257,24 +257,24 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
                 })}
               </div>
             )}
-            <p className="text-[11px] text-zinc-500 mt-2">
+            <p className="text-[11px] text-faint mt-2">
               * Пользователь получит единую ссылку подписки. Все выбранные ноды появятся у него в Incy автоматически.
             </p>
           </div>
 
           {/* Submit */}
-          <div className="flex items-center justify-end gap-3 pt-3 border-t border-zinc-800">
+          <div className="flex items-center justify-end gap-3 pt-3 border-t-2 border-ink">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition"
+              className="px-4 py-2 text-sm text-muted hover:text-ink transition"
             >
               Отмена
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-medium text-sm px-5 py-2.5 rounded-xl transition shadow-lg shadow-emerald-600/20"
+              className="bg-mint hover:bg-mint disabled:opacity-50 text-ink font-bold text-sm px-5 py-2.5 rounded-xl transition shadow-brutal-sm border-2 border-ink btn-press"
             >
               {loading ? 'Сохранение...' : editingSubscriber ? 'Обновить доступ' : 'Создать подписку'}
             </button>

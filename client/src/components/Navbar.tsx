@@ -1,5 +1,6 @@
 import React from 'react';
 import { ShieldCheck, Plus, Server as ServerIcon, Users, Activity, LogOut, KeyRound, Lock, Palette, Handshake } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type { Server, AdminUser } from '../types';
 import { PanelVersion } from './PanelVersion';
 
@@ -16,6 +17,14 @@ interface NavbarProps {
   onLogout: () => void;
 }
 
+const TABS: { id: AppTab; label: string; icon: LucideIcon; color: string }[] = [
+  { id: 'servers', label: 'Серверы', icon: ServerIcon, color: 'bg-yellow' },
+  { id: 'subscribers', label: 'Пользователи и подписки', icon: Users, color: 'bg-blue' },
+  { id: 'subscription', label: 'Оформление подписки', icon: Palette, color: 'bg-pink' },
+  { id: 'partners', label: 'Партнёры', icon: Handshake, color: 'bg-orange' },
+  { id: 'security', label: 'Безопасность', icon: Lock, color: 'bg-violet' },
+];
+
 export const Navbar: React.FC<NavbarProps> = ({
   servers,
   user,
@@ -30,133 +39,70 @@ export const Navbar: React.FC<NavbarProps> = ({
   const activeClients = servers.reduce((acc, s) => acc + (s.active_client_count || 0), 0);
 
   return (
-    <header className="border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md sticky top-0 z-30">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        {/* Brand & Tabs */}
-        <div className="flex items-center gap-8">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-              <ShieldCheck className="w-6 h-6 text-zinc-950 stroke-[2.5]" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-lg text-white tracking-wide">DEMENSION</span>
-                <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  AmneziaWG
-                </span>
-              </div>
-              <p className="text-[11px] text-zinc-400">Панель управления нодами</p>
-              {user && <PanelVersion />}
-            </div>
+    <header className="border-b-2 border-ink bg-paper/95 sticky top-0 z-30">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-3 flex items-center gap-4">
+        {/* Логотип и версия */}
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-11 h-11 shrink-0 rounded-xl bg-mint border-2 border-ink flex items-center justify-center shadow-brutal-sm -rotate-3">
+            <ShieldCheck className="w-6 h-6 text-ink stroke-[2.5]" />
           </div>
-
-          {/* Navigation Tabs */}
-          <nav className="hidden sm:flex items-center gap-1 bg-zinc-900/60 p-1 rounded-xl border border-zinc-800/80">
-            <button
-              onClick={() => onSelectTab('servers')}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                activeTab === 'servers'
-                  ? 'bg-zinc-800 text-white shadow-sm'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <ServerIcon className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Серверы (Ноды)</span>
-            </button>
-
-            <button
-              onClick={() => onSelectTab('subscribers')}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                activeTab === 'subscribers'
-                  ? 'bg-zinc-800 text-white shadow-sm'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <Users className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Пользователи & Подписки</span>
-            </button>
-
-            <button
-              onClick={() => onSelectTab('subscription')}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                activeTab === 'subscription'
-                  ? 'bg-zinc-800 text-white shadow-sm'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <Palette className="w-3.5 h-3.5 text-purple-400" />
-              <span>Оформление подписки</span>
-            </button>
-
-            <button
-              onClick={() => onSelectTab('partners')}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                activeTab === 'partners'
-                  ? 'bg-zinc-800 text-white shadow-sm'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <Handshake className="w-3.5 h-3.5 text-amber-400" />
-              <span>Партнёры</span>
-            </button>
-
-            <button
-              onClick={() => onSelectTab('security')}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                activeTab === 'security'
-                  ? 'bg-zinc-800 text-white shadow-sm'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <Lock className="w-3.5 h-3.5 text-amber-400" />
-              <span>Безопасность (HTTPS & SSH)</span>
-            </button>
-          </nav>
-        </div>
-
-        {/* Global Stats */}
-        <div className="hidden lg:flex items-center gap-6 text-xs text-zinc-400">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-400" />
-            <span>Серверы:</span>
-            <strong className="text-zinc-200">{onlineCount} / {servers.length} онлайн</strong>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Activity className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Активных пиров:</span>
-            <strong className="text-emerald-400">{activeClients}</strong>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="font-extrabold text-xl text-ink tracking-tight leading-none">DEMENSION</span>
+              <span className="hidden sm:inline text-[10px] uppercase font-bold px-2 py-0.5 rounded-md bg-yellow text-ink border-2 border-ink">
+                AmneziaWG
+              </span>
+            </div>
+            {user && <PanelVersion />}
           </div>
         </div>
 
-        {/* Actions & User Menu */}
-        <div className="flex items-center gap-3">
+        <div className="flex-1" />
+
+        {/* Сводка */}
+        <div className="hidden lg:flex items-center gap-2 text-xs">
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-card border-2 border-ink">
+            <span className={`w-2.5 h-2.5 rounded-full border-2 border-ink ${onlineCount > 0 ? 'bg-mint' : 'bg-faint'}`} />
+            <span className="text-muted">Онлайн</span>
+            <strong className="text-ink">
+              {onlineCount}/{servers.length}
+            </strong>
+          </div>
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-card border-2 border-ink">
+            <Activity className="w-3.5 h-3.5 text-info" />
+            <span className="text-muted">Активных пиров</span>
+            <strong className="text-ink">{activeClients}</strong>
+          </div>
+        </div>
+
+        {/* Действия и учётная запись */}
+        <div className="flex items-center gap-2 shrink-0">
           {activeTab === 'servers' && (
             <button
               onClick={onAddServer}
-              className="flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-medium text-xs px-3.5 py-2 rounded-xl transition shadow-lg shadow-emerald-600/20 active:scale-[0.98]"
+              className="flex items-center gap-1.5 bg-mint text-ink font-bold text-xs px-3 py-2 rounded-xl border-2 border-ink shadow-brutal-sm btn-press"
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Добавить сервер</span>
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Добавить сервер</span>
             </button>
           )}
 
           {activeTab === 'subscribers' && (
             <button
               onClick={onAddSubscriber}
-              className="flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-medium text-xs px-3.5 py-2 rounded-xl transition shadow-lg shadow-emerald-600/20 active:scale-[0.98]"
+              className="flex items-center gap-1.5 bg-mint text-ink font-bold text-xs px-3 py-2 rounded-xl border-2 border-ink shadow-brutal-sm btn-press"
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Новый пользователь</span>
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Новый пользователь</span>
             </button>
           )}
 
-          {/* User Controls */}
           {user && (
-            <div className="flex items-center gap-1 pl-2 border-l border-zinc-800">
+            <>
               <button
                 onClick={onOpenAccount}
                 title={`Учётная запись «${user.username}»: сменить логин или пароль`}
-                className="flex items-center gap-1.5 p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl transition"
+                className="flex items-center gap-1.5 p-2 text-ink bg-card border-2 border-ink rounded-xl hover:bg-soft transition"
               >
                 <KeyRound className="w-4 h-4" />
                 <span className="hidden md:inline max-w-28 truncate text-xs font-mono">{user.username}</span>
@@ -165,14 +111,36 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 onClick={onLogout}
                 title="Выйти из панели"
-                className="p-2 text-zinc-400 hover:text-red-400 hover:bg-zinc-800 rounded-xl transition"
+                className="p-2 text-ink bg-card border-2 border-ink rounded-xl hover:bg-danger transition"
               >
                 <LogOut className="w-4 h-4" />
               </button>
-            </div>
+            </>
           )}
         </div>
       </div>
+
+      {/* Разделы: на узком экране прокручиваются по горизонтали */}
+      <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-3 pb-3 flex items-center gap-2 overflow-x-auto">
+        {TABS.map(({ id, label, icon: Icon, color }) => {
+          const active = activeTab === id;
+          return (
+            <button
+              key={id}
+              onClick={() => onSelectTab(id)}
+              aria-current={active ? 'page' : undefined}
+              className={`shrink-0 flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-sm font-bold border-2 transition whitespace-nowrap ${
+                active
+                  ? `${color} text-ink border-ink shadow-brutal-sm`
+                  : 'border-transparent text-muted hover:text-ink hover:border-ink hover:bg-card'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              <span>{label}</span>
+            </button>
+          );
+        })}
+      </nav>
     </header>
   );
 };

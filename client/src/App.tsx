@@ -134,7 +134,7 @@ export const App: React.FC = () => {
 
   if (authChecking) {
     return (
-      <div className="min-h-screen bg-[#090a0f] flex items-center justify-center text-zinc-500 text-sm">
+      <div className="min-h-screen bg-paper flex items-center justify-center text-faint text-sm">
         Загрузка панели...
       </div>
     );
@@ -222,7 +222,7 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#090a0f] text-zinc-100 flex flex-col font-sans selection:bg-emerald-500/30 selection:text-emerald-200">
+    <div className="min-h-screen bg-paper text-ink flex flex-col font-sans selection:bg-ok-soft selection:text-ok">
       <Navbar
         servers={servers}
         user={user}
@@ -241,13 +241,13 @@ export const App: React.FC = () => {
       />
 
       {migrationState === 'exporting' && (
-        <div className="bg-amber-500/10 border-b border-amber-500/20 text-amber-200 text-xs">
+        <div className="bg-warn-soft border-b-2 border-ink text-warn text-xs">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex flex-wrap items-center gap-2">
             <AlertTriangle className="w-4 h-4 flex-shrink-0" />
             <span>
               Идёт перенос панели на другой сервер: изменения сейчас не сохраняются, опрос нод приостановлен.
             </span>
-            <button onClick={() => setActiveTab('security')} className="underline hover:text-white">
+            <button onClick={() => setActiveTab('security')} className="underline hover:text-ink">
               Завершить или отменить перенос
             </button>
           </div>
@@ -256,7 +256,7 @@ export const App: React.FC = () => {
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {loading ? (
-          <div className="flex items-center justify-center py-24 text-zinc-500 text-sm">
+          <div className="flex items-center justify-center py-24 text-faint text-sm">
             Загрузка данных...
           </div>
         ) : activeTab === 'partners' ? (
@@ -292,44 +292,44 @@ export const App: React.FC = () => {
           />
         ) : servers.length === 0 ? (
           /* Empty Servers Screen */
-          <div className="max-w-2xl mx-auto text-center py-16 px-6 bg-zinc-900/50 border border-zinc-800/80 rounded-3xl shadow-2xl space-y-6">
-            <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-emerald-600 to-teal-400 mx-auto flex items-center justify-center shadow-xl shadow-emerald-500/20">
-              <ShieldCheck className="w-9 h-9 text-zinc-950 stroke-[2.5]" />
+          <div className="max-w-2xl mx-auto text-center py-16 px-6 bg-card border-2 border-ink rounded-2xl shadow-brutal space-y-6">
+            <div className="w-16 h-16 rounded-2xl bg-mint mx-auto flex items-center justify-center shadow-brutal">
+              <ShieldCheck className="w-9 h-9 text-ink stroke-[2.5]" />
             </div>
 
             <div className="space-y-2">
-              <h2 className="text-2xl font-bold text-white tracking-tight">
+              <h2 className="text-2xl font-bold text-ink tracking-tight">
                 Добро пожаловать в Demension Panel
               </h2>
-              <p className="text-sm text-zinc-400 max-w-lg mx-auto">
+              <p className="text-sm text-muted max-w-lg mx-auto">
                 Добавляйте удаленные серверы по SSH, и панель автоматически развернет изолированный Docker-контейнер с AmneziaWG и сгенерирует подписки для клиентов.
               </p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-left pt-2">
-              <div className="p-4 bg-zinc-950/70 border border-zinc-800/80 rounded-2xl">
-                <Terminal className="w-5 h-5 text-emerald-400 mb-2" />
-                <h4 className="text-xs font-semibold text-white">Agentless по SSH</h4>
-                <p className="text-[11px] text-zinc-400 mt-1">Никаких сторонних демонов на сервере — только чистый Docker.</p>
+              <div className="p-4 bg-paper border-2 border-ink rounded-2xl">
+                <Terminal className="w-5 h-5 text-ok mb-2" />
+                <h4 className="text-xs font-semibold text-ink">Agentless по SSH</h4>
+                <p className="text-[11px] text-muted mt-1">Никаких сторонних демонов на сервере — только чистый Docker.</p>
               </div>
 
-              <div className="p-4 bg-zinc-950/70 border border-zinc-800/80 rounded-2xl">
-                <Sparkles className="w-5 h-5 text-cyan-400 mb-2" />
-                <h4 className="text-xs font-semibold text-white">DPI Bypass</h4>
-                <p className="text-[11px] text-zinc-400 mt-1">Автоматическая рандомизация H1..H4, Jc, S1, S2.</p>
+              <div className="p-4 bg-paper border-2 border-ink rounded-2xl">
+                <Sparkles className="w-5 h-5 text-info mb-2" />
+                <h4 className="text-xs font-semibold text-ink">DPI Bypass</h4>
+                <p className="text-[11px] text-muted mt-1">Автоматическая рандомизация H1..H4, Jc, S1, S2.</p>
               </div>
 
-              <div className="p-4 bg-zinc-950/70 border border-zinc-800/80 rounded-2xl">
-                <Zap className="w-5 h-5 text-amber-400 mb-2" />
-                <h4 className="text-xs font-semibold text-white">Подписки HAPP / Incy</h4>
-                <p className="text-[11px] text-zinc-400 mt-1">Автообновление списка серверов без ручной настройки.</p>
+              <div className="p-4 bg-paper border-2 border-ink rounded-2xl">
+                <Zap className="w-5 h-5 text-warn mb-2" />
+                <h4 className="text-xs font-semibold text-ink">Подписки HAPP / Incy</h4>
+                <p className="text-[11px] text-muted mt-1">Автообновление списка серверов без ручной настройки.</p>
               </div>
             </div>
 
             <div className="pt-4">
               <button
                 onClick={() => setIsAddServerOpen(true)}
-                className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-medium text-sm px-6 py-3 rounded-2xl transition shadow-xl shadow-emerald-600/25 active:scale-[0.98]"
+                className="inline-flex items-center gap-2 bg-mint text-ink font-bold text-sm px-6 py-3 rounded-2xl transition shadow-brutal-sm border-2 border-ink btn-press"
               >
                 <Plus className="w-4 h-4" />
                 <span>Добавить первый сервер</span>

@@ -89,33 +89,33 @@ export const PanelUpdateModal: React.FC<PanelUpdateModalProps> = ({ info, onClos
   const showResult = status && !running && status.state !== 'idle' && (status.to === info.latest || status.state !== 'success');
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-zinc-900/60">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/60 animate-in fade-in duration-200">
+      <div className="bg-card border-2 border-ink rounded-2xl w-full max-w-xl shadow-brutal overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between px-6 py-4 border-b-2 border-ink bg-card">
           <div className="flex items-center gap-2">
-            <ArrowUpCircle className="w-5 h-5 text-emerald-400" />
-            <h2 className="text-base font-semibold text-white">Обновление панели</h2>
+            <ArrowUpCircle className="w-5 h-5 text-ok" />
+            <h2 className="text-base font-semibold text-ink">Обновление панели</h2>
           </div>
           <button
             onClick={onClose}
             disabled={!canClose}
             title={canClose ? 'Закрыть' : 'Дождитесь окончания обновления'}
-            className="text-zinc-400 hover:text-white transition p-1 rounded-lg hover:bg-zinc-800 disabled:opacity-30 disabled:hover:bg-transparent"
+            className="text-muted hover:text-ink transition p-1 rounded-lg hover:bg-soft disabled:opacity-30 disabled:hover:bg-transparent border-2 border-ink"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="px-6 py-5 space-y-4 overflow-y-auto">
-          <div className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-zinc-950/60 border border-zinc-800">
+          <div className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-paper border-2 border-ink">
             <div>
-              <div className="text-[11px] text-zinc-500">Установлена</div>
-              <div className="font-mono text-sm text-zinc-200">{status?.current ?? info.current}</div>
+              <div className="text-[11px] text-faint">Установлена</div>
+              <div className="font-mono text-sm text-ink">{status?.current ?? info.current}</div>
             </div>
-            <div className="text-zinc-600">→</div>
+            <div className="text-faint">→</div>
             <div className="text-right">
-              <div className="text-[11px] text-zinc-500">Последний релиз</div>
-              <div className="font-mono text-sm text-emerald-300">{info.latest ?? '—'}</div>
+              <div className="text-[11px] text-faint">Последний релиз</div>
+              <div className="font-mono text-sm text-ok">{info.latest ?? '—'}</div>
             </div>
           </div>
 
@@ -124,7 +124,7 @@ export const PanelUpdateModal: React.FC<PanelUpdateModalProps> = ({ info, onClos
               href={info.latest_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300"
+              className="inline-flex items-center gap-1.5 text-xs text-ok hover:text-ok"
             >
               <ExternalLink className="w-3.5 h-3.5" />
               Что нового в {info.latest}
@@ -132,20 +132,20 @@ export const PanelUpdateModal: React.FC<PanelUpdateModalProps> = ({ info, onClos
           )}
 
           {loadError && (
-            <div className="flex gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-300">
+            <div className="flex gap-2 p-3 rounded-xl bg-bad-soft border-2 border-ink text-xs text-bad">
               <AlertTriangle className="w-4 h-4 shrink-0" />
               <span>{loadError}</span>
             </div>
           )}
 
           {running && (
-            <div className="flex gap-3 p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/20">
-              <Loader2 className="w-5 h-5 text-emerald-400 animate-spin shrink-0" />
-              <div className="text-xs text-zinc-300 space-y-1">
-                <div className="font-medium text-white">
+            <div className="flex gap-3 p-4 rounded-2xl bg-ok-soft border-2 border-ink">
+              <Loader2 className="w-5 h-5 text-ok animate-spin shrink-0" />
+              <div className="text-xs text-ink space-y-1">
+                <div className="font-medium text-ink">
                   {restarting ? 'Панель перезапускается…' : `Обновление до ${status?.to ?? info.latest}…`}
                 </div>
-                <div className="text-zinc-400">
+                <div className="text-muted">
                   Обычно занимает 1–3 минуты: скачивание релиза, резервная копия БД, сборка, перезапуск службы. Пока панель
                   перезапускается, она не отвечает — не закрывайте страницу.
                 </div>
@@ -154,14 +154,14 @@ export const PanelUpdateModal: React.FC<PanelUpdateModalProps> = ({ info, onClos
           )}
 
           {done && (
-            <div className="flex gap-3 p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
-              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-              <div className="text-xs text-zinc-300 space-y-2">
-                <div className="font-medium text-white">Панель обновлена до {status.current}</div>
+            <div className="flex gap-3 p-4 rounded-2xl bg-ok-soft border-2 border-ink">
+              <CheckCircle2 className="w-5 h-5 text-ok shrink-0" />
+              <div className="text-xs text-ink space-y-2">
+                <div className="font-medium text-ink">Панель обновлена до {status.current}</div>
                 <div>Данные, ноды, клиенты и подписки сохранены. Страница перезагрузится, чтобы загрузить новый интерфейс.</div>
                 <button
                   onClick={() => window.location.reload()}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-500 text-zinc-950 font-semibold hover:bg-emerald-400 transition"
+                  className="px-3 py-1.5 rounded-lg bg-mint text-ink font-semibold hover:bg-mint transition border-2 border-ink shadow-brutal-sm btn-press"
                 >
                   Перезагрузить страницу
                 </button>
@@ -170,31 +170,31 @@ export const PanelUpdateModal: React.FC<PanelUpdateModalProps> = ({ info, onClos
           )}
 
           {showResult && !done && (
-            <div className="flex gap-3 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20">
+            <div className="flex gap-3 p-4 rounded-2xl bg-warn-soft border-2 border-ink">
               {status.state === 'rolled_back' ? (
-                <RotateCcw className="w-5 h-5 text-amber-400 shrink-0" />
+                <RotateCcw className="w-5 h-5 text-warn shrink-0" />
               ) : (
-                <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+                <AlertTriangle className="w-5 h-5 text-warn shrink-0" />
               )}
-              <div className="text-xs text-zinc-300 space-y-1">
-                <div className="font-medium text-white">
+              <div className="text-xs text-ink space-y-1">
+                <div className="font-medium text-ink">
                   {status.state === 'rolled_back' ? 'Обновление отменено' : status.state === 'success' ? 'Последнее обновление' : 'Обновление не удалось'}
                 </div>
                 {status.message && <div>{status.message}</div>}
-                {status.finished_at && <div className="text-zinc-500">{new Date(status.finished_at).toLocaleString('ru-RU')}</div>}
+                {status.finished_at && <div className="text-faint">{new Date(status.finished_at).toLocaleString('ru-RU')}</div>}
               </div>
             </div>
           )}
 
           {status && !status.available && !running && (
-            <div className="space-y-2 p-4 rounded-2xl bg-zinc-950/60 border border-zinc-800 text-xs text-zinc-400">
-              <div className="flex items-center gap-2 text-zinc-200 font-medium">
+            <div className="space-y-2 p-4 rounded-2xl bg-paper border-2 border-ink text-xs text-muted">
+              <div className="flex items-center gap-2 text-ink font-medium">
                 <Terminal className="w-4 h-4" />
                 Обновление из панели недоступно
               </div>
               <div>{status.reason}</div>
               <div>Обновите панель из терминала сервера — повторный запуск установки сохраняет все данные:</div>
-              <code className="block p-2 rounded-lg bg-black/60 border border-zinc-800 text-[11px] text-emerald-300 break-all select-all">
+              <code className="block p-2 rounded-lg bg-ink/60 border-2 border-ink text-[11px] text-ok break-all select-all">
                 {INSTALL_COMMAND}
               </code>
             </div>
@@ -202,10 +202,10 @@ export const PanelUpdateModal: React.FC<PanelUpdateModalProps> = ({ info, onClos
 
           {status?.log && (
             <details open={running || status.state === 'failed' || status.state === 'rolled_back'} className="group">
-              <summary className="cursor-pointer text-xs text-zinc-400 hover:text-zinc-200 select-none">Журнал обновления</summary>
+              <summary className="cursor-pointer text-xs text-muted hover:text-ink select-none">Журнал обновления</summary>
               <pre
                 ref={logRef}
-                className="mt-2 max-h-64 overflow-auto p-3 rounded-xl bg-black/60 border border-zinc-800 text-[10.5px] leading-4 text-zinc-400 whitespace-pre-wrap break-all"
+                className="mt-2 max-h-64 overflow-auto p-3 rounded-xl bg-ink/60 border-2 border-ink text-[10.5px] leading-4 text-muted whitespace-pre-wrap break-all"
               >
                 {status.log}
               </pre>
@@ -214,10 +214,10 @@ export const PanelUpdateModal: React.FC<PanelUpdateModalProps> = ({ info, onClos
         </div>
 
         {status?.available && info.update_available && info.latest && !running && !done && (
-          <div className="px-6 py-4 border-t border-zinc-800 bg-zinc-900/60 space-y-3">
+          <div className="px-6 py-4 border-t-2 border-ink bg-card space-y-3">
             {confirm ? (
               <>
-                <div className="text-xs text-zinc-400">
+                <div className="text-xs text-muted">
                   Панель будет недоступна 1–3 минуты. Логин, пароль, ноды, клиенты, подписки и настройки сохранятся; перед
                   обновлением делается резервная копия БД, а если новая версия не запустится — панель вернётся на {info.current}.
                   VPN у пользователей не прерывается: ноды работают независимо от панели.
@@ -225,14 +225,14 @@ export const PanelUpdateModal: React.FC<PanelUpdateModalProps> = ({ info, onClos
                 <div className="flex justify-end gap-2">
                   <button
                     onClick={() => setConfirm(false)}
-                    className="px-4 py-2 rounded-xl text-xs font-medium text-zinc-300 hover:text-white hover:bg-zinc-800 transition"
+                    className="px-4 py-2 rounded-xl text-xs font-medium text-ink hover:text-ink hover:bg-soft transition border-2 border-ink"
                   >
                     Отмена
                   </button>
                   <button
                     onClick={start}
                     disabled={starting}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-500 text-zinc-950 hover:bg-emerald-400 transition disabled:opacity-60"
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-mint text-ink hover:bg-mint transition disabled:opacity-60 border-2 border-ink shadow-brutal-sm btn-press"
                   >
                     {starting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                     Обновить сейчас
@@ -243,7 +243,7 @@ export const PanelUpdateModal: React.FC<PanelUpdateModalProps> = ({ info, onClos
               <div className="flex justify-end">
                 <button
                   onClick={() => setConfirm(true)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-500 text-zinc-950 hover:bg-emerald-400 transition"
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-mint text-ink hover:bg-mint transition border-2 border-ink shadow-brutal-sm btn-press"
                 >
                   <ArrowUpCircle className="w-4 h-4" />
                   Обновить до {info.latest}

@@ -4,11 +4,11 @@ import { api } from '../api';
 import type { AmneziaImportResult } from '../types';
 
 const STATUS_VIEW: Record<AmneziaImportResult['status'], { label: string; className: string; icon: React.ReactNode }> = {
-  adopted: { label: 'Подключён без переустановки', className: 'text-emerald-300', icon: <CheckCircle2 className="w-4 h-4 text-emerald-400" /> },
-  needs_install: { label: 'Добавлен, требуется установка', className: 'text-amber-300', icon: <AlertTriangle className="w-4 h-4 text-amber-400" /> },
-  ssh_error: { label: 'Добавлен, нет SSH-доступа', className: 'text-amber-300', icon: <AlertTriangle className="w-4 h-4 text-amber-400" /> },
-  exists: { label: 'Уже есть в панели', className: 'text-zinc-400', icon: <AlertTriangle className="w-4 h-4 text-zinc-500" /> },
-  invalid: { label: 'Ключ не подходит', className: 'text-red-300', icon: <XCircle className="w-4 h-4 text-red-400" /> },
+  adopted: { label: 'Подключён без переустановки', className: 'text-ok', icon: <CheckCircle2 className="w-4 h-4 text-ok" /> },
+  needs_install: { label: 'Добавлен, требуется установка', className: 'text-warn', icon: <AlertTriangle className="w-4 h-4 text-warn" /> },
+  ssh_error: { label: 'Добавлен, нет SSH-доступа', className: 'text-warn', icon: <AlertTriangle className="w-4 h-4 text-warn" /> },
+  exists: { label: 'Уже есть в панели', className: 'text-muted', icon: <AlertTriangle className="w-4 h-4 text-faint" /> },
+  invalid: { label: 'Ключ не подходит', className: 'text-bad', icon: <XCircle className="w-4 h-4 text-bad" /> },
 };
 
 /**
@@ -43,26 +43,26 @@ export const AmneziaImportPanel: React.FC<{ onImported: () => void; onClose: () 
           {results.map((r, i) => {
             const view = STATUS_VIEW[r.status];
             return (
-              <div key={i} className="p-3 bg-zinc-950/60 border border-zinc-800 rounded-xl text-xs space-y-1">
+              <div key={i} className="p-3 bg-paper border-2 border-ink rounded-xl text-xs space-y-1">
                 <div className="flex items-center gap-2">
                   {view.icon}
-                  <span className="font-medium text-white">{r.name || r.key}</span>
+                  <span className="font-medium text-ink">{r.name || r.key}</span>
                   <span className={view.className}>{view.label}</span>
                 </div>
-                <p className="text-zinc-400">{r.message}</p>
+                <p className="text-muted">{r.message}</p>
               </div>
             );
           })}
         </div>
-        <p className="text-[11px] text-zinc-500">
+        <p className="text-[11px] text-faint">
           Клиенты, созданные в AmneziaVPN, продолжают работать и видны в панели с пометкой «импорт», но их конфигурации панель выдать не может.
           Новых клиентов создавайте в панели. Не меняйте клиентов этих серверов в приложении AmneziaVPN — панель перезапишет конфигурацию.
         </p>
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={() => setResults(null)} className="px-4 py-2 text-sm text-zinc-400 hover:text-white">
+          <button type="button" onClick={() => setResults(null)} className="px-4 py-2 text-sm text-muted hover:text-ink">
             Импортировать ещё
           </button>
-          <button type="button" onClick={onClose} className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl text-sm">
+          <button type="button" onClick={onClose} className="px-4 py-2 bg-soft hover:bg-soft-2 text-ink rounded-xl text-sm border-2 border-ink">
             Готово
           </button>
         </div>
@@ -72,11 +72,11 @@ export const AmneziaImportPanel: React.FC<{ onImported: () => void; onClose: () 
 
   return (
     <form onSubmit={handleImport} className="p-6 space-y-4 overflow-y-auto">
-      {error && <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">{error}</div>}
-      <div className="p-3 bg-zinc-950/60 border border-zinc-800 rounded-xl text-xs text-zinc-400 space-y-1">
+      {error && <div className="p-3 bg-bad-soft border-2 border-ink rounded-xl text-bad text-sm">{error}</div>}
+      <div className="p-3 bg-paper border-2 border-ink rounded-xl text-xs text-muted space-y-1">
         <p>
-          В приложении AmneziaVPN откройте сервер → <strong className="text-zinc-200">«Поделиться»</strong> →{' '}
-          <strong className="text-zinc-200">«Полный доступ»</strong> и скопируйте ключ <code>vpn://…</code>.
+          В приложении AmneziaVPN откройте сервер → <strong className="text-ink">«Поделиться»</strong> →{' '}
+          <strong className="text-ink">«Полный доступ»</strong> и скопируйте ключ <code>vpn://…</code>.
         </p>
         <p>
           Панель подключится к серверу по SSH из ключа и заберёт работающий AmneziaWG вместе с ключами, параметрами и клиентами — переустанавливать
@@ -89,19 +89,19 @@ export const AmneziaImportPanel: React.FC<{ onImported: () => void; onClose: () 
         value={keys}
         onChange={(e) => setKeys(e.target.value)}
         placeholder="vpn://AAAB..."
-        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500 transition font-mono text-xs"
+        className="w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-ink transition font-mono text-xs"
       />
-      <p className="text-[11px] text-amber-300/80">
+      <p className="text-[11px] text-warn">
         Ключ полного доступа содержит пароль или SSH-ключ сервера. В панели он хранится зашифрованным, сам ключ не сохраняется.
       </p>
       <div className="flex items-center justify-end gap-3">
-        <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition">
+        <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-muted hover:text-ink transition">
           Отмена
         </button>
         <button
           type="submit"
           disabled={loading}
-          className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-medium text-sm px-5 py-2 rounded-xl transition"
+          className="flex items-center gap-2 bg-mint hover:bg-mint disabled:opacity-50 text-ink font-bold text-sm px-5 py-2 rounded-xl transition border-2 border-ink shadow-brutal-sm btn-press"
         >
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
           <span>{loading ? 'Подключение к серверам...' : 'Импортировать'}</span>

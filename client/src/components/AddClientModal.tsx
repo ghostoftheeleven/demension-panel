@@ -44,20 +44,20 @@ export const AddClientModal: React.FC<AddClientModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/60 animate-in fade-in duration-200">
+      <div className="bg-card border-2 border-ink rounded-2xl w-full max-w-md shadow-brutal overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-zinc-900/50">
+        <div className="flex items-center justify-between px-6 py-4 border-b-2 border-ink bg-card">
           <div className="flex items-center gap-2">
-            <UserPlus className="w-5 h-5 text-emerald-400" />
+            <UserPlus className="w-5 h-5 text-ok" />
             <div>
-              <h2 className="text-base font-semibold text-white">Новый клиент AmneziaWG</h2>
-              <p className="text-xs text-zinc-400">{serverName}</p>
+              <h2 className="text-base font-semibold text-ink">Новый клиент AmneziaWG</h2>
+              <p className="text-xs text-muted">{serverName}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-zinc-400 hover:text-white transition p-1 rounded-lg hover:bg-zinc-800"
+            className="text-muted hover:text-ink transition p-1 rounded-lg hover:bg-soft border-2 border-ink"
           >
             <X className="w-5 h-5" />
           </button>
@@ -66,13 +66,13 @@ export const AddClientModal: React.FC<AddClientModalProps> = ({
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && (
-            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">
+            <div className="p-3 bg-bad-soft border-2 border-ink rounded-xl text-bad text-sm">
               {error}
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1">
+            <label className="block text-xs font-medium text-muted mb-1">
               Имя клиента / Устройства
             </label>
             <div className="relative">
@@ -83,11 +83,11 @@ export const AddClientModal: React.FC<AddClientModalProps> = ({
                 placeholder="например: iPhone-Alex, Home-PC"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-9 pr-3.5 py-2 text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500 transition text-sm"
+                className="w-full bg-paper border-2 border-ink rounded-xl pl-9 pr-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-ink transition text-sm"
               />
-              <Smartphone className="w-4 h-4 text-zinc-500 absolute left-3 top-2.5" />
+              <Smartphone className="w-4 h-4 text-faint absolute left-3 top-2.5" />
             </div>
-            <p className="text-[11px] text-zinc-500 mt-2">
+            <p className="text-[11px] text-faint mt-2">
               Ключи Curve25519 и свободный IP-адрес из подсети сервера будут назначены автоматически.
             </p>
           </div>
@@ -96,14 +96,14 @@ export const AddClientModal: React.FC<AddClientModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition"
+              className="px-4 py-2 text-sm text-muted hover:text-ink transition"
             >
               Отмена
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-medium text-sm px-5 py-2 rounded-xl transition shadow-lg shadow-emerald-600/20"
+              className="bg-mint hover:bg-mint disabled:opacity-50 text-ink font-bold text-sm px-5 py-2 rounded-xl transition shadow-brutal-sm border-2 border-ink btn-press"
             >
               {loading ? 'Создание...' : 'Создать клиента'}
             </button>

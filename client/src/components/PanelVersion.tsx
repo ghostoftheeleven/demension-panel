@@ -54,18 +54,18 @@ export const PanelVersion: React.FC = () => {
         type="button"
         onClick={() => load(true)}
         title={describe(info)}
-        className="flex items-center gap-1 font-mono text-zinc-500 hover:text-zinc-300 transition"
+        className="flex items-center gap-1 font-mono text-faint hover:text-ink transition"
       >
         <span>{info.current}</span>
         {checking && <RefreshCw className="w-3 h-3 animate-spin" />}
       </button>
       {info.latest && !info.update_available && (
-        <span title={describe(info)} className="text-emerald-400/80">
+        <span title={describe(info)} className="text-ok">
           актуальная (GitHub: {info.latest})
         </span>
       )}
       {!info.latest && info.check_enabled && (
-        <span title={describe(info)} className="text-zinc-600">
+        <span title={describe(info)} className="text-faint">
           GitHub: —
         </span>
       )}
@@ -74,7 +74,7 @@ export const PanelVersion: React.FC = () => {
           type="button"
           onClick={() => setUpdateOpen(true)}
           title="Что нового и обновление панели"
-          className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20 hover:bg-amber-500/20 transition"
+          className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-warn-soft text-warn border-2 border-ink hover:bg-warn-soft transition"
         >
           <ArrowUpCircle className="w-3 h-3" />
           <span>Доступна {info.latest}</span>

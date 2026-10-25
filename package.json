@@ -1,6 +1,6 @@
 {
   "name": "demension-panel",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "AmneziaWG Multi-Server Management Panel",
   "private": true,
   "scripts": {

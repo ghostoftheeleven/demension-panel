@@ -29,33 +29,31 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#090a0f] flex items-center justify-center p-4 selection:bg-emerald-500/30 selection:text-emerald-200">
-      <div className="w-full max-w-md bg-zinc-900/80 border border-zinc-800/80 rounded-3xl p-8 shadow-2xl backdrop-blur-xl relative overflow-hidden">
-        {/* Glow accent */}
-        <div className="absolute -top-24 -left-24 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen bg-paper flex items-center justify-center p-4 selection:bg-ok-soft selection:text-ok">
+      <div className="w-full max-w-md bg-card border-2 border-ink rounded-2xl p-8 shadow-brutal relative overflow-hidden">
+        {/* Glow accent */}
 
         {/* Brand */}
         <div className="flex flex-col items-center text-center space-y-3 mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center shadow-xl shadow-emerald-500/20">
-            <ShieldCheck className="w-9 h-9 text-zinc-950 stroke-[2.5]" />
+          <div className="w-16 h-16 rounded-2xl bg-mint flex items-center justify-center shadow-brutal">
+            <ShieldCheck className="w-9 h-9 text-ink stroke-[2.5]" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-white tracking-wide">DEMENSION</h1>
-            <p className="text-xs text-zinc-400 mt-1">Авторизация в панели управления AmneziaWG</p>
+            <h1 className="text-2xl font-bold text-ink tracking-wide">DEMENSION</h1>
+            <p className="text-xs text-muted mt-1">Авторизация в панели управления AmneziaWG</p>
           </div>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs text-center animate-in fade-in">
+            <div className="p-3 bg-bad-soft border-2 border-ink rounded-xl text-bad text-xs text-center animate-in fade-in">
               {error}
             </div>
           )}
 
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">
+            <label className="block text-xs font-medium text-muted mb-1.5">
               Имя пользователя
             </label>
             <div className="relative">
@@ -66,14 +64,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 placeholder="admin"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl pl-10 pr-4 py-2.5 text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500 transition text-sm font-sans"
+                className="w-full bg-paper border-2 border-ink rounded-xl pl-10 pr-4 py-2.5 text-ink placeholder-faint focus:outline-none focus:border-ink transition text-sm font-sans"
               />
-              <User className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3" />
+              <User className="w-4 h-4 text-faint absolute left-3.5 top-3" />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-zinc-400 mb-1.5">
+            <label className="block text-xs font-medium text-muted mb-1.5">
               Пароль администратора
             </label>
             <div className="relative">
@@ -83,16 +81,16 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl pl-10 pr-4 py-2.5 text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500 transition text-sm font-sans"
+                className="w-full bg-paper border-2 border-ink rounded-xl pl-10 pr-4 py-2.5 text-ink placeholder-faint focus:outline-none focus:border-ink transition text-sm font-sans"
               />
-              <Lock className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3" />
+              <Lock className="w-4 h-4 text-faint absolute left-3.5 top-3" />
             </div>
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full mt-2 flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white font-medium text-sm py-2.5 rounded-xl transition shadow-lg shadow-emerald-600/20 active:scale-[0.99]"
+            className="w-full mt-2 flex items-center justify-center gap-2 bg-mint disabled:opacity-50 text-ink font-bold text-sm py-2.5 rounded-xl transition shadow-brutal-sm border-2 border-ink btn-press"
           >
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -105,7 +103,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           </button>
         </form>
 
-        <p className="text-[11px] text-zinc-600 text-center mt-6">
+        <p className="text-[11px] text-faint text-center mt-6">
           Demension Panel &bull; Изолированное управление AmneziaWG
         </p>
       </div>

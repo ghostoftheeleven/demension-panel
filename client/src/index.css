@@ -1,34 +1,132 @@
 @import "tailwindcss";
 
+/*
+ * Оформление neo-brutal: бумажный фон, чёрные рамки 2px, жёсткие тени без размытия, яркие плоские цвета.
+ * Цвета интерфейса — только семантические токены ниже (bg-card, text-muted, border-ink, bg-mint…), а не палитра
+ * Tailwind (zinc, emerald…): так тема меняется в одном месте. Шрифты и флаги лежат локально — CSP панели
+ * запрещает внешние ресурсы (server/src/middleware/security-headers.ts).
+ */
+
+/* Флаги стран: в Windows нет эмодзи-флагов. Шрифт Twemoji Country Flags (графика Twemoji — CC-BY 4.0,
+   сборка — country-flag-emoji-polyfill, MIT) подменяет только символы региональных индикаторов. */
+@font-face {
+  font-family: 'Twemoji Country Flags';
+  unicode-range: U+1F1E6-1F1FF, U+1F3F4, U+E0062-E007F;
+  src: url('./assets/fonts/TwemojiCountryFlags.woff2') format('woff2');
+  font-display: swap;
+}
+
+@theme {
+  --font-sans: 'Twemoji Country Flags', Rubik, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Twemoji Country Flags', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Поверхности и текст */
+  --color-paper: #fff8e7;     /* фон страницы, поля ввода, вложенные блоки */
+  --color-card: #ffffff;      /* карточки и модальные окна */
+  --color-soft: #f6ecd2;      /* выделение, наведение, неактивные вкладки */
+  --color-soft-2: #ecdcb2;    /* наведение на soft */
+  --color-ink: #111111;       /* рамки, основной текст, тени */
+  --color-muted: #4b4b4b;     /* второстепенный текст */
+  --color-faint: #7c7769;     /* подписи, плейсхолдеры */
+
+  /* Акценты — плоские заливки с чёрным текстом */
+  --color-mint: #2ee59d;      /* основное действие, «в сети» */
+  --color-yellow: #ffd43b;    /* активная вкладка, внимание */
+  --color-pink: #ff6bcb;
+  --color-blue: #4d7cff;
+  --color-violet: #b28dff;
+  --color-orange: #ff9f1c;
+  --color-danger: #ff4d4d;
+
+  /* Тексты статусов (читаемые на светлом) и мягкие подложки */
+  --color-ok: #087a45;
+  --color-ok-soft: #c9f7e4;
+  --color-bad: #c81e1e;
+  --color-bad-soft: #ffd9d9;
+  --color-warn: #9a5200;
+  --color-warn-soft: #ffeaa6;
+  --color-info: #1d4fd8;
+  --color-info-soft: #d9e4ff;
+  --color-accent: #6b2fd6;
+  --color-accent-soft: #eadfff;
+
+  --shadow-brutal: 5px 5px 0 0 var(--color-ink);
+  --shadow-brutal-sm: 3px 3px 0 0 var(--color-ink);
+
+  --radius-xl: 0.75rem;
+  --radius-2xl: 0.875rem;
+}
+
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {
   margin: 0;
-  background-color: #090a0f;
-  color: #e2e8f0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  background-color: var(--color-paper);
+  background-image: radial-gradient(rgb(17 17 17 / 0.11) 1px, transparent 1px);
+  background-size: 22px 22px;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
-/* Custom scrollbars for logs and tables */
+@layer base {
+  /* Поля ввода: фокус — жёсткая тень вместо свечения */
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  select,
+  textarea {
+    transition: box-shadow 0.08s, transform 0.08s;
+  }
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):focus,
+  select:focus,
+  textarea:focus {
+    outline: none;
+    box-shadow: var(--shadow-brutal-sm);
+  }
+  input[type='checkbox'],
+  input[type='radio'] {
+    accent-color: var(--color-ink);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: var(--color-yellow);
+    color: var(--color-ink);
+  }
+}
+
+/* Кнопки с тенью «нажимаются»: при наведении приподнимаются, при нажатии тень исчезает */
+@layer components {
+  .btn-press {
+    transition: transform 0.08s, box-shadow 0.08s, background-color 0.15s;
+  }
+  .btn-press:not(:disabled):hover {
+    transform: translate(-1px, -1px);
+    box-shadow: 4px 4px 0 0 var(--color-ink);
+  }
+  .btn-press:not(:disabled):active {
+    transform: translate(3px, 3px);
+    box-shadow: none;
+  }
+}
+
+/* Полосы прокрутки */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0f121a;
+  background: var(--color-paper);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e2638;
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #2e3a54;
+  background: var(--color-ink);
+  border: 3px solid var(--color-paper);
+  border-radius: 6px;
 }
 
 /* Появление модальных окон (классы animate-in / fade-in) */
@@ -42,11 +140,14 @@ body {
 }
 
 .animate-in.fade-in {
-  animation: demension-fade-in 0.2s ease-out;
+  animation: demension-fade-in 0.15s ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .animate-in.fade-in {
     animation: none;
+  }
+  .btn-press {
+    transition: none;
   }
 }

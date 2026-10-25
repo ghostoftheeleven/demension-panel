@@ -22,7 +22,7 @@ const CHANGE_WARNING =
   'а клиентам нужно будет обновить подписку или заново импортировать конфигурацию. Продолжить?';
 
 const inputBase =
-  'w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-1.5 text-white text-sm focus:outline-none font-mono';
+  'w-full bg-paper border-2 border-ink rounded-xl px-3 py-1.5 text-ink text-sm focus:outline-none font-mono';
 
 type FormState = {
   jc: string;
@@ -82,7 +82,7 @@ const Field: React.FC<{
   numeric?: boolean;
 }> = ({ label, hint, value, onChange, accent, numeric }) => (
   <div>
-    <label className="block text-xs font-medium text-zinc-400 mb-1" title={hint}>
+    <label className="block text-xs font-medium text-muted mb-1" title={hint}>
       {label}
     </label>
     <input
@@ -180,20 +180,20 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
   const extras = Object.entries(server.extra_params || {});
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/60 animate-in fade-in duration-200">
+      <div className="bg-card border-2 border-ink rounded-2xl w-full max-w-2xl shadow-brutal overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-zinc-900/50">
+        <div className="flex items-center justify-between px-6 py-4 border-b-2 border-ink bg-card">
           <div className="flex items-center gap-2">
-            <Dna className="w-5 h-5 text-emerald-400" />
+            <Dna className="w-5 h-5 text-ok" />
             <div>
-              <h2 className="text-base font-semibold text-white">
+              <h2 className="text-base font-semibold text-ink">
                 Параметры обфускации AmneziaWG {modern ? '3.x' : '1.x'}
               </h2>
-              <p className="text-xs text-zinc-400">{server.name} ({server.host})</p>
+              <p className="text-xs text-muted">{server.name} ({server.host})</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-zinc-400 hover:text-white transition p-1 rounded-lg hover:bg-zinc-800">
+          <button onClick={onClose} className="text-muted hover:text-ink transition p-1 rounded-lg hover:bg-soft border-2 border-ink">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -201,7 +201,7 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
         {/* Form */}
         <form onSubmit={handleSave} className="p-6 space-y-5 overflow-y-auto">
           {outdated && (
-            <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs text-amber-200">
+            <div className="p-3 bg-warn-soft border-2 border-ink rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs text-warn">
               <span>
                 Сервер использует устаревший формат AmneziaWG 1.x (одиночные H, без S3/S4 и защиты заголовков).
               </span>
@@ -209,7 +209,7 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
                 type="button"
                 onClick={handleUpgrade}
                 disabled={loading}
-                className="flex items-center gap-1.5 bg-amber-500/20 hover:bg-amber-500/30 font-medium px-3 py-1.5 rounded-lg transition"
+                className="flex items-center gap-1.5 bg-warn-soft hover:bg-warn-soft font-medium px-3 py-1.5 rounded-lg transition"
               >
                 <ArrowUpCircle className="w-3.5 h-3.5" />
                 <span>Перейти на {server.latest_awg_version}.x</span>
@@ -217,8 +217,8 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
             </div>
           )}
 
-          <div className="p-3 bg-zinc-950/60 border border-zinc-800 rounded-xl flex items-start gap-3 text-xs text-zinc-400">
-            <Info className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
+          <div className="p-3 bg-paper border-2 border-ink rounded-xl flex items-start gap-3 text-xs text-muted">
+            <Info className="w-4 h-4 text-ok flex-shrink-0 mt-0.5" />
             <span>
               S1–S4, H1–H4 и ключ защиты заголовков должны совпадать на сервере и клиентах; Jc/Jmin/Jmax и I1–I5 — только у клиента.
               {installed && ' После сохранения AmneziaWG на сервере будет перезапущен, а клиентам потребуется обновить конфигурацию.'}
@@ -226,63 +226,63 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
           </div>
 
           <div className="space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-emerald-400">Мусорные пакеты</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-ok">Мусорные пакеты</h3>
             <div className="grid grid-cols-3 gap-3">
-              <Field label="Jc (кол-во)" value={form.jc} onChange={set('jc')} accent="focus:border-emerald-500" numeric />
-              <Field label="Jmin (байт)" value={form.jmin} onChange={set('jmin')} accent="focus:border-emerald-500" numeric />
-              <Field label="Jmax (байт)" value={form.jmax} onChange={set('jmax')} accent="focus:border-emerald-500" numeric />
+              <Field label="Jc (кол-во)" value={form.jc} onChange={set('jc')} accent="focus:border-ink" numeric />
+              <Field label="Jmin (байт)" value={form.jmin} onChange={set('jmin')} accent="focus:border-ink" numeric />
+              <Field label="Jmax (байт)" value={form.jmax} onChange={set('jmax')} accent="focus:border-ink" numeric />
             </div>
           </div>
 
           <div className="space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-cyan-400">Дополнение пакетов (padding)</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-info">Дополнение пакетов (padding)</h3>
             <div className={`grid gap-3 ${modern ? 'grid-cols-4' : 'grid-cols-2'}`}>
-              <Field label="S1 (init)" value={form.s1} onChange={set('s1')} accent="focus:border-cyan-500" numeric />
-              <Field label="S2 (response)" value={form.s2} onChange={set('s2')} accent="focus:border-cyan-500" numeric />
-              {modern && <Field label="S3 (cookie)" value={form.s3} onChange={set('s3')} accent="focus:border-cyan-500" numeric />}
-              {modern && <Field label="S4 (transport, ≤32)" value={form.s4} onChange={set('s4')} accent="focus:border-cyan-500" numeric />}
+              <Field label="S1 (init)" value={form.s1} onChange={set('s1')} accent="focus:border-ink" numeric />
+              <Field label="S2 (response)" value={form.s2} onChange={set('s2')} accent="focus:border-ink" numeric />
+              {modern && <Field label="S3 (cookie)" value={form.s3} onChange={set('s3')} accent="focus:border-ink" numeric />}
+              {modern && <Field label="S4 (transport, ≤32)" value={form.s4} onChange={set('s4')} accent="focus:border-ink" numeric />}
             </div>
           </div>
 
           <div className="space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-purple-400">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-accent">
               Заголовки {modern ? '(диапазоны без пересечений, например 100000-200000)' : ''}
             </h3>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="H1 (initiation)" value={form.h1} onChange={set('h1')} accent="focus:border-purple-500" />
-              <Field label="H2 (response)" value={form.h2} onChange={set('h2')} accent="focus:border-purple-500" />
-              <Field label="H3 (cookie reply)" value={form.h3} onChange={set('h3')} accent="focus:border-purple-500" />
-              <Field label="H4 (transport)" value={form.h4} onChange={set('h4')} accent="focus:border-purple-500" />
+              <Field label="H1 (initiation)" value={form.h1} onChange={set('h1')} accent="focus:border-ink" />
+              <Field label="H2 (response)" value={form.h2} onChange={set('h2')} accent="focus:border-ink" />
+              <Field label="H3 (cookie reply)" value={form.h3} onChange={set('h3')} accent="focus:border-ink" />
+              <Field label="H4 (transport)" value={form.h4} onChange={set('h4')} accent="focus:border-ink" />
             </div>
           </div>
 
           {modern && (
             <div className="space-y-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-amber-400">Защита заголовков</h3>
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-warn">Защита заголовков</h3>
               <div className="flex items-center gap-2">
                 <input
                   value={form.header_protection_key}
                   onChange={(e) => set('header_protection_key')(e.target.value)}
                   placeholder="выключена"
-                  className={`${inputBase} focus:border-amber-500 text-xs`}
+                  className={`${inputBase} focus:border-ink text-xs`}
                 />
                 <button
                   type="button"
                   onClick={() => set('header_protection_key')(generateKey())}
-                  className="flex items-center gap-1.5 flex-shrink-0 px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl transition"
+                  className="flex items-center gap-1.5 flex-shrink-0 px-3 py-1.5 text-xs bg-soft hover:bg-soft-2 text-ink rounded-xl transition border-2 border-ink"
                   title="Сгенерировать новый ключ"
                 >
-                  <KeyRound className="w-3.5 h-3.5 text-amber-400" />
+                  <KeyRound className="w-3.5 h-3.5 text-warn" />
                   <span>Новый</span>
                 </button>
               </div>
-              <p className="text-[11px] text-zinc-500">HeaderProtectionKey шифрует заголовки пакетов. Требует S1–S4 не меньше 12.</p>
+              <p className="text-[11px] text-faint">HeaderProtectionKey шифрует заголовки пакетов. Требует S1–S4 не меньше 12.</p>
             </div>
           )}
 
           <div className="space-y-2">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-300">Сигнатурные пакеты I1–I5 (необязательно)</h3>
-            <p className="text-[11px] text-zinc-500">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-ink">Сигнатурные пакеты I1–I5 (необязательно)</h3>
+            <p className="text-[11px] text-faint">
               Отправляются клиентом перед рукопожатием. Теги: <code>&lt;b 0x…&gt;</code>, <code>&lt;r N&gt;</code>, <code>&lt;rd N&gt;</code>,{' '}
               <code>&lt;rc N&gt;</code>, <code>&lt;t&gt;</code>.
             </p>
@@ -292,14 +292,14 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
                 value={form[key]}
                 onChange={(e) => set(key)(e.target.value)}
                 placeholder={key.toUpperCase()}
-                className={`${inputBase} focus:border-zinc-500 text-xs`}
+                className={`${inputBase} focus:border-ink text-xs`}
               />
             ))}
           </div>
 
           {extras.length > 0 && (
-            <div className="text-[11px] text-zinc-500 space-y-1">
-              <p className="font-medium text-zinc-400">Дополнительные параметры (импортированы, сохраняются как есть):</p>
+            <div className="text-[11px] text-faint space-y-1">
+              <p className="font-medium text-muted">Дополнительные параметры (импортированы, сохраняются как есть):</p>
               {extras.map(([key, value]) => (
                 <p key={key} className="font-mono">
                   {key} = {value}
@@ -309,25 +309,25 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
           )}
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-between pt-4 border-t border-zinc-800">
+          <div className="flex items-center justify-between pt-4 border-t-2 border-ink">
             <button
               type="button"
               onClick={handleRandomize}
               disabled={loading}
-              className="flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-zinc-300 hover:text-white bg-zinc-800 hover:bg-zinc-700 rounded-xl transition"
+              className="flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-ink hover:text-ink bg-soft hover:bg-soft-2 rounded-xl transition border-2 border-ink"
             >
-              <Shuffle className="w-3.5 h-3.5 text-emerald-400" />
+              <Shuffle className="w-3.5 h-3.5 text-ok" />
               <span>Случайные параметры</span>
             </button>
 
             <div className="flex items-center gap-2">
-              <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition">
+              <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-muted hover:text-ink transition">
                 Отмена
               </button>
               <button
                 type="submit"
                 disabled={loading}
-                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-medium text-sm px-5 py-2 rounded-xl transition shadow-lg shadow-emerald-600/20"
+                className="flex items-center gap-2 bg-mint hover:bg-mint disabled:opacity-50 text-ink font-bold text-sm px-5 py-2 rounded-xl transition shadow-brutal-sm border-2 border-ink btn-press"
               >
                 <Save className="w-4 h-4" />
                 <span>Сохранить</span>

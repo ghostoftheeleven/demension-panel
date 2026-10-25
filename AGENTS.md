@@ -38,6 +38,7 @@ server/            Node.js 22.13+ / Express 4 / TypeScript, SQLite через no
   src/middleware/    авторизация, ограничение частоты, заголовки безопасности (CSP), единый обработчик ошибок
   test/              vitest: *.test.ts, helpers/ (API, БД, подмена SSH и панели партнёра, процесс панели), docker/ (тестовые ноды)
 client/            React 19 + Vite + Tailwind 4 (SPA, собирается в client/dist и раздаётся сервером)
+  src/index.css      тема neo-brutal: семантические цвета (paper, card, ink, muted, mint…), тени shadow-brutal, шрифты
 install.sh         установка панели на VPS (systemd)
 docs/              документация
 ```
@@ -64,6 +65,9 @@ CI (`.github/workflows/ci.yml`) выполняет всё перечисленн
 - Shell-скрипты хранятся с LF (`.gitattributes`). На Windows с `core.autocrlf=true` рабочие файлы могут быть с CRLF —
   учитывайте это в скриптах, которые патчат исходники.
 - Тексты интерфейса и сообщения об ошибках — на русском.
+- Оформление интерфейса — neo-brutal (выбрал владелец): чёрные рамки `border-2 border-ink`, жёсткие тени `shadow-brutal(-sm)`,
+  плоские заливки, кнопки-действия с `btn-press`. Цвета — только семантические токены из `client/src/index.css`
+  (`bg-card`, `text-muted`, `bg-ok-soft text-ok`…), не палитра Tailwind (`zinc`, `emerald`…), без градиентов и размытия.
 - Новые функции и правки поведения сопровождайте тестами в `server/test` и обновлением документа в `docs/`; новое правило,
   которое легко нарушить, — пунктом в инвариантах ниже. Изменили данные для ИИ-агентов (этот файл, `docs/`) — обновляйте их в том
   же коммите. Правила тестов — [docs/testing.md](docs/testing.md): проверяйте реальный код, тест на баг должен падать на старом коде,
@@ -175,6 +179,9 @@ CI на `main`. Подробно — [docs/releases.md](docs/releases.md).
     Поэтому `install.sh` обязан поддерживать `PANEL_UPDATE_REF=vX.Y.Z` (ff-merge тега вместо `git pull`) и работу без терминала без
     вопросов и без смены учётных данных; аргументы `update-panel.sh` (каталог, каталог состояния, версия, текущая версия) и формат
     `data/update/status.json` не меняйте несовместимо. Процесс обновления живёт в отдельной службе `systemd-run`, а не в дочернем процессе панели.
+35. **Интерфейс не загружает ничего извне** (CSP: `default-src 'self'`, security-headers.ts): шрифты и прочие файлы лежат в сборке
+    (`@fontsource/*`, `client/src/assets`), а `assetsInlineLimit: 0` в vite.config.ts не даёт встроить их как `data:` — такие шрифты CSP
+    блокирует. CI проверяет CSS сборки.
 
 ## Чек-лист перед коммитом
 

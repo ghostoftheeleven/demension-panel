@@ -3,9 +3,9 @@ import type { ProbeResult } from '../types';
 import { countryFlag, countryName } from '../utils';
 
 const MARK: Record<ProbeResult['status'], { symbol: string; label: string; className: string }> = {
-  ok: { symbol: '✓', label: 'доступна', className: 'text-emerald-400' },
-  partial: { symbol: '!', label: 'доступна не со всех узлов страны', className: 'text-amber-400' },
-  fail: { symbol: '✕', label: 'недоступна', className: 'text-red-400' },
+  ok: { symbol: '✓', label: 'доступна', className: 'text-ok' },
+  partial: { symbol: '!', label: 'доступна не со всех узлов страны', className: 'text-warn' },
+  fail: { symbol: '✕', label: 'недоступна', className: 'text-bad' },
 };
 
 /**
@@ -21,11 +21,11 @@ export const ProbeBadges: React.FC<{ probes?: ProbeResult[]; showRtt?: boolean }
           <span
             key={p.country}
             title={`${countryName(p.country)}: ${mark.label} (${p.ok_nodes} из ${p.total_nodes} узлов${p.rtt_ms !== null ? `, ${p.rtt_ms} мс` : ''}); проверено ${new Date(p.checked_at).toLocaleString()}`}
-            className="inline-flex items-center gap-0.5 text-[11px] bg-zinc-950/70 border border-zinc-800 rounded-md px-1.5 py-0.5"
+            className="inline-flex items-center gap-0.5 text-[11px] bg-paper border-2 border-ink rounded-md px-1.5 py-0.5"
           >
             <span>{countryFlag(p.country)}</span>
             <span className={`font-bold ${mark.className}`}>{mark.symbol}</span>
-            {showRtt && p.rtt_ms !== null && <span className="text-zinc-500 font-mono">{p.rtt_ms} мс</span>}
+            {showRtt && p.rtt_ms !== null && <span className="text-faint font-mono">{p.rtt_ms} мс</span>}
           </span>
         );
       })}

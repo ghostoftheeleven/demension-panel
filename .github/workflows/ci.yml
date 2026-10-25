@@ -38,6 +38,9 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run build
+      # CSP панели (font-src 'self') блокирует встроенные data:-шрифты и внешние ресурсы
+      - run: |
+          ! grep -lE 'data:font|fonts.googleapis|url\(https?:' dist/assets/*.css
 
   scripts:
     runs-on: ubuntu-latest

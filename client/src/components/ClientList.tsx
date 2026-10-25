@@ -96,17 +96,17 @@ export const ClientList: React.FC<ClientListProps> = ({
   );
 
   return (
-    <div className="bg-zinc-900/70 border border-zinc-800/80 rounded-2xl p-6 shadow-xl space-y-5">
+    <div className="bg-card border-2 border-ink rounded-2xl p-6 shadow-brutal space-y-5">
       {/* Table Header Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h3 className="text-base font-semibold text-white flex items-center gap-2">
+          <h3 className="text-base font-semibold text-ink flex items-center gap-2">
             <span>Клиенты AmneziaWG</span>
-            <span className="text-xs font-mono text-zinc-400 bg-zinc-800 px-2 py-0.5 rounded-full">
+            <span className="text-xs font-mono text-muted bg-soft px-2 py-0.5 rounded-full border-2 border-ink">
               {clients.length}
             </span>
           </h3>
-          <p className="text-xs text-zinc-400 mt-0.5">Управление пирами и устройствами сервера {serverName}</p>
+          <p className="text-xs text-muted mt-0.5">Управление пирами и устройствами сервера {serverName}</p>
         </div>
 
         <div className="flex items-center gap-3">
@@ -117,14 +117,14 @@ export const ClientList: React.FC<ClientListProps> = ({
               placeholder="Поиск по имени или IP..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="bg-zinc-950 border border-zinc-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500 w-48 sm:w-60 transition"
+              className="bg-paper border-2 border-ink rounded-xl pl-8 pr-3 py-1.5 text-xs text-ink placeholder-faint focus:outline-none focus:border-ink w-48 sm:w-60 transition"
             />
-            <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-2.5 top-2" />
+            <Search className="w-3.5 h-3.5 text-faint absolute left-2.5 top-2" />
           </div>
 
           <button
             onClick={onAddClient}
-            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs px-3.5 py-1.5 rounded-xl transition shadow-md shadow-emerald-600/20 active:scale-[0.98]"
+            className="flex items-center gap-1.5 bg-mint hover:bg-mint text-ink font-bold text-xs px-3.5 py-1.5 rounded-xl transition shadow-brutal-sm border-2 border-ink btn-press"
           >
             <Plus className="w-4 h-4" />
             <span>Добавить клиента</span>
@@ -134,10 +134,10 @@ export const ClientList: React.FC<ClientListProps> = ({
 
       {/* Clients Table */}
       {filteredClients.length === 0 ? (
-        <div className="text-center py-12 border border-dashed border-zinc-800 rounded-xl">
-          <Laptop className="w-10 h-10 text-zinc-600 mx-auto mb-2" />
-          <p className="text-sm font-medium text-zinc-400">Нет добавленных клиентов</p>
-          <p className="text-xs text-zinc-600 mt-1">
+        <div className="text-center py-12 border-2 border-dashed border-ink rounded-xl">
+          <Laptop className="w-10 h-10 text-faint mx-auto mb-2" />
+          <p className="text-sm font-medium text-muted">Нет добавленных клиентов</p>
+          <p className="text-xs text-faint mt-1">
             Нажмите «Добавить клиента», чтобы сгенерировать конфигурацию и QR-код
           </p>
         </div>
@@ -145,7 +145,7 @@ export const ClientList: React.FC<ClientListProps> = ({
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-zinc-800 text-zinc-400">
+              <tr className="border-b-2 border-ink text-muted">
                 <th className="pb-3 font-medium">Клиент / Устройство</th>
                 <th className="pb-3 font-medium">IP адрес</th>
                 <th className="pb-3 font-medium">Статус</th>
@@ -154,21 +154,21 @@ export const ClientList: React.FC<ClientListProps> = ({
                 <th className="pb-3 font-medium text-right">Действия</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-800/60">
+            <tbody className="divide-y-2 divide-ink">
               {filteredClients.map((client) => {
                 const online = isOnline(client.last_handshake);
                 const disabled = !client.enabled || client.owner_blocked;
                 const keyless = client.external || Boolean(client.partner_name) || client.pending;
 
                 return (
-                  <tr key={client.id} className="hover:bg-zinc-800/20 transition">
+                  <tr key={client.id} className="hover:bg-soft transition">
                     {/* Name */}
-                    <td className="py-3 font-medium text-white flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${disabled ? 'bg-zinc-600' : online ? 'bg-emerald-400' : 'bg-zinc-500'}`} />
+                    <td className="py-3 font-medium text-ink flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${disabled ? 'bg-faint' : online ? 'bg-mint' : 'bg-faint'}`} />
                       <span>{client.name}</span>
                       {client.partner_name && (
                         <span
-                          className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-300 border border-amber-500/20"
+                          className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-warn-soft text-warn border-2 border-ink"
                           title="Клиент создан панелью партнёра. Его можно заблокировать, но не удалить."
                         >
                           партнёр: {client.partner_name}
@@ -176,20 +176,20 @@ export const ClientList: React.FC<ClientListProps> = ({
                       )}
                       {client.pending && (
                         <span
-                          className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-zinc-800 text-zinc-400 border border-zinc-700"
+                          className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-soft text-muted border-2 border-ink"
                           title={client.remote_state?.startsWith('error') ? client.remote_state.slice(7) : 'Ожидает создания на ноде партнёра'}
                         >
                           {client.remote_state?.startsWith('error') ? 'ошибка у владельца' : 'создаётся'}
                         </span>
                       )}
                       {client.remote_state === 'blocked' && (
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-500/10 text-red-300 border border-red-500/20">
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-bad-soft text-bad border-2 border-ink">
                           заблокирован владельцем
                         </span>
                       )}
                       {client.external && (
                         <span
-                          className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-zinc-800 text-zinc-400 border border-zinc-700"
+                          className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-soft text-muted border-2 border-ink"
                           title="Импортирован из существующей установки: конфигурация и QR-код недоступны"
                         >
                           импорт
@@ -198,36 +198,36 @@ export const ClientList: React.FC<ClientListProps> = ({
                     </td>
 
                     {/* IP */}
-                    <td className="py-3 font-mono text-zinc-300">
+                    <td className="py-3 font-mono text-ink">
                       {client.client_ip}
                     </td>
 
                     {/* Status Badge */}
                     <td className="py-3">
                       {disabled ? (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-800 text-zinc-400 border border-zinc-700">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-soft text-muted border-2 border-ink">
                           Отключен
                         </span>
                       ) : online ? (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-ok-soft text-ok border-2 border-ink">
+                          <span className="w-1.5 h-1.5 rounded-full bg-mint animate-pulse" />
                           Онлайн
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-800/60 text-zinc-400 border border-zinc-700/50">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-soft text-muted border-2 border-ink">
                           Неактивен
                         </span>
                       )}
                     </td>
 
                     {/* Traffic */}
-                    <td className="py-3 text-zinc-300 font-mono">
+                    <td className="py-3 text-ink font-mono">
                       <div className="flex items-center gap-3">
-                        <span className="flex items-center gap-1 text-emerald-400" title="Получено клиентом">
+                        <span className="flex items-center gap-1 text-ok" title="Получено клиентом">
                           <ArrowDownRight className="w-3.5 h-3.5" />
                           {formatBytes(client.total_tx)}
                         </span>
-                        <span className="flex items-center gap-1 text-cyan-400" title="Отправлено клиентом">
+                        <span className="flex items-center gap-1 text-info" title="Отправлено клиентом">
                           <ArrowUpRight className="w-3.5 h-3.5" />
                           {formatBytes(client.total_rx)}
                         </span>
@@ -235,9 +235,9 @@ export const ClientList: React.FC<ClientListProps> = ({
                     </td>
 
                     {/* Last Handshake */}
-                    <td className="py-3 text-zinc-400">
+                    <td className="py-3 text-muted">
                       <div className="flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5 text-zinc-500" />
+                        <Clock className="w-3.5 h-3.5 text-faint" />
                         <span>{formatLastHandshake(client.last_handshake)}</span>
                       </div>
                     </td>
@@ -249,7 +249,7 @@ export const ClientList: React.FC<ClientListProps> = ({
                           onClick={() => onShowQr(client.id)}
                           disabled={keyless}
                           title={keyless ? 'Конфигурация недоступна для этого клиента' : 'Показать QR-код'}
-                          className="p-1.5 text-zinc-400 hover:text-emerald-400 hover:bg-zinc-800 rounded-lg transition"
+                          className="p-1.5 text-muted hover:text-ok hover:bg-soft rounded-lg transition border-2 border-ink"
                         >
                           <QrCode className="w-4 h-4" />
                         </button>
@@ -258,7 +258,7 @@ export const ClientList: React.FC<ClientListProps> = ({
                           onClick={() => handleDownload(client)}
                           disabled={keyless}
                           title={keyless ? 'Конфигурация недоступна для этого клиента' : 'Скачать .conf'}
-                          className="p-1.5 text-zinc-400 hover:text-cyan-400 hover:bg-zinc-800 rounded-lg transition"
+                          className="p-1.5 text-muted hover:text-info hover:bg-soft rounded-lg transition border-2 border-ink"
                         >
                           <Download className="w-4 h-4" />
                         </button>
@@ -268,8 +268,8 @@ export const ClientList: React.FC<ClientListProps> = ({
                           title={!disabled ? (client.partner_name ? 'Заблокировать клиента партнёра' : 'Отключить пира') : (client.partner_name ? 'Разблокировать' : 'Включить пира')}
                           className={`p-1.5 rounded-lg transition ${
                             !disabled
-                              ? 'text-zinc-400 hover:text-amber-400 hover:bg-zinc-800'
-                              : 'text-amber-400 hover:text-emerald-400 hover:bg-zinc-800'
+                              ? 'text-muted hover:text-warn hover:bg-soft'
+                              : 'text-warn hover:text-ok hover:bg-soft'
                           }`}
                         >
                           <Power className="w-4 h-4" />
@@ -279,7 +279,7 @@ export const ClientList: React.FC<ClientListProps> = ({
                         <button
                           onClick={() => handleDelete(client)}
                           title="Удалить пира"
-                          className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-zinc-800 rounded-lg transition"
+                          className="p-1.5 text-muted hover:text-bad hover:bg-soft rounded-lg transition border-2 border-ink"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>

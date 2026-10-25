@@ -13,8 +13,8 @@ interface AccountModalProps {
 type AccountTab = 'password' | 'username';
 
 const inputClass =
-  'w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-emerald-500 text-sm';
-const labelClass = 'block text-xs font-medium text-zinc-400 mb-1';
+  'w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2 text-ink focus:outline-none focus:border-ink text-sm';
+const labelClass = 'block text-xs font-medium text-muted mb-1';
 
 export const AccountModal: React.FC<AccountModalProps> = ({ isOpen, user, onClose, onUsernameChanged }) => {
   const [tab, setTab] = useState<AccountTab>('password');
@@ -97,34 +97,34 @@ export const AccountModal: React.FC<AccountModalProps> = ({ isOpen, user, onClos
 
   const tabClass = (active: boolean) =>
     `flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition ${
-      active ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-white'
+      active ? 'bg-soft text-ink shadow-brutal-sm' : 'text-muted hover:text-ink'
     }`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/60 animate-in fade-in duration-200">
+      <div className="bg-card border-2 border-ink rounded-2xl w-full max-w-md shadow-brutal overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-zinc-900/60">
+        <div className="flex items-center justify-between px-6 py-4 border-b-2 border-ink bg-card">
           <div className="flex items-center gap-2">
-            <Lock className="w-5 h-5 text-emerald-400" />
-            <h2 className="text-base font-semibold text-white">Учётная запись администратора</h2>
+            <Lock className="w-5 h-5 text-ok" />
+            <h2 className="text-base font-semibold text-ink">Учётная запись администратора</h2>
           </div>
           <button
             onClick={onClose}
-            className="text-zinc-400 hover:text-white transition p-1 rounded-lg hover:bg-zinc-800"
+            className="text-muted hover:text-ink transition p-1 rounded-lg hover:bg-soft border-2 border-ink"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="px-6 pt-4">
-          <div className="flex gap-1 bg-zinc-950/60 p-1 rounded-xl border border-zinc-800/80">
+          <div className="flex gap-1 bg-paper p-1 rounded-xl border-2 border-ink">
             <button type="button" onClick={() => switchTab('password')} className={tabClass(tab === 'password')}>
-              <Lock className="w-3.5 h-3.5 text-emerald-400" />
+              <Lock className="w-3.5 h-3.5 text-ok" />
               <span>Пароль</span>
             </button>
             <button type="button" onClick={() => switchTab('username')} className={tabClass(tab === 'username')}>
-              <User className="w-3.5 h-3.5 text-cyan-400" />
+              <User className="w-3.5 h-3.5 text-info" />
               <span>Логин</span>
             </button>
           </div>
@@ -133,10 +133,10 @@ export const AccountModal: React.FC<AccountModalProps> = ({ isOpen, user, onClos
         {/* Messages */}
         <div className="px-6 pt-4 space-y-3 empty:hidden">
           {error && (
-            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs">{error}</div>
+            <div className="p-3 bg-bad-soft border-2 border-ink rounded-xl text-bad text-xs">{error}</div>
           )}
           {success && (
-            <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs flex items-center gap-2">
+            <div className="p-3 bg-ok-soft border-2 border-ink rounded-xl text-ok text-xs flex items-center gap-2">
               <Check className="w-4 h-4" />
               <span>{success}</span>
             </div>
@@ -182,13 +182,13 @@ export const AccountModal: React.FC<AccountModalProps> = ({ isOpen, user, onClos
             </div>
 
             <div className="flex items-center justify-end gap-3 pt-3">
-              <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition">
+              <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-muted hover:text-ink transition">
                 Отмена
               </button>
               <button
                 type="submit"
                 disabled={loading || !!success}
-                className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-medium text-sm px-5 py-2 rounded-xl transition shadow-lg shadow-emerald-600/20"
+                className="bg-mint hover:bg-mint disabled:opacity-50 text-ink font-bold text-sm px-5 py-2 rounded-xl transition shadow-brutal-sm border-2 border-ink btn-press"
               >
                 {loading ? 'Сохранение...' : 'Обновить пароль'}
               </button>
@@ -196,8 +196,8 @@ export const AccountModal: React.FC<AccountModalProps> = ({ isOpen, user, onClos
           </form>
         ) : (
           <form onSubmit={handleUsernameSubmit} className="p-6 space-y-4">
-            <div className="text-xs text-zinc-400">
-              Текущий логин: <span className="font-mono text-white">{user?.username ?? '—'}</span>
+            <div className="text-xs text-muted">
+              Текущий логин: <span className="font-mono text-ink">{user?.username ?? '—'}</span>
             </div>
 
             <div>
@@ -226,18 +226,18 @@ export const AccountModal: React.FC<AccountModalProps> = ({ isOpen, user, onClos
               />
             </div>
 
-            <p className="text-[11px] text-zinc-500">
+            <p className="text-[11px] text-faint">
               Остальные сессии администратора будут завершены, в этой вы останетесь авторизованы.
             </p>
 
             <div className="flex items-center justify-end gap-3 pt-3">
-              <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition">
+              <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-muted hover:text-ink transition">
                 Отмена
               </button>
               <button
                 type="submit"
                 disabled={loading || !!success}
-                className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-medium text-sm px-5 py-2 rounded-xl transition shadow-lg shadow-emerald-600/20"
+                className="bg-mint hover:bg-mint disabled:opacity-50 text-ink font-bold text-sm px-5 py-2 rounded-xl transition shadow-brutal-sm border-2 border-ink btn-press"
               >
                 {loading ? 'Сохранение...' : 'Сменить логин'}
               </button>

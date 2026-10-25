@@ -103,35 +103,35 @@ export const InstallLogsModal: React.FC<InstallLogsModalProps> = ({
   if (!isOpen || !server) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="bg-zinc-950 border border-zinc-800 rounded-2xl w-full max-w-3xl shadow-2xl flex flex-col h-[75vh] overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/60 animate-in fade-in duration-200">
+      <div className="bg-paper border-2 border-ink rounded-2xl w-full max-w-3xl shadow-brutal flex flex-col h-[75vh] overflow-hidden">
         {/* Terminal Header */}
-        <div className="flex items-center justify-between px-6 py-3.5 border-b border-zinc-800 bg-zinc-900/60">
+        <div className="flex items-center justify-between px-6 py-3.5 border-b-2 border-ink bg-card">
           <div className="flex items-center gap-2.5">
-            <Terminal className="w-5 h-5 text-emerald-400" />
+            <Terminal className="w-5 h-5 text-ok" />
             <div>
-              <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-ink flex items-center gap-2">
                 <span>Установка AmneziaWG на {server.name}</span>
-                <span className="text-zinc-500 font-mono text-xs">({server.host})</span>
+                <span className="text-faint font-mono text-xs">({server.host})</span>
               </h2>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
             {status === 'running' && (
-              <div className="flex items-center gap-2 text-xs text-amber-400 bg-amber-400/10 px-2.5 py-1 rounded-full border border-amber-400/20">
+              <div className="flex items-center gap-2 text-xs text-warn bg-warn-soft px-2.5 py-1 rounded-full border-2 border-ink">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 <span>Установка...</span>
               </div>
             )}
             {status === 'success' && (
-              <div className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-400/10 px-2.5 py-1 rounded-full border border-emerald-400/20">
+              <div className="flex items-center gap-1.5 text-xs text-ok bg-ok-soft px-2.5 py-1 rounded-full border-2 border-ink">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 <span>Успешно завершено</span>
               </div>
             )}
             {status === 'error' && (
-              <div className="flex items-center gap-1.5 text-xs text-red-400 bg-red-400/10 px-2.5 py-1 rounded-full border border-red-400/20">
+              <div className="flex items-center gap-1.5 text-xs text-bad bg-bad-soft px-2.5 py-1 rounded-full border-2 border-ink">
                 <AlertCircle className="w-3.5 h-3.5" />
                 <span>Ошибка</span>
               </div>
@@ -139,7 +139,7 @@ export const InstallLogsModal: React.FC<InstallLogsModalProps> = ({
 
             <button
               onClick={onClose}
-              className="text-zinc-400 hover:text-white transition p-1 rounded-lg hover:bg-zinc-800"
+              className="text-muted hover:text-ink transition p-1 rounded-lg hover:bg-soft border-2 border-ink"
             >
               <X className="w-5 h-5" />
             </button>
@@ -149,10 +149,10 @@ export const InstallLogsModal: React.FC<InstallLogsModalProps> = ({
         {/* Terminal Console */}
         <div
           ref={logContainerRef}
-          className="flex-1 p-5 font-mono text-xs text-zinc-300 overflow-y-auto bg-black/90 space-y-1 select-text leading-relaxed whitespace-pre-wrap"
+          className="flex-1 p-5 font-mono text-xs text-ink overflow-y-auto bg-ink/60 space-y-1 select-text leading-relaxed whitespace-pre-wrap"
         >
           {logs.length === 0 && status === 'connecting' && (
-            <div className="text-zinc-500 italic">Подключение к удаленному серверу по SSH...</div>
+            <div className="text-faint italic">Подключение к удаленному серверу по SSH...</div>
           )}
 
           {logs.map((log, index) => {
@@ -165,12 +165,12 @@ export const InstallLogsModal: React.FC<InstallLogsModalProps> = ({
                 key={index}
                 className={
                   isError
-                    ? 'text-red-400'
+                    ? 'text-bad'
                     : isSuccess
-                    ? 'text-emerald-400 font-semibold'
+                    ? 'text-ok font-semibold'
                     : isHeader
-                    ? 'text-cyan-400 font-medium'
-                    : 'text-zinc-300'
+                    ? 'text-info font-medium'
+                    : 'text-ink'
                 }
               >
                 {log}
@@ -179,18 +179,18 @@ export const InstallLogsModal: React.FC<InstallLogsModalProps> = ({
           })}
 
           {errorMessage && (
-            <div className="text-red-400 bg-red-950/40 border border-red-800/40 p-3 rounded-lg my-2">
+            <div className="text-bad bg-bad-soft border-2 border-ink p-3 rounded-lg my-2">
               {errorMessage}
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3 border-t border-zinc-800 bg-zinc-900/40 flex items-center justify-between text-xs text-zinc-500">
+        <div className="px-6 py-3 border-t-2 border-ink bg-card flex items-center justify-between text-xs text-faint">
           <span>Поддерживаемые ОС: Ubuntu 20.04+, Debian 11+, AlmaLinux 9+</span>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg transition font-medium"
+            className="px-4 py-1.5 bg-soft hover:bg-soft-2 text-ink rounded-lg transition font-medium border-2 border-ink"
           >
             Закрыть
           </button>
