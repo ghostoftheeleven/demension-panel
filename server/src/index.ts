@@ -9,7 +9,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { initDatabase, db } from './db/index.js';
 import { AuthService } from './services/auth.service.js';
 import { requireAuth } from './middleware/auth.middleware.js';
-import { loginIpLimiter, loginUserLimiter } from './middleware/rate-limit.js';
+import { loginIpLimiter, loginUserLimiter, migrationCodeLimiter, reauthLimiter } from './middleware/rate-limit.js';
 import { authRouter } from './routes/auth.js';
 import { serversRouter } from './routes/servers.js';
 import { clientsRouter } from './routes/clients.js';
@@ -22,6 +22,11 @@ import { federationRouter, cleanupFederationLimits } from './routes/federation.j
 import { partnersRouter } from './routes/partners.js';
 import { remotePanelsRouter } from './routes/remote-panels.js';
 import { versionRouter } from './routes/version.js';
+import { migrationRouter } from './routes/migration.js';
+import { probesRouter } from './routes/probes.js';
+import { ProbeService } from './services/probe.service.js';
+import { migrationGuard, subscriptionFreeze } from './middleware/migration-guard.js';
+import { MigrationService } from './services/migration.service.js';
 import { PANEL_VERSION } from './services/version.service.js';
 import { PartnerService } from './services/partner.service.js';
 import { FederationClient } from './services/federation-client.service.js';
@@ -60,12 +65,16 @@ app.get('/.well-known/acme-challenge/:token', (req, res) => {
   }
 });
 
-// Public Subscription Endpoint — доступен и по HTTP, чтобы выданные ранее ссылки не ломались после включения HTTPS
-app.use('/sub', subscriptionRouter);
+// Public Subscription Endpoint — доступен и по HTTP, чтобы выданные ранее ссылки не ломались после включения HTTPS.
+// У перенесённой на другой сервер панели ссылки перенаправляются на новый адрес
+app.use('/sub', subscriptionFreeze, subscriptionRouter);
 
 // При включённом HTTPS остальные запросы по обычному HTTP перенаправляются на HTTPS
 app.use((req, res, next) => {
   if (!SslService.isActive() || isEncrypted(req)) return next();
+  // Проверка запуска (install.sh опрашивает http://127.0.0.1:порт) не раскрывает ничего, кроме статуса
+  // Проверка запуска (install.sh опрашивает http://127.0.0.1:порт) не раскрывает ничего, кроме статуса
+  if (req.path === '/api/health') return next();
   if (req.path.startsWith('/api/')) {
     return res.status(403).json({ error: 'Панель доступна только по HTTPS', https: true });
   }
@@ -76,6 +85,9 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json({ limit: '1mb' }));
+
+// Во время переноса на другой сервер изменения блокируются, после переноса панель заморожена
+app.use('/api', migrationGuard);
 
 // Public Health Check
 app.get('/api/health', (req, res) => {
@@ -93,6 +105,9 @@ app.use('/api/federation/v1', federationRouter);
 // Authentication routes (login, me, logout, change-password)
 app.use('/api/auth', authRouter);
 
+// Перенос панели на другой сервер (часть маршрутов — по коду переноса, остальные — для администратора)
+app.use('/api/migration', migrationRouter);
+
 // Protected Admin API Routes
 app.use('/api/servers', requireAuth, serversRouter);
 app.use('/api/subscribers', subscribersRouter);
@@ -101,6 +116,7 @@ app.use('/api/settings', settingsRouter);
 app.use('/api/subscription-settings', subscriptionSettingsRouter);
 app.use('/api/partners', partnersRouter);
 app.use('/api/remote-panels', remotePanelsRouter);
+app.use('/api/probes', probesRouter);
 app.use('/api/version', versionRouter);
 app.use('/api', requireAuth, clientsRouter);
 
@@ -246,6 +262,8 @@ async function mapLimit<T>(items: T[], limit: number, fn: (item: T) => Promise<v
 // Опрос нод: статистика, восстановление статуса, досинхронизация. Следующий цикл — после завершения текущего.
 async function statsLoop() {
   try {
+    // Пока ноды переходят к новой панели, эта не должна ни синхронизировать их, ни менять статусы
+    if (MigrationService.isBackgroundPaused()) return;
     const servers = db.prepare("SELECT id FROM servers WHERE status IN ('online', 'offline', 'error')").all() as { id: number }[];
     await mapLimit(servers, 5, (s) => ProvisionService.fetchServerStats(s.id));
     SubscriptionService.refreshSuspension();
@@ -261,6 +279,7 @@ setTimeout(statsLoop, 5000);
 // Синхронизация нод и клиентов на панелях партнёров
 async function federationLoop() {
   try {
+    if (MigrationService.isBackgroundPaused()) return;
     await FederationClient.syncAll();
   } catch (err) {
     console.error('[FEDERATION] Ошибка синхронизации:', err);
@@ -270,14 +289,32 @@ async function federationLoop() {
 }
 setTimeout(federationLoop, 10000);
 
+// Проверка доступности нод из выбранных стран (если включена): раз в минуту смотрим, не пора ли
+async function probeLoop() {
+  try {
+    if (!MigrationService.isBackgroundPaused() && ProbeService.isDue()) await ProbeService.runAll();
+  } catch (err) {
+    console.error('[PROBE] Ошибка проверки:', err);
+  } finally {
+    setTimeout(probeLoop, 60000);
+  }
+}
+setTimeout(probeLoop, 20000);
+
 setInterval(() => {
   cleanupFederationLimits();
   AuthService.cleanupExpiredSessions();
   loginIpLimiter.cleanup();
   loginUserLimiter.cleanup();
+  reauthLimiter.cleanup();
+  migrationCodeLimiter.cleanup();
 }, 60 * 60 * 1000);
 
-const renew = () => SslService.renewIfNeeded().catch((err) => console.error('[SSL]', err));
+const renew = () => {
+  // Сертификат перенесённой панели продлевает новая
+  if (MigrationService.isBackgroundPaused()) return;
+  SslService.renewIfNeeded().catch((err) => console.error('[SSL]', err));
+};
 setTimeout(renew, 60 * 1000);
 setInterval(renew, 12 * 60 * 60 * 1000);
 

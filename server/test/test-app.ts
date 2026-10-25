@@ -12,6 +12,9 @@ import { federationRouter } from '../src/routes/federation.js';
 import { partnersRouter } from '../src/routes/partners.js';
 import { remotePanelsRouter } from '../src/routes/remote-panels.js';
 import { versionRouter } from '../src/routes/version.js';
+import { migrationRouter } from '../src/routes/migration.js';
+import { probesRouter } from '../src/routes/probes.js';
+import { migrationGuard, subscriptionFreeze } from '../src/middleware/migration-guard.js';
 import { requireAuth } from '../src/middleware/auth.middleware.js';
 import { errorHandler } from '../src/middleware/error-handler.js';
 import { securityHeaders } from '../src/middleware/security-headers.js';
@@ -22,13 +25,19 @@ export function createTestApp() {
   app.use(express.json({ limit: '1mb' }));
 
   // Public subscription
-  app.use('/sub', subscriptionRouter);
+  app.use('/sub', subscriptionFreeze, subscriptionRouter);
+
+  // Блокировка изменений во время переноса панели
+  app.use('/api', migrationGuard);
 
   // Federation API
   app.use('/api/federation/v1', federationRouter);
 
   // Auth routes
   app.use('/api/auth', authRouter);
+
+  // Перенос панели на другой сервер
+  app.use('/api/migration', migrationRouter);
 
   // Protected Admin API Routes
   app.use('/api/servers', requireAuth, serversRouter);
@@ -38,6 +47,7 @@ export function createTestApp() {
   app.use('/api/subscription-settings', subscriptionSettingsRouter);
   app.use('/api/partners', partnersRouter);
   app.use('/api/remote-panels', remotePanelsRouter);
+  app.use('/api/probes', probesRouter);
   app.use('/api/version', versionRouter);
   app.use('/api', requireAuth, clientsRouter);
 

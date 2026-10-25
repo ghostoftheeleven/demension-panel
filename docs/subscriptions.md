@@ -10,7 +10,8 @@
 - Истёк срок или исчерпан лимит — 200 с пустым списком и заголовками (приложение покажет срок/трафик).
 - В подписку попадают клиенты подписчика с `enabled = 1`, `external = 0`, не `pending:` и не `blocked` владельцем,
   на нодах со статусом не `uninstalled` (временно недоступная нода не пропадает из приложения).
-- Порядок — `servers.sub_order`, имя — `servers.sub_name` или имя сервера.
+- Порядок — `servers.sub_order`, имя — `servers.sub_name` или имя сервера; при включённой проверке доступности из стран к имени добавляются
+  пометки ` · 🇷🇺✅ 🇰🇿❌` ([probes.md](probes.md)).
 
 ## Форматы
 
@@ -35,7 +36,7 @@ AmneziaWG/AmneziaVPN не умеют подписки по ссылке.
 | `Subscription-Userinfo` | `upload=total_rx; download=total_tx; total=traffic_limit; expire=unix` |
 | `Profile-Title` | `base64:` + шаблон названия (`{user}` → имя), обрезка до 25 символов |
 | `Profile-Update-Interval` | Часы (1–168, по умолчанию 12) |
-| `Profile-Description`, `Announce` | `base64:` (объявление до 200 символов) |
+| `Profile-Description`, `Announce` | `base64:` (объявление до 200 символов). Если включена проверка доступности из стран ([probes.md](probes.md)), к описанию добавляется строка с пояснением |
 | `Announce-Url`, `Support-Url`, `Profile-Web-Page-Url` | URL, нормализованные в ASCII (`URL.href`) |
 | `Support-Email`, `Sort-Order` (`ping`/`name`/`none`), `Hide-Url: 1` | Как есть |
 | `Content-Disposition` | `contentDisposition('inline', '<имя>.txt|yaml')` |

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { db, initDatabase } from '../src/db/index.js';
-import { loginIpLimiter, loginUserLimiter } from '../src/middleware/rate-limit.js';
+import { loginIpLimiter, loginUserLimiter, reauthLimiter } from '../src/middleware/rate-limit.js';
 import { AuthService } from '../src/services/auth.service.js';
 import { createAdminApi } from './helpers/api.js';
 import { insertClient, insertServer } from './helpers/db.js';
@@ -99,6 +99,9 @@ describe('сессии', () => {
       ['GET', '/api/security/ssl'], ['POST', '/api/security/fail2ban/ban'], ['GET', '/api/settings'], ['PUT', '/api/settings'],
       ['GET', '/api/subscription-settings'], ['GET', '/api/partners'], ['POST', '/api/partners'], ['GET', '/api/remote-panels'],
       ['POST', '/api/remote-panels'], ['POST', '/api/auth/logout'], ['POST', '/api/auth/change-password'],
+      ['POST', '/api/auth/change-username'], ['GET', '/api/probes'], ['PUT', '/api/probes'], ['POST', '/api/probes/run'],
+      ['GET', '/api/probes/countries'], ['GET', '/api/migration/status'], ['POST', '/api/migration/prepare'],
+      ['GET', '/api/migration/download'], ['POST', '/api/migration/cancel'],
     ];
     for (const [method, path] of routes) {
       const res = await env.request(path, { method, headers: { 'Content-Type': 'application/json' }, body: method === 'GET' ? undefined : '{}' });
@@ -158,6 +161,91 @@ describe('смена пароля', () => {
     expect(AuthService.login(USER, PASSWORD)).toBeNull();
     expect(AuthService.login(USER, 'NewPassword456!')).not.toBeNull();
 
+    AuthService.resetAdmin(USER, PASSWORD);
+    admin = createAdminApi(env, USER, PASSWORD);
+  });
+});
+
+describe('смена логина', () => {
+  const changeUsername = (password: unknown, newUsername: unknown) => admin.api('/api/auth/change-username', 'POST', { password, newUsername });
+  const adminId = () => (db.prepare('SELECT id FROM admins ORDER BY id LIMIT 1').get() as { id: number }).id;
+
+  const resetReauth = () => reauthLimiter.reset(`admin:${adminId()}`);
+
+  beforeEach(resetReauth);
+
+  it('проверяет входные данные: обязательные поля, допустимые символы и длину, совпадение с текущим', async () => {
+    expect((await changeUsername(PASSWORD, undefined)).status).toBe(400);
+    expect((await changeUsername(undefined, 'new_login')).status).toBe(400);
+    expect((await changeUsername(PASSWORD, '   ')).status).toBe(400);
+    for (const bad of ['two words', 'логин', 'a'.repeat(65), '<script>', 'x/y', 'a\nb', "quote'"]) {
+      const res = await changeUsername(PASSWORD, bad);
+      expect(res.status, bad).toBe(400);
+      expect(res.body.error).toContain('Логин');
+    }
+    const same = await changeUsername(PASSWORD, USER);
+    expect(same.status).toBe(400);
+    expect(same.body.error).toContain('совпадает');
+    expect((await admin.api('/api/auth/me')).body.user.username).toBe(USER);
+  });
+
+  it('неверный пароль — 400, логин не меняется', async () => {
+    const wrong = await changeUsername('not-the-password', 'new_login');
+    expect(wrong.status).toBe(400);
+    expect(wrong.body.error).toBe('Неверный пароль');
+    expect(AuthService.login(USER, PASSWORD)).not.toBeNull();
+    expect(AuthService.login('new_login', PASSWORD)).toBeNull();
+  });
+
+  it('логин меняется: вход под новым логином с прежним паролем, старый логин не действует, остальные сессии завершены', async () => {
+    const otherSession = AuthService.login(USER, PASSWORD)!.token;
+    const res = await changeUsername(PASSWORD, ' New.Login-1@x ');
+    expect(res.status).toBe(200);
+    expect(res.body.user).toEqual({ id: adminId(), username: 'New.Login-1@x' });
+
+    expect(AuthService.validateSession(otherSession)).toBeNull();
+    expect((await admin.api('/api/auth/me')).status).toBe(401);
+    const me = await env.request('/api/auth/me', { headers: { Authorization: `Bearer ${res.body.token}` } });
+    expect(((await me.json()) as any).user.username).toBe('New.Login-1@x');
+
+    expect((await login(USER, PASSWORD)).status).toBe(401);
+    const relogin = await login('New.Login-1@x', PASSWORD);
+    expect(relogin.status).toBe(200);
+    expect(relogin.body.user.username).toBe('New.Login-1@x');
+    expect(JSON.stringify(res.body)).not.toMatch(/hash|salt|"password"/i);
+
+    AuthService.resetAdmin(USER, PASSWORD);
+    admin = createAdminApi(env, USER, PASSWORD);
+  });
+
+  it('занятый логин другого администратора — 409', async () => {
+    const { hash, salt } = AuthService.hashPassword('OtherAdminPass-1');
+    db.prepare('INSERT INTO admins (username, password_hash, salt) VALUES (?, ?, ?)').run('second_admin', hash, salt);
+    try {
+      const res = await changeUsername(PASSWORD, 'second_admin');
+      expect(res.status).toBe(409);
+      expect(res.body.error).toContain('занят');
+      expect(AuthService.login(USER, PASSWORD)).not.toBeNull();
+    } finally {
+      db.prepare('DELETE FROM admins WHERE username = ?').run('second_admin');
+    }
+  });
+
+  it('подбор пароля через смену логина и пароля ограничен: 5 неверных за 15 минут — затем 429 даже с верным паролем', async () => {
+    for (let i = 0; i < 3; i++) expect((await changeUsername('bad-password-' + i, 'new_login')).status).toBe(400);
+    for (let i = 0; i < 2; i++) {
+      expect((await admin.api('/api/auth/change-password', 'POST', { oldPassword: 'bad-' + i, newPassword: 'NewPassword456!' })).status).toBe(400);
+    }
+    const blocked = await changeUsername(PASSWORD, 'new_login');
+    expect(blocked.status).toBe(429);
+    expect(blocked.body.error).toContain('Повторите');
+    expect((await admin.api('/api/auth/change-password', 'POST', { oldPassword: PASSWORD, newPassword: 'NewPassword456!' })).status).toBe(429);
+    expect(AuthService.login(USER, PASSWORD)).not.toBeNull();
+
+    resetReauth();
+    // верный пароль сбрасывает счётчик
+    expect((await changeUsername('bad', 'new_login')).status).toBe(400);
+    expect((await changeUsername(PASSWORD, 'new_login')).status).toBe(200);
     AuthService.resetAdmin(USER, PASSWORD);
     admin = createAdminApi(env, USER, PASSWORD);
   });

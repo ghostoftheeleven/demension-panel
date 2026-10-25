@@ -48,3 +48,8 @@ export class FailureLimiter {
 // 5 неудачных попыток за 15 минут с одного IP, 10 — на один логин
 export const loginIpLimiter = new FailureLimiter(5, 15 * 60 * 1000);
 export const loginUserLimiter = new FailureLimiter(10, 15 * 60 * 1000);
+// Неверный пароль при подтверждении действий уже вошедшим администратором (смена пароля/логина, перенос панели):
+// 5 попыток за 15 минут на администратора — украденная сессия не должна позволять подбирать пароль
+export const reauthLimiter = new FailureLimiter(5, 15 * 60 * 1000);
+// Неверный код переноса панели: 10 попыток за 15 минут с одного IP
+export const migrationCodeLimiter = new FailureLimiter(10, 15 * 60 * 1000);

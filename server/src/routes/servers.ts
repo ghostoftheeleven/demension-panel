@@ -8,6 +8,7 @@ import { asyncHandler, HttpError, parseId } from '../utils/http.js';
 import { isValidHost, isValidPort, parseSubnet } from '../utils/net.js';
 import { LATEST_AWG_VERSION, paramsFromRow, paramsToColumns } from '../utils/awg-params.js';
 import { AmneziaKeyError, decodeAmneziaKey, splitAmneziaKeys } from '../utils/amnezia-key.js';
+import { ProbeService } from '../services/probe.service.js';
 
 export const serversRouter = Router();
 
@@ -36,6 +37,8 @@ export function serializeServer(s: any) {
     needs_sync: Boolean(s.needs_sync),
     needs_apply: Boolean(s.needs_apply),
     installing: ProvisionService.isInstalling(s.id),
+    // Доступность из выбранных стран (пусто, пока проверка выключена)
+    probes: ProbeService.resultsFor(s.id),
   };
 }
 

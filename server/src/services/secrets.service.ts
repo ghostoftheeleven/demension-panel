@@ -33,6 +33,11 @@ function getKey(): Buffer {
   return cachedKey;
 }
 
+/** Действующий мастер-ключ (base64) — для переноса панели на другой сервер */
+export function exportSecretKey(): string {
+  return getKey().toString('base64');
+}
+
 export function encryptSecret(value: string | null | undefined): string | null {
   if (value === null || value === undefined || value === '') return null;
   if (value.startsWith(PREFIX)) return value;

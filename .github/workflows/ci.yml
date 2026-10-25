@@ -43,8 +43,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: bash -n install.sh && bash -n server/src/scripts/deploy-awg.sh && bash -n server/test/docker/nodes.sh && bash -n server/test/docker/entrypoint.sh && bash -n server/test/install/run.sh && bash -n server/test/install/in-container.sh && bash -n .github/scripts/release.sh
-      - run: shellcheck -S error install.sh server/src/scripts/deploy-awg.sh server/test/docker/nodes.sh server/test/docker/entrypoint.sh server/test/install/run.sh server/test/install/in-container.sh .github/scripts/release.sh
+      - run: bash -n install.sh && bash -n server/src/scripts/deploy-awg.sh && bash -n server/test/docker/nodes.sh && bash -n server/test/docker/entrypoint.sh && bash -n server/test/install/run.sh && bash -n server/test/install/in-container.sh && bash -n server/test/install/common.sh && bash -n server/test/install/migration-old.sh && bash -n server/test/install/migration-new.sh && bash -n .github/scripts/release.sh
+      - run: shellcheck -S error install.sh server/src/scripts/deploy-awg.sh server/test/docker/nodes.sh server/test/docker/entrypoint.sh server/test/install/run.sh server/test/install/in-container.sh server/test/install/common.sh server/test/install/migration-old.sh server/test/install/migration-new.sh .github/scripts/release.sh
 
   # install.sh целиком в чистом Ubuntu: настоящие apt, Node.js, сборка и запуск; проверяет случайные логин/пароль и вывод данных
   # подключения. Не блокирует остальные проверки, пока не накоплена статистика стабильности (нужен интернет).

@@ -5,6 +5,8 @@ const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 /** Сколько помнится IP, с которого администратор входил (исключение из блокировки по логину) */
 const KNOWN_IP_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 export const MIN_PASSWORD_LENGTH = 8;
+/** Допустимый логин администратора (тот же набор символов проверяет install.sh) */
+export const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
 
 function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
@@ -177,6 +179,28 @@ export class AuthService {
       db.prepare('UPDATE admins SET password_hash = ?, salt = ? WHERE id = ?').run(hash, salt, adminId);
       db.prepare('DELETE FROM sessions WHERE admin_id = ?').run(adminId);
       return this.createSession(adminId);
+    });
+  }
+
+  /** Проверка пароля администратора для действий, которые требуют подтверждения (смена логина, перенос панели) */
+  static confirmPassword(adminId: number, password: string): boolean {
+    const admin = db.prepare('SELECT password_hash, salt FROM admins WHERE id = ?').get(adminId) as any;
+    return Boolean(admin) && this.verifyPassword(password, admin.password_hash, admin.salt);
+  }
+
+  /**
+   * Смена логина администратора (по текущему паролю). Как и при смене пароля, остальные сессии завершаются, а вызывающему
+   * выдаётся новый токен. Возвращает причину отказа или новый токен.
+   */
+  static changeUsername(adminId: number, password: string, newUsername: string): { token: string; username: string } | 'wrong_password' | 'taken' {
+    if (!this.confirmPassword(adminId, password)) return 'wrong_password';
+
+    return transaction(() => {
+      const taken = db.prepare('SELECT 1 FROM admins WHERE username = ? AND id != ?').get(newUsername, adminId);
+      if (taken) return 'taken' as const;
+      db.prepare('UPDATE admins SET username = ? WHERE id = ?').run(newUsername, adminId);
+      db.prepare('DELETE FROM sessions WHERE admin_id = ?').run(adminId);
+      return { token: this.createSession(adminId), username: newUsername };
     });
   }
 }

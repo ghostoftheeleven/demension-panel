@@ -102,6 +102,88 @@ describe('загруженный сертификат', () => {
   it('не принимает значения не строкового типа', () => {
     expect(() => SslService.saveCustomCertificate({} as any, 5 as any)).toThrow('строками');
   });
+
+  it('сертификат без CN получает имя из SAN (современный Let\'s Encrypt)', async () => {
+    const sanOnly = await generate([{ name: 'organizationName', value: 'No CN Org' }], {
+      keySize: 2048,
+      algorithm: 'sha256',
+      extensions: [{ name: 'subjectAltName', altNames: [{ type: 2, value: 'san-only.example.com' }, { type: 2, value: 'www.san-only.example.com' }] }],
+    });
+    expect(x509Of(sanOnly.cert).subject).not.toContain('CN=');
+    SslService.saveCustomCertificate(sanOnly.cert, sanOnly.private);
+    expect(SslService.getStatus().domain).toBe('san-only.example.com');
+
+    // Если CN есть, он по-прежнему главнее SAN
+    const withCn = await makeCert('cn.example.com', {
+      extensions: [{ name: 'subjectAltName', altNames: [{ type: 2, value: 'other-name.example.com' }] }],
+    });
+    SslService.saveCustomCertificate(withCn.cert, withCn.private);
+    expect(SslService.getStatus().domain).toBe('cn.example.com');
+  }, 30000);
+});
+
+const x509Of = (pem: string) => new crypto.X509Certificate(pem);
+
+describe('перенос панели: сертификат, приехавший вместе с данными', () => {
+  it('activateExisting включает HTTPS на лежащем в data/ssl сертификате и сохраняет режим выпуска, домен и почту (автопродление работает)', async () => {
+    await SslService.generateSelfSignedIpCert('203.0.113.20');
+    setSetting('ssl_mode', 'letsencrypt_cf');
+    setSetting('ssl_email', 'admin@example.com');
+    SslService.toggleSsl(false);
+    setSetting('ssl_expires_at', '2000-01-01T00:00:00.000Z');
+    const listener = vi.fn();
+    SslService.onCertificateChanged(listener);
+
+    const result = SslService.activateExisting();
+    expect(result.domain).toBe('203.0.113.20');
+    expect(SslService.getStatus()).toMatchObject({ enabled: true, mode: 'letsencrypt_cf', domain: '203.0.113.20', autoRenew: true });
+    // Дата окончания перечитана из самого сертификата, а не взята из прежних настроек
+    expect(new Date(SslService.getStatus().expiresAt!).getFullYear()).toBeGreaterThan(2000);
+    expect(getSetting('ssl_email')).toBe('admin@example.com');
+    expect(listener).toHaveBeenCalled();
+  }, 30000);
+
+  it('activateExisting отказывает без сертификата, с истёкшим сертификатом и с ключом от другого', async () => {
+    SslService.clearCertificate();
+    expect(() => SslService.activateExisting()).toThrow('не найден');
+
+    const expired = await makeCert('old.example.com', {
+      notBeforeDate: new Date(Date.now() - 400 * 86_400_000),
+      notAfterDate: new Date(Date.now() - 30 * 86_400_000),
+    });
+    fs.writeFileSync(certPath, expired.cert);
+    fs.writeFileSync(keyPath, expired.private);
+    expect(() => SslService.activateExisting()).toThrow('истёк');
+
+    const other = await makeCert('other.example.com');
+    fs.writeFileSync(certPath, other.cert);
+    fs.writeFileSync(keyPath, expired.private);
+    expect(() => SslService.activateExisting()).toThrow('не соответствует');
+    SslService.clearCertificate();
+  }, 60000);
+
+  it('clearCertificate удаляет файлы и отключает HTTPS, но оставляет токен Cloudflare и почту для следующего выпуска', async () => {
+    await SslService.generateSelfSignedIpCert('203.0.113.21');
+    setSetting('ssl_email', 'admin@example.com');
+    setSetting('cf_token', 'enc:v1:stub');
+    SslService.clearCertificate();
+
+    expect(SslService.hasCertificate()).toBe(false);
+    expect(SslService.getStatus()).toMatchObject({ enabled: false, hasCert: false, domain: null, mode: null, expiresAt: null });
+    expect(getSetting('ssl_email')).toBe('admin@example.com');
+    expect(getSetting('cf_token')).toBe('enc:v1:stub');
+    setSetting('cf_token', null);
+  }, 30000);
+
+  it('getSavedCloudflareToken расшифровывает сохранённый токен; повреждённое значение даёт null, а не исключение', async () => {
+    const { encryptSecret } = await import('../src/services/secrets.service.js');
+    setSetting('cf_token', encryptSecret('cf-saved-token'));
+    expect(SslService.getSavedCloudflareToken()).toBe('cf-saved-token');
+    setSetting('cf_token', 'enc:v1:AAAA');
+    expect(SslService.getSavedCloudflareToken()).toBeNull();
+    setSetting('cf_token', null);
+    expect(SslService.getSavedCloudflareToken()).toBeNull();
+  });
 });
 
 describe('включение HTTPS и уведомления об изменении сертификата', () => {

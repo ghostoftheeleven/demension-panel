@@ -94,6 +94,19 @@ export function formatEndpointHost(host: string): string {
   return net.isIPv6(host) ? `[${host}]` : host;
 }
 
+/** Внешний IPv4 этого сервера, определённый через публичные сервисы; null, если определить не удалось */
+export async function detectPublicIpv4(): Promise<string | null> {
+  for (const url of ['https://api.ipify.org', 'https://ifconfig.me/ip', 'https://icanhazip.com']) {
+    try {
+      const text = (await (await fetch(url, { signal: AbortSignal.timeout(5000) })).text()).trim();
+      if (net.isIPv4(text)) return text;
+    } catch {
+      // следующий сервис
+    }
+  }
+  return null;
+}
+
 /**
  * Адрес для перенаправления HTTP → HTTPS. Хост берётся из настроенного сертификата, а не из заголовка Host:
  * иначе запрос с произвольным Host получил бы редирект на сторонний сайт. Порт берётся из Host

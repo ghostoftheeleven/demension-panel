@@ -31,10 +31,12 @@ npx vitest run --coverage --coverage.provider=v8 --coverage.include='src/**'
 | `migrations.test.ts` | Обновление БД со старых версий схемы (`initDatabase(targetVersion)`) |
 | `server-process.test.ts` | Настоящий процесс панели: HTTP и HTTPS на одном порту, WebSocket, редирект, устойчивость к мусору |
 | `reset-admin-cli.test.ts` | CLI сброса пароля администратора |
+| `migration.test.ts`, `migration-restore.test.ts` | Перенос панели: формат и защита архива, код, состояния прежней панели (423/410, перенаправление подписок), полный круг «экспорт → CLI в чистый каталог», откат при ошибке, выбор сертификата |
+| `probes.test.ts` | Проверка из стран с подменой check-host.net: разбор ответов, агрегация по странам, ping/TCP, подписка (название, описание, три формата), устаревание, ошибки провайдера |
 | `real-docker-nodes.test.ts`, `real-docker-lifecycle.test.ts` | Реальные ноды в Docker: установка, переустановка, 1.x → 3.x, применение, смена порта, TOFU, удаление |
 | `real-docker-amnezia.test.ts` | Сервер с контейнером «как у приложения AmneziaVPN»: отказ установки поверх, подключение без перезапуска, синхронизация, применение, замена |
 | `real-federation-e2e.test.ts` | Две панели-процесса и реальная нода: получатель → владелец → Docker |
-| `test/install/run.sh` (не vitest) | `install.sh` целиком в чистом Ubuntu 24.04: случайные логин/пароль и вывод данных подключения, обновление (в т.ч. из git: при ошибке `git pull` служба не останавливается; сохранение переменных `.env`), занятый порт, CLI сброса пароля (≈ 5 минут, нужны Docker и интернет) |
+| `test/install/run.sh` (не vitest) | `install.sh` целиком в чистом Ubuntu 24.04: случайные логин/пароль и вывод данных подключения, обновление (в т.ч. из git: при ошибке `git pull` служба не останавливается; сохранение переменных `.env`), занятый порт, CLI сброса пароля (`in-container.sh`); затем **перенос панели между двумя контейнерами** одной сети (`migration-old.sh` + `migration-new.sh`): неверный код, перенос данных с прежними логином и паролем, ключ шифрования, заморозка прежней панели и перенаправление подписок, обновление панели при включённом HTTPS (≈ 12–15 минут, нужны Docker и интернет; `SKIP_MIGRATION=1` — только установка, `SKIP_INSTALL=1` — только перенос) |
 
 ## Хелперы (`test/helpers`)
 
@@ -45,6 +47,7 @@ npx vitest run --coverage --coverage.provider=v8 --coverage.include='src/**'
 | `ssh-stub.ts` → `stubSsh(responder)` | Подмена `SshService.executeCommand`: записывает команды и stdin (`calls`), ответ задаёт `responder` |
 | `remote-panel.ts` → `newRemote`, `createRemotePanel` | Имитация панели владельца нод (подмена `fetch`); поля `failWith`, `latencyMs`, `assignedIp`, `nodeParams` управляют ответами |
 | `panel-process.ts` → `startPanel`, `eventually` | Реальный процесс панели с собственной БД и портом, запросы по HTTP/TLS, ожидание фоновых операций |
+| `migration-cli.ts` → `runCli`, `newDataDir`, `readDb` | CLI переноса (`src/cli/migration.ts`) отдельным процессом на собственном каталоге данных; строки `@@ключ=значение` разбираются в `values` |
 
 `test-app.ts` собирает те же роутеры и тот же `errorHandler`/`securityHeaders`, что `src/index.ts`; всё, что живёт только в
 `index.ts` (WebSocket, HTTPS на одном порту, фоновые циклы), проверяется через `startPanel`.

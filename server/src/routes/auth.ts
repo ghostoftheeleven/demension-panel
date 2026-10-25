@@ -1,9 +1,20 @@
 import { Router } from 'express';
-import { AuthService, MIN_PASSWORD_LENGTH } from '../services/auth.service.js';
+import { AuthService, MIN_PASSWORD_LENGTH, USERNAME_PATTERN } from '../services/auth.service.js';
 import { requireAuth, AuthenticatedRequest, getBearerToken } from '../middleware/auth.middleware.js';
-import { loginIpLimiter, loginUserLimiter } from '../middleware/rate-limit.js';
+import { loginIpLimiter, loginUserLimiter, reauthLimiter } from '../middleware/rate-limit.js';
+import { HttpError } from '../utils/http.js';
 
 export const authRouter = Router();
+
+/**
+ * Подтверждение паролем для смены учётных данных: неверные попытки ограничены (429 после 5 за 15 минут)
+ */
+function assertReauthAllowed(adminId: number): string {
+  const key = `admin:${adminId}`;
+  const blockedMs = reauthLimiter.blockedFor(key);
+  if (blockedMs > 0) throw new HttpError(429, `Слишком много неверных паролей. Повторите через ${Math.ceil(blockedMs / 60000)} мин.`);
+  return key;
+}
 
 // POST /api/auth/login
 authRouter.post('/login', (req, res) => {
@@ -62,10 +73,45 @@ authRouter.post('/change-password', requireAuth, (req: AuthenticatedRequest, res
     return res.status(400).json({ error: `Новый пароль должен содержать не менее ${MIN_PASSWORD_LENGTH} символов` });
   }
 
+  const limiterKey = assertReauthAllowed(req.user!.id);
   const token = AuthService.changePassword(req.user!.id, oldPassword, newPassword);
   if (!token) {
+    reauthLimiter.registerFailure(limiterKey);
     return res.status(400).json({ error: 'Неверный старый пароль' });
   }
+  reauthLimiter.reset(limiterKey);
 
   res.json({ success: true, token, message: 'Пароль успешно изменен. Остальные сессии завершены.' });
+});
+
+// POST /api/auth/change-username — смена логина администратора по текущему паролю
+authRouter.post('/change-username', requireAuth, (req: AuthenticatedRequest, res) => {
+  const { password, newUsername } = req.body ?? {};
+  if (typeof password !== 'string' || typeof newUsername !== 'string' || !password || !newUsername.trim()) {
+    return res.status(400).json({ error: 'Текущий пароль и новый логин обязательны' });
+  }
+  const username = newUsername.trim();
+  if (!USERNAME_PATTERN.test(username)) {
+    return res.status(400).json({ error: 'Логин: от 1 до 64 символов — латинские буквы, цифры и . _ @ -' });
+  }
+  if (username === req.user!.username) {
+    return res.status(400).json({ error: 'Новый логин совпадает с текущим' });
+  }
+
+  const limiterKey = assertReauthAllowed(req.user!.id);
+  const result = AuthService.changeUsername(req.user!.id, password, username);
+  if (result === 'wrong_password') {
+    reauthLimiter.registerFailure(limiterKey);
+    return res.status(400).json({ error: 'Неверный пароль' });
+  }
+  reauthLimiter.reset(limiterKey);
+  if (result === 'taken') return res.status(409).json({ error: 'Такой логин уже занят' });
+
+  console.log(`[AUTH] Логин администратора изменён с ${JSON.stringify(req.user!.username)} на ${JSON.stringify(result.username)}`);
+  res.json({
+    success: true,
+    token: result.token,
+    user: { id: req.user!.id, username: result.username },
+    message: 'Логин изменён. Остальные сессии завершены.',
+  });
 });

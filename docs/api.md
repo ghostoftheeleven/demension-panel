@@ -7,14 +7,18 @@ HTTP-кодом. Тела — JSON.
 | Метод | Путь | Описание |
 |---|---|---|
 | GET | `/sub/:token` | Подписка, см. [subscriptions.md](subscriptions.md) |
-| GET | `/api/health` | `{status, uptime, https, timestamp}` |
+| GET | `/api/health` | `{status, uptime, https, timestamp}`; доступен по HTTP и при включённом HTTPS (его опрашивает `install.sh`) |
+| GET | `/api/migration/archive` | Зашифрованный архив переноса для нового сервера; заголовок `X-Migration-Auth` (производная от кода переноса). 403/429 при неверном коде |
+| POST | `/api/migration/finish` | `{newUrl?}` — новая панель запущена, эта замораживается; тот же заголовок |
 | POST | `/api/auth/login` | `{username, password}` → `{token, user}`; 429 при переборе |
 | GET | `/.well-known/acme-challenge/:token` | Let's Encrypt HTTP-01 |
 | * | `/api/federation/v1/*` | Партнёрский API (токен партнёра), см. [partners.md](partners.md) |
 | WS | `/ws` | Логи установки: `{type:'auth', token}` → `auth_ok` → `{type:'start_install', serverId}` → `log`… `install_finished` |
 
 ## Авторизация
-`GET /api/auth/me`, `POST /api/auth/logout`, `POST /api/auth/change-password` (`{oldPassword, newPassword}` → новый `token`).
+`GET /api/auth/me`, `POST /api/auth/logout`, `POST /api/auth/change-password` (`{oldPassword, newPassword}` → новый `token`),
+`POST /api/auth/change-username` (`{password, newUsername}` → `{token, user}`; логин — до 64 символов `A-Za-z0-9._@-`, 409 если занят;
+остальные сессии завершаются). Неверные пароли при смене логина/пароля ограничены: 5 за 15 минут на администратора (429).
 
 ## Серверы `/api/servers`
 | Метод | Путь | Описание |
@@ -61,6 +65,14 @@ HTTP-кодом. Тела — JSON.
   `GET /:id/clients`, `GET /:id/audit`.
 - Получатель `/api/remote-panels`: `GET /`, `POST /` (`connect_string, name?`), `POST /:id/sync`, `PATCH /:id`
   (`name`), `DELETE /:id`.
+
+## Перенос панели `/api/migration`
+Администратор: `GET /status` (`{state, expiresAt, exportedAt, migratedAt, newUrl}`), `POST /prepare` (`{password}` → `{code, expiresAt}`, код показывается один раз),
+`GET /download` (архив файлом), `POST /cancel`. Публичные (по коду) — `archive` и `finish` выше. В состоянии `exporting` все записи `/api/*` дают 423, у
+перенесённой панели — 410, см. [migration.md](migration.md).
+
+## Проверка доступности нод `/api/probes`
+`GET /`, `GET /countries`, `PUT /` (`settings`, `servers[{id, probe_port}]`), `POST /run`, см. [probes.md](probes.md). `GET /api/servers` содержит `probes`.
 
 ## Безопасность `/api/security`
 `GET /ssl`, `POST /ssl/verify-cf`, `/ssl/cf-zones`, `/ssl/issue-cf`, `/ssl/issue-http`, `/ssl/issue-ip`,

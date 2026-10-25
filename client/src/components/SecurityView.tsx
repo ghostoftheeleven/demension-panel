@@ -17,6 +17,7 @@ import {
 import type { SslStatus, Fail2banStatus, CloudflareZone, PanelSettings } from '../types';
 import { api } from '../api';
 import { PanelSettingsCard } from './PanelSettingsCard';
+import { MigrationCard } from './MigrationCard';
 
 /**
  * HTTPS включается сразу (без перезапуска). Открытая по HTTP панель после этого
@@ -34,7 +35,11 @@ function switchToHttps(domain?: string | null) {
 
 const HTTPS_SWITCH_NOTE = ' Через пару секунд панель откроется по HTTPS. Старые http-ссылки подписок продолжат работать.';
 
-export const SecurityView: React.FC<{ onSettingsSaved?: (settings: PanelSettings) => void }> = ({ onSettingsSaved }) => {
+export const SecurityView: React.FC<{
+  publicUrl: string | null;
+  onSettingsSaved?: (settings: PanelSettings) => void;
+  onMigrationChange?: () => void;
+}> = ({ publicUrl, onSettingsSaved, onMigrationChange }) => {
   const [sslStatus, setSslStatus] = useState<SslStatus | null>(null);
   const [f2bStatus, setF2bStatus] = useState<Fail2banStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -174,7 +179,8 @@ export const SecurityView: React.FC<{ onSettingsSaved?: (settings: PanelSettings
         type: 'success',
         text:
           `🎉 Самоподписанный сертификат для ${ipTarget} установлен. Браузер покажет предупреждение — это ожидаемо. ` +
-          'Мобильные приложения могут не принять такой сертификат для подписок — для них используйте http-ссылку или Let\'s Encrypt.' +
+          'Подписки по https:// с таким сертификатом в приложениях работать не будут (http-ссылки работают, но без шифрования) — ' +
+          'для подписок нужен домен и сертификат Let\'s Encrypt.' +
           HTTPS_SWITCH_NOTE,
       });
       loadSecurityData();
@@ -542,6 +548,15 @@ export const SecurityView: React.FC<{ onSettingsSaved?: (settings: PanelSettings
                 </span>
               </div>
 
+              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-300 text-xs flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                <span>
+                  <b>Подписки с таким сертификатом работать не будут.</b> Сертификат самоподписанный, поэтому приложения (Incy, Clash и др.)
+                  не откроют ссылки подписок по <code>https://</code>. Ссылки по <code>http://</code> продолжат работать, но ключи клиентов
+                  в них передаются без шифрования. Для подписок используйте домен и сертификат Let's Encrypt.
+                </span>
+              </div>
+
               <div>
                 <label className="block text-xs font-medium text-zinc-400 mb-1">
                   IP-адрес сервера
@@ -811,6 +826,11 @@ export const SecurityView: React.FC<{ onSettingsSaved?: (settings: PanelSettings
           </button>
         </form>
       </div>
+
+      {/* ========================================================================= */}
+      {/* SECTION 3: Перенос панели на другой сервер */}
+      {/* ========================================================================= */}
+      <MigrationCard publicUrl={publicUrl} onStateChange={onMigrationChange} />
     </div>
   );
 };

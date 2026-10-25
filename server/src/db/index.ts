@@ -304,7 +304,27 @@ const migrations: Array<() => void> = [
     addColumn('servers', 'node_image_created TEXT');
     addColumn('servers', 'node_info_at TEXT');
   },
+
+  // v8: проверка доступности нод из выбранных стран (check-host.net)
+  () => {
+    // NULL — проверка ICMP-ping, число — TCP-подключение к этому порту (для нод, где ping закрыт)
+    addColumn('servers', 'probe_port INTEGER');
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS probe_results (
+        server_id INTEGER NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+        country TEXT NOT NULL,
+        ok_nodes INTEGER NOT NULL,
+        total_nodes INTEGER NOT NULL,
+        rtt_ms INTEGER,
+        checked_at TEXT NOT NULL,
+        PRIMARY KEY (server_id, country)
+      );
+    `);
+  },
 ];
+
+/** Версия схемы, которую умеет эта сборка панели (число миграций) */
+export const SCHEMA_VERSION = migrations.length;
 
 /**
  * Применяет недостающие миграции. `targetVersion` позволяет остановиться раньше — так тесты воспроизводят БД старой версии.

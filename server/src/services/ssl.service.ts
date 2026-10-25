@@ -11,7 +11,7 @@ import { generate as generateSelfSigned } from 'selfsigned';
 
 export const certPath = path.join(sslDir, 'fullchain.pem');
 export const keyPath = path.join(sslDir, 'privkey.pem');
-const accountKeyPath = path.join(sslDir, 'acme-account.key');
+export const accountKeyPath = path.join(sslDir, 'acme-account.key');
 
 const RENEW_BEFORE_DAYS = 30;
 
@@ -72,7 +72,9 @@ function inspectCertificate(certPem: string, keyPem: string): { validTo: string;
   if (validTo.getTime() <= Date.now()) {
     throw new Error('Срок действия сертификата истёк');
   }
-  const cn = /CN=([^\n,]+)/.exec(x509.subject)?.[1] ?? 'custom';
+  // Имя берётся из CN, а у сертификатов без CN (современный Let's Encrypt) — из первого имени SAN
+  const san = /(?:DNS:|IP Address:)([^,\s]+)/.exec(x509.subjectAltName ?? '')?.[1];
+  const cn = /CN=([^\n,]+)/.exec(x509.subject)?.[1] ?? san ?? 'custom';
   return { validTo: validTo.toISOString(), subject: cn };
 }
 
@@ -362,6 +364,36 @@ export class SslService {
       throw new Error('Сертификат и ключ должны быть строками в формате PEM');
     }
     this.saveCertificate(certContent, keyContent, 'custom', domain?.trim() || '');
+  }
+
+  /**
+   * Включает HTTPS на уже лежащем в data/ssl сертификате (перенос панели: сертификат приехал из архива). Режим выпуска,
+   * домен и почта сохраняются, поэтому автопродление продолжает работать; дата окончания перечитывается из сертификата.
+   */
+  static activateExisting(): { domain: string | null; expiresAt: string } {
+    if (!this.hasCertificate()) throw new Error('Сертификат не найден');
+    const info = inspectCertificate(fs.readFileSync(certPath, 'utf-8'), fs.readFileSync(keyPath, 'utf-8'));
+    if (!getSetting('ssl_domain')) setSetting('ssl_domain', info.subject);
+    setSetting('ssl_expires_at', info.validTo);
+    setSetting('ssl_enabled', '1');
+    for (const listener of listeners) listener();
+    return { domain: getSetting('ssl_domain'), expiresAt: info.validTo };
+  }
+
+  /** Удаляет сертификат и отключает HTTPS (токен Cloudflare и почта ACME сохраняются) */
+  static clearCertificate(): void {
+    for (const file of [certPath, keyPath]) fs.rmSync(file, { force: true });
+    for (const key of ['ssl_enabled', 'ssl_mode', 'ssl_domain', 'ssl_expires_at']) setSetting(key, null);
+    for (const listener of listeners) listener();
+  }
+
+  /** Токен Cloudflare, сохранённый при прежнем выпуске сертификата */
+  static getSavedCloudflareToken(): string | null {
+    try {
+      return decryptSecret(getSetting('cf_token'));
+    } catch {
+      return null;
+    }
   }
 
   /**

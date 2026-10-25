@@ -18,6 +18,8 @@ Demension Panel — агентлесс-панель управления нод�
 | [docs/security.md](docs/security.md) | Авторизация, секреты, HTTPS на одном порту, ограничения частоты, fail2ban |
 | [docs/api.md](docs/api.md) | Справочник HTTP API панели |
 | [docs/testing.md](docs/testing.md) | Как устроены тесты, хелперы, реальные ноды в Docker, правила для новых тестов |
+| [docs/migration.md](docs/migration.md) | Перенос панели на другой сервер: архив, код, сертификат, заморозка прежней панели, CLI |
+| [docs/probes.md](docs/probes.md) | Проверка доступности нод из выбранных стран (check-host.net) и её показ в подписке |
 | [docs/releases.md](docs/releases.md) | Номер версии `vX.Y.Z`, `CHANGELOG.md`, автоматические релизы GitHub, проверка обновлений в панели |
 
 ## Структура репозитория
@@ -31,6 +33,7 @@ server/            Node.js 22.13+ / Express 4 / TypeScript, SQLite через no
   src/utils/         чистые функции (сети, параметры AWG, ключи Amnezia, HTTP-утилиты)
   src/scripts/deploy-awg.sh  скрипт развёртывания ноды (передаётся по SSH через stdin)
   src/cli/reset-admin.ts     сброс логина/пароля администратора
+  src/cli/migration.ts       перенос панели на другой сервер (его вызывает install.sh)
   src/middleware/    авторизация, ограничение частоты, заголовки безопасности (CSP), единый обработчик ошибок
   test/              vitest: *.test.ts, helpers/ (API, БД, подмена SSH и панели партнёра, процесс панели), docker/ (тестовые ноды)
 client/            React 19 + Vite + Tailwind 4 (SPA, собирается в client/dist и раздаётся сервером)
@@ -48,7 +51,7 @@ cd server && npx tsc --noEmit && npm test     # проверка типов и �
 cd client && npx tsc -b && npm run lint && npx vite build
 npx shellcheck -S error install.sh server/src/scripts/deploy-awg.sh server/test/docker/nodes.sh server/test/docker/entrypoint.sh
 server/test/docker/nodes.sh up                # реальные ноды в Docker для real-*.test.ts (без них эти тесты пропускаются)
-server/test/install/run.sh                    # install.sh целиком в чистом Ubuntu (Docker, ≈ 5 мин) — гонять при любой правке install.sh
+server/test/install/run.sh                    # install.sh целиком в чистом Ubuntu + перенос панели между двумя контейнерами (Docker, ≈ 12–15 мин) — гонять при любой правке install.sh
 ```
 
 CI (`.github/workflows/ci.yml`) выполняет всё перечисленное на каждый push в `main`; отдельное задание `e2e` поднимает тестовые
@@ -153,6 +156,20 @@ CI на `main`. Подробно — [docs/releases.md](docs/releases.md).
     применить на ноде, откатываются в БД (`applyOrRollback`, routes/servers.ts): подписки не должны раздавать то, чего нет на ноде.
     `install.sh` скачивает обновление до остановки службы и сохраняет добавленные вручную переменные `server/.env`
     (в т.ч. `DEMENSION_SECRET_KEY` — без него не расшифровать SSH-доступы).
+
+### Перенос панели, проверка из стран, учётная запись
+29. **Архив переноса** (`utils/migration-archive.ts`) восстанавливает только файлы из белого списка `ARCHIVE_FILES`; **код переноса не хранится и не
+    передаётся по сети** — в `settings` лежат производные (ключ `enc` под мастер-ключом и SHA-256 от `auth`). Всё, что добавляется в БД или в `data/`,
+    должно попадать в снимок (`VACUUM INTO`) и импорт (`importMigrationArchive`). Модули, которые выполняются **до** открытия БД
+    (`migration-archive.ts`, `migration-import.service.ts`, `migration-client.ts`, CLI), не импортируют `db/index.ts` статически.
+30. **Пока панель в состоянии `exporting`/`migrated`**, `migrationGuard` отклоняет записи (423/410), а `MigrationService.isBackgroundPaused()` останавливает
+    фоновые задачи (опрос нод, партнёры, продление сертификата, проверки из стран): две панели не должны управлять одними нодами. Новый фоновый
+    цикл обязан проверять `isBackgroundPaused()`.
+31. **Подтверждение паролем** при смене логина/пароля и выдаче кода переноса считается в `reauthLimiter` (5 неверных за 15 минут на администратора).
+32. **Проверка из стран выключена по умолчанию**: пока администратор не включил её, адреса нод никуда не отправляются. Ответы check-host.net — внешние
+    данные, проверяются по формату (`ProbeService`); пометки в названии/описании подписки идут только через `getNameMarks`/`getLegend`
+    (описание — `base64:`, инвариант 19).
+33. **`/api/health` отвечает по HTTP и при включённом HTTPS**: `install.sh` проверяет запуск панели через `http://127.0.0.1:порт/api/health`.
 
 ## Чек-лист перед коммитом
 

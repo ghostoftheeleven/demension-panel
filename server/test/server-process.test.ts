@@ -213,6 +213,11 @@ describe('HTTP и HTTPS на одном порту', () => {
     expect(api.status).toBe(403);
     expect(json(api)).toMatchObject({ https: true });
 
+    // Проверка запуска по HTTP работает и при включённом HTTPS: иначе install.sh принимал бы обновление такой панели за сбой
+    const health = await request({ path: '/api/health' });
+    expect(health.status).toBe(200);
+    expect(json(health)).toMatchObject({ status: 'ok', https: true });
+
     // Ссылки подписки, выданные по HTTP, продолжают работать (инвариант 20)
     const sub = await request({ path: '/sub/sub_unknown' });
     expect(sub.status).toBe(404);

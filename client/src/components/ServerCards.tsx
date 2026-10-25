@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import type { Server } from '../types';
 import { api } from '../api';
+import { ProbeBadges } from './ProbeBadges';
 
 interface ServerCardsProps {
   servers: Server[];
@@ -183,6 +184,7 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
               />
               <span className="font-semibold">{s.name}</span>
               <span className="text-[11px] font-mono text-zinc-500">{s.host}</span>
+              <ProbeBadges probes={s.probes} />
             </button>
           );
         })}
@@ -223,6 +225,12 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
                   <span>AWG Порт: <strong className="text-zinc-200">{selectedServer.awg_port} (UDP)</strong></span>
                   <span>Подсеть: <strong className="text-zinc-200">{selectedServer.subnet}</strong></span>
                 </div>
+                {selectedServer.probes && selectedServer.probes.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 mt-2 text-xs text-zinc-400">
+                    <span>Доступность из стран:</span>
+                    <ProbeBadges probes={selectedServer.probes} showRtt />
+                  </div>
+                )}
               </div>
             </div>
 

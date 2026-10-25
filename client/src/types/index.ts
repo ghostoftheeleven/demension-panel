@@ -90,6 +90,8 @@ export interface Server {
   node_image: string | null;
   node_image_created: string | null;
   node_info_at: string | null;
+  /** Доступность из выбранных стран (пусто, пока проверка выключена) */
+  probes?: ProbeResult[];
 }
 
 /** Версия панели и последний релиз на GitHub (GET /api/version) */
@@ -296,6 +298,52 @@ export interface RemotePanel {
   last_error: string | null;
   node_count: number;
   client_count: number;
+}
+
+/** Проверка доступности нод из стран (check-host.net) */
+export type ProbeStatus = 'ok' | 'partial' | 'fail';
+
+export interface ProbeResult {
+  server_id: number;
+  country: string;
+  ok_nodes: number;
+  total_nodes: number;
+  rtt_ms: number | null;
+  checked_at: string;
+  status: ProbeStatus;
+}
+
+export interface ProbeSettings {
+  enabled: boolean;
+  countries: string[];
+  interval_minutes: number;
+  show_in_name: boolean;
+  show_in_description: boolean;
+}
+
+export interface ProbeCountry {
+  code: string;
+  name: string;
+  nodes: string[];
+  cities: string[];
+}
+
+export interface ProbesOverview {
+  settings: ProbeSettings;
+  status: { running: boolean; last_run: string | null; error: string | null; next_run: string | null };
+  max_countries: number;
+  servers: { id: number; name: string; host: string; status: ServerStatus; probe_port: number | null }[];
+  results: ProbeResult[];
+}
+
+/** Перенос панели на другой сервер (GET /api/migration/status) */
+export interface MigrationStatus {
+  /** idle — обычная работа; prepared — выдан код; exporting — архив передан, изменения блокируются; migrated — панель заморожена */
+  state: 'idle' | 'prepared' | 'exporting' | 'migrated';
+  expiresAt: string | null;
+  exportedAt: string | null;
+  migratedAt: string | null;
+  newUrl: string | null;
 }
 
 export interface AmneziaImportResult {

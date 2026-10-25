@@ -38,3 +38,17 @@ export function formatBytes(bytes: number): string {
 }
 
 export const GIB = 1024 * 1024 * 1024;
+
+/** Флаг страны из двухбуквенного кода (региональные индикаторы Unicode) */
+export function countryFlag(code: string): string {
+  return String.fromCodePoint(...[...code.toUpperCase()].map((c) => 0x1f1a5 + c.charCodeAt(0)));
+}
+
+/** Название страны по-русски (запасной вариант — сам код) */
+export function countryName(code: string): string {
+  try {
+    return new Intl.DisplayNames(['ru'], { type: 'region' }).of(code.toUpperCase()) ?? code.toUpperCase();
+  } catch {
+    return code.toUpperCase();
+  }
+}

@@ -138,6 +138,31 @@ describe('обновление с первой версии', () => {
   });
 });
 
+describe('миграция v8: проверка доступности нод из стран', () => {
+  it('БД версии 7 с серверами и клиентами обновляется без потерь: появляются probe_port и таблица результатов', async () => {
+    const { db, initDatabase, SCHEMA_VERSION } = await openFresh();
+    initDatabase(7);
+    expect(version(db)).toBe(7);
+    expect(columns(db, 'servers')).not.toContain('probe_port');
+    expect(hasTable(db, 'probe_results')).toBe(false);
+    db.prepare("INSERT INTO servers (name, host) VALUES ('keep-me', '198.51.100.40')").run();
+    db.prepare("INSERT INTO clients (server_id, name, client_ip, client_public_key, client_private_key) VALUES (1, 'c', '10.8.0.2', 'K', 'p')").run();
+
+    initDatabase();
+    expect(version(db)).toBe(SCHEMA_VERSION);
+    expect(SCHEMA_VERSION).toBeGreaterThanOrEqual(8);
+    expect(columns(db, 'servers')).toContain('probe_port');
+    expect(hasTable(db, 'probe_results')).toBe(true);
+    expect(db.prepare("SELECT name, probe_port FROM servers WHERE host = '198.51.100.40'").get()).toEqual({ name: 'keep-me', probe_port: null });
+    expect((db.prepare('SELECT COUNT(*) AS c FROM clients').get() as any).c).toBe(1);
+
+    // Результаты удаляются вместе с сервером (ON DELETE CASCADE)
+    db.prepare("INSERT INTO probe_results (server_id, country, ok_nodes, total_nodes, checked_at) VALUES (1, 'ru', 1, 1, '2026-01-01T00:00:00.000Z')").run();
+    db.prepare('DELETE FROM servers WHERE id = 1').run();
+    expect((db.prepare('SELECT COUNT(*) AS c FROM probe_results').get() as any).c).toBe(0);
+  });
+});
+
 describe('миграция v6: уникальность ключа клиента на ноде', () => {
   async function atVersion5(duplicate: boolean) {
     const ctx = await openFresh();

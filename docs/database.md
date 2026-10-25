@@ -22,6 +22,7 @@ SQLite (`node:sqlite`, Node ≥ 22.13), файл `data/demension.db`, режим
 | v5 | Партнёрский доступ: `partners`, `partner_nodes`, `partner_audit`, `remote_panels`; поля клиентов/серверов для партнёров |
 | v6 | Уникальный индекс `idx_clients_server_pubkey` (ключ клиента на ноде; не создаётся, если дубли уже есть — предупреждение в логе), таблица `trusted_login_ips` |
 | v7 | Версии ПО AmneziaWG на ноде: `node_awg_go`, `node_awg_tools`, `node_image`, `node_image_created`, `node_info_at` |
+| v8 | Проверка доступности из стран: `servers.probe_port`, таблица `probe_results` |
 
 ## Таблицы
 
@@ -43,6 +44,7 @@ SQLite (`node:sqlite`, Node ≥ 22.13), файл `data/demension.db`, режим
 | `managed_by` | `demension` — контейнер панели, `amnezia` — контейнер приложения Amnezia, `partner` — нода партнёра |
 | `sub_name`, `sub_order` | Отображаемое имя и порядок в подписке |
 | `remote_panel_id`, `remote_node_id` | Нода партнёрской панели (без SSH); каскадное удаление с `remote_panels` |
+| `probe_port` | Порт TCP-проверки доступности из стран; NULL — ICMP-ping ([probes.md](probes.md)) |
 | `node_awg_go`, `node_awg_tools`, `node_image`, `node_image_created`, `node_info_at` | Версии ПО AmneziaWG на ноде (amneziawg-go, утилиты, образ и дата его сборки) и время их чтения; `node_info_at = NULL` — перечитать при следующем опросе |
 
 ### `clients` — пиры
@@ -71,8 +73,14 @@ SQLite (`node:sqlite`, Node ≥ 22.13), файл `data/demension.db`, режим
 `base_url`, `token` (**зашифрован**), `partner_name` (как нас назвал владелец), `status`
 (`pending`/`online`/`error`/`revoked`), `limits` (JSON), `last_sync_at`, `last_error`.
 
+### `probe_results` — доступность нод из стран
+`(server_id, country)` — ключ; `ok_nodes` / `total_nodes` — сколько проверяющих узлов страны достучалось до ноды, `rtt_ms`, `checked_at`.
+Каскадно удаляется с сервером. Устаревшие (старше трёх интервалов, но не менее двух часов) результаты не показываются.
+
 ### Прочее
 - `admins` — администратор (scrypt), `sessions` — SHA-256 токенов с `expires_at`, `trusted_login_ips` — IP успешных входов
   администратора (исключение из блокировки по логину, см. [security.md](security.md)).
 - `settings` — ключ/значение: `ssl_*`, `cf_token` (**зашифрован**), `public_url`, `client_dns`, `client_mtu`,
-  `sub_*` (оформление подписки).
+  `sub_*` (оформление подписки), `probe_*` (проверка из стран), `migration_*` (состояние переноса панели: `migration_state`,
+  `migration_key` — **зашифрован**, `migration_auth_hash`, `migration_expires_at`, `migration_exported_at`, `migration_migrated_at`,
+  `migration_new_url`; в снимок для переноса не попадают).

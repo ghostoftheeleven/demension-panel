@@ -18,6 +18,10 @@ import type {
   RemotePanel,
   AmneziaImportResult,
   VersionInfo,
+  MigrationStatus,
+  ProbeCountry,
+  ProbeSettings,
+  ProbesOverview,
 } from '../types';
 
 const API_BASE = '/api';
@@ -119,6 +123,17 @@ export const api = {
     );
     // Сервер завершает все сессии и выдаёт новый токен текущему пользователю
     if (data.token) setToken(data.token);
+  },
+
+  /** Смена логина администратора: сервер завершает остальные сессии и выдаёт новый токен */
+  async changeUsername(password: string, newUsername: string): Promise<AdminUser> {
+    const data = await request<{ token?: string; user: AdminUser }>(
+      `${API_BASE}/auth/change-username`,
+      { method: 'POST', ...json({ password, newUsername }) },
+      'Ошибка смены логина'
+    );
+    if (data.token) setToken(data.token);
+    return data.user;
   },
 
   // Servers
@@ -336,6 +351,55 @@ export const api = {
 
   disconnectRemotePanel(id: number): Promise<{ success: boolean; remoteCleanup: boolean }> {
     return request(`${API_BASE}/remote-panels/${id}`, { method: 'DELETE' }, 'Ошибка отключения панели');
+  },
+
+  // Проверка доступности нод из стран
+  getProbes(): Promise<ProbesOverview> {
+    return request(`${API_BASE}/probes`, {}, 'Ошибка загрузки проверок доступности');
+  },
+
+  getProbeCountries(): Promise<ProbeCountry[]> {
+    return request(`${API_BASE}/probes/countries`, {}, 'Ошибка получения списка стран');
+  },
+
+  updateProbes(data: {
+    settings?: Partial<ProbeSettings>;
+    servers?: { id: number; probe_port: number | null }[];
+  }): Promise<ProbesOverview> {
+    return request(`${API_BASE}/probes`, { method: 'PUT', ...json(data) }, 'Ошибка сохранения настроек проверки');
+  },
+
+  async runProbes(): Promise<void> {
+    await request(`${API_BASE}/probes/run`, { method: 'POST' }, 'Ошибка запуска проверки');
+  },
+
+  // Перенос панели на другой сервер
+  getMigrationStatus(): Promise<MigrationStatus> {
+    return request(`${API_BASE}/migration/status`, {}, 'Ошибка получения состояния переноса');
+  },
+
+  /** Код переноса показывается один раз: сервер хранит только производные от него значения */
+  prepareMigration(password: string): Promise<{ code: string; expiresAt: string }> {
+    return request(`${API_BASE}/migration/prepare`, { method: 'POST', ...json({ password }) }, 'Ошибка подготовки переноса');
+  },
+
+  async cancelMigration(): Promise<void> {
+    await request(`${API_BASE}/migration/cancel`, { method: 'POST' }, 'Ошибка отмены переноса');
+  },
+
+  /** Архив переноса файлом (если новому серверу недоступен адрес этой панели): fetch с токеном в заголовке, затем Blob */
+  async downloadMigrationArchive(): Promise<void> {
+    const res = await fetchWithAuth(`${API_BASE}/migration/download`);
+    if (!res.ok) throw new Error(await errorMessage(res, 'Ошибка скачивания архива'));
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `demension-migration-${new Date().toISOString().slice(0, 10)}.dpm`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   },
 
   // Security: SSL & Fail2ban

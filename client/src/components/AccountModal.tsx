@@ -1,0 +1,250 @@
+import React, { useState } from 'react';
+import { X, Lock, Check, User } from 'lucide-react';
+import { api } from '../api';
+import type { AdminUser } from '../types';
+
+interface AccountModalProps {
+  isOpen: boolean;
+  user: AdminUser | null;
+  onClose: () => void;
+  onUsernameChanged: (user: AdminUser) => void;
+}
+
+type AccountTab = 'password' | 'username';
+
+const inputClass =
+  'w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-emerald-500 text-sm';
+const labelClass = 'block text-xs font-medium text-zinc-400 mb-1';
+
+export const AccountModal: React.FC<AccountModalProps> = ({ isOpen, user, onClose, onUsernameChanged }) => {
+  const [tab, setTab] = useState<AccountTab>('password');
+
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  const [usernamePassword, setUsernamePassword] = useState('');
+  const [newUsername, setNewUsername] = useState('');
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  if (!isOpen) return null;
+
+  const switchTab = (next: AccountTab) => {
+    setTab(next);
+    setError(null);
+    setSuccess(null);
+  };
+
+  const finish = (message: string) => {
+    setSuccess(message);
+    setTimeout(() => {
+      setSuccess(null);
+      onClose();
+    }, 1500);
+  };
+
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      setError('Новые пароли не совпадают');
+      return;
+    }
+    if (newPassword.length < 8) {
+      setError('Новый пароль должен содержать не менее 8 символов');
+      return;
+    }
+
+    setError(null);
+    setLoading(true);
+    try {
+      await api.changePassword(oldPassword, newPassword);
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      finish('Пароль успешно обновлен!');
+    } catch (err: any) {
+      setError(err.message || 'Ошибка смены пароля');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUsernameSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const username = newUsername.trim();
+    if (!/^[A-Za-z0-9._@-]{1,64}$/.test(username)) {
+      setError('Логин: от 1 до 64 символов — латинские буквы, цифры и . _ @ -');
+      return;
+    }
+
+    setError(null);
+    setLoading(true);
+    try {
+      const updated = await api.changeUsername(usernamePassword, username);
+      onUsernameChanged(updated);
+      setUsernamePassword('');
+      setNewUsername('');
+      finish('Логин изменён. Используйте его при следующем входе.');
+    } catch (err: any) {
+      setError(err.message || 'Ошибка смены логина');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const tabClass = (active: boolean) =>
+    `flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition ${
+      active ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-white'
+    }`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-zinc-900/60">
+          <div className="flex items-center gap-2">
+            <Lock className="w-5 h-5 text-emerald-400" />
+            <h2 className="text-base font-semibold text-white">Учётная запись администратора</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-zinc-400 hover:text-white transition p-1 rounded-lg hover:bg-zinc-800"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="px-6 pt-4">
+          <div className="flex gap-1 bg-zinc-950/60 p-1 rounded-xl border border-zinc-800/80">
+            <button type="button" onClick={() => switchTab('password')} className={tabClass(tab === 'password')}>
+              <Lock className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Пароль</span>
+            </button>
+            <button type="button" onClick={() => switchTab('username')} className={tabClass(tab === 'username')}>
+              <User className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Логин</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Messages */}
+        <div className="px-6 pt-4 space-y-3 empty:hidden">
+          {error && (
+            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs">{error}</div>
+          )}
+          {success && (
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs flex items-center gap-2">
+              <Check className="w-4 h-4" />
+              <span>{success}</span>
+            </div>
+          )}
+        </div>
+
+        {tab === 'password' ? (
+          <form onSubmit={handlePasswordSubmit} className="p-6 space-y-4">
+            <div>
+              <label className={labelClass}>Текущий пароль</label>
+              <input
+                type="password"
+                required
+                autoComplete="current-password"
+                value={oldPassword}
+                onChange={(e) => setOldPassword(e.target.value)}
+                className={inputClass}
+              />
+            </div>
+
+            <div>
+              <label className={labelClass}>Новый пароль</label>
+              <input
+                type="password"
+                required
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className={inputClass}
+              />
+            </div>
+
+            <div>
+              <label className={labelClass}>Подтвердите новый пароль</label>
+              <input
+                type="password"
+                required
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className={inputClass}
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3">
+              <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition">
+                Отмена
+              </button>
+              <button
+                type="submit"
+                disabled={loading || !!success}
+                className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-medium text-sm px-5 py-2 rounded-xl transition shadow-lg shadow-emerald-600/20"
+              >
+                {loading ? 'Сохранение...' : 'Обновить пароль'}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <form onSubmit={handleUsernameSubmit} className="p-6 space-y-4">
+            <div className="text-xs text-zinc-400">
+              Текущий логин: <span className="font-mono text-white">{user?.username ?? '—'}</span>
+            </div>
+
+            <div>
+              <label className={labelClass}>Новый логин</label>
+              <input
+                type="text"
+                required
+                maxLength={64}
+                autoComplete="username"
+                placeholder="латиница, цифры и . _ @ -"
+                value={newUsername}
+                onChange={(e) => setNewUsername(e.target.value)}
+                className={inputClass}
+              />
+            </div>
+
+            <div>
+              <label className={labelClass}>Текущий пароль (для подтверждения)</label>
+              <input
+                type="password"
+                required
+                autoComplete="current-password"
+                value={usernamePassword}
+                onChange={(e) => setUsernamePassword(e.target.value)}
+                className={inputClass}
+              />
+            </div>
+
+            <p className="text-[11px] text-zinc-500">
+              Остальные сессии администратора будут завершены, в этой вы останетесь авторизованы.
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-3">
+              <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-zinc-400 hover:text-white transition">
+                Отмена
+              </button>
+              <button
+                type="submit"
+                disabled={loading || !!success}
+                className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-medium text-sm px-5 py-2 rounded-xl transition shadow-lg shadow-emerald-600/20"
+              >
+                {loading ? 'Сохранение...' : 'Сменить логин'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+};

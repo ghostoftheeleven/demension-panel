@@ -3,6 +3,7 @@ import { Navbar, type AppTab } from './components/Navbar';
 import { SubscriptionSettingsView } from './components/SubscriptionSettingsView';
 import { PartnersView } from './components/PartnersView';
 import { ServerCards } from './components/ServerCards';
+import { ProbesCard } from './components/ProbesCard';
 import { ClientList } from './components/ClientList';
 import { SubscribersList } from './components/SubscribersList';
 import { SecurityView } from './components/SecurityView';
@@ -12,12 +13,12 @@ import { AwgParamsModal } from './components/AwgParamsModal';
 import { AddClientModal } from './components/AddClientModal';
 import { AddSubscriberModal } from './components/AddSubscriberModal';
 import { SubscriptionModal } from './components/SubscriptionModal';
-import { ChangePasswordModal } from './components/ChangePasswordModal';
+import { AccountModal } from './components/AccountModal';
 import { QrCodeModal } from './components/QrCodeModal';
 import { LoginView } from './components/LoginView';
-import type { Server, Client, Subscriber, QrCodeData, AdminUser } from './types';
+import type { Server, Client, Subscriber, QrCodeData, AdminUser, MigrationStatus } from './types';
 import { api } from './api';
-import { ShieldCheck, Plus, Terminal, Zap, Sparkles } from 'lucide-react';
+import { ShieldCheck, Plus, Terminal, Zap, Sparkles, AlertTriangle } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [user, setUser] = useState<AdminUser | null>(null);
@@ -46,7 +47,8 @@ export const App: React.FC = () => {
   const [publicUrl, setPublicUrl] = useState<string | null>(null);
   // Номер последнего запроса клиентов: ответ для ранее выбранного сервера отбрасывается
   const clientsRequestRef = useRef(0);
-  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [isAccountOpen, setIsAccountOpen] = useState(false);
+  const [migrationState, setMigrationState] = useState<MigrationStatus['state']>('idle');
 
   // Check auth on mount
   useEffect(() => {
@@ -71,11 +73,13 @@ export const App: React.FC = () => {
   const loadData = async () => {
     if (!user) return;
     try {
-      const [serversData, subscribersData, settings] = await Promise.all([
+      const [serversData, subscribersData, settings, migration] = await Promise.all([
         api.getServers(),
         api.getSubscribers(),
         api.getSettings().catch(() => null),
+        api.getMigrationStatus().catch(() => null),
       ]);
+      if (migration) setMigrationState(migration.state);
       setServers(serversData);
       setSubscribers(subscribersData);
       if (settings) setPublicUrl(settings.public_url || null);
@@ -229,12 +233,26 @@ export const App: React.FC = () => {
           setEditingSubscriber(null);
           setIsAddSubscriberOpen(true);
         }}
-        onChangePassword={() => setIsChangePasswordOpen(true)}
+        onOpenAccount={() => setIsAccountOpen(true)}
         onLogout={async () => {
           await api.logout();
           setUser(null);
         }}
       />
+
+      {migrationState === 'exporting' && (
+        <div className="bg-amber-500/10 border-b border-amber-500/20 text-amber-200 text-xs">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex flex-wrap items-center gap-2">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <span>
+              Идёт перенос панели на другой сервер: изменения сейчас не сохраняются, опрос нод приостановлен.
+            </span>
+            <button onClick={() => setActiveTab('security')} className="underline hover:text-white">
+              Завершить или отменить перенос
+            </button>
+          </div>
+        </div>
+      )}
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         {loading ? (
@@ -247,7 +265,11 @@ export const App: React.FC = () => {
           <SubscriptionSettingsView subscribers={subscribers} publicUrl={publicUrl} />
         ) : activeTab === 'security' ? (
           /* Security: HTTPS & Fail2ban Tab */
-          <SecurityView onSettingsSaved={(settings) => setPublicUrl(settings.public_url || null)} />
+          <SecurityView
+            publicUrl={publicUrl}
+            onSettingsSaved={(settings) => setPublicUrl(settings.public_url || null)}
+            onMigrationChange={loadData}
+          />
         ) : activeTab === 'subscribers' ? (
           /* Subscribers & Multi-Node Subscriptions Tab */
           <SubscribersList
@@ -317,6 +339,8 @@ export const App: React.FC = () => {
         ) : (
           /* Servers & Clients View */
           <>
+            <ProbesCard onChanged={loadData} />
+
             <ServerCards
               servers={servers}
               selectedServerId={selectedServerId}
@@ -399,9 +423,11 @@ export const App: React.FC = () => {
         }}
       />
 
-      <ChangePasswordModal
-        isOpen={isChangePasswordOpen}
-        onClose={() => setIsChangePasswordOpen(false)}
+      <AccountModal
+        isOpen={isAccountOpen}
+        user={user}
+        onClose={() => setIsAccountOpen(false)}
+        onUsernameChanged={(updated) => setUser(updated)}
       />
 
       <QrCodeModal

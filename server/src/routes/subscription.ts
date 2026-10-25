@@ -5,6 +5,7 @@ import { SubscriptionService } from '../services/subscription.service.js';
 import { buildSubscriptionHeaders, readSubscriptionSettings } from '../services/subscription-settings.service.js';
 import { contentDisposition } from '../utils/http.js';
 import { paramsFromRow } from '../utils/awg-params.js';
+import { ProbeService } from '../services/probe.service.js';
 
 /** Названия доп. параметров AWG 3.x в amnezia-wg-option mihomo */
 const MIHOMO_EXTRA_KEYS: Record<string, string> = {
@@ -134,7 +135,7 @@ subscriptionRouter.get('/:token', (req, res) => {
     'Subscription-Userinfo',
     `upload=${usage.upload}; download=${usage.download}; total=${subscriber.traffic_limit || 0}; expire=${expire}`
   );
-  for (const [name, value] of Object.entries(buildSubscriptionHeaders(readSubscriptionSettings(), subscriber.name))) {
+  for (const [name, value] of Object.entries(buildSubscriptionHeaders(readSubscriptionSettings(), subscriber.name, ProbeService.getLegend()))) {
     res.setHeader(name, value);
   }
   res.setHeader('Content-Disposition', contentDisposition('inline', `${subscriber.name}.${format === 'clash' ? 'yaml' : 'txt'}`));
@@ -154,8 +155,10 @@ subscriptionRouter.get('/:token', (req, res) => {
     : [];
 
   const settings = AwgService.getClientNetworkSettings();
+  // Доступность нод из выбранных стран дописывается к названию (если включено)
+  const marks = ProbeService.getNameMarks();
   const entries = peers.map((p) => ({
-    name: p.sub_name || p.server_name,
+    name: [p.sub_name || p.server_name, marks.get(p.server_id)].filter(Boolean).join(' · '),
     server: { ...p, preshared_key: p.server_psk },
     client: p,
   }));

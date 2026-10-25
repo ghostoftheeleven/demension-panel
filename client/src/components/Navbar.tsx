@@ -12,7 +12,7 @@ interface NavbarProps {
   onSelectTab: (tab: AppTab) => void;
   onAddServer: () => void;
   onAddSubscriber: () => void;
-  onChangePassword: () => void;
+  onOpenAccount: () => void;
   onLogout: () => void;
 }
 
@@ -23,7 +23,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSelectTab,
   onAddServer,
   onAddSubscriber,
-  onChangePassword,
+  onOpenAccount,
   onLogout,
 }) => {
   const onlineCount = servers.filter((s) => s.status === 'online').length;
@@ -154,11 +154,12 @@ export const Navbar: React.FC<NavbarProps> = ({
           {user && (
             <div className="flex items-center gap-1 pl-2 border-l border-zinc-800">
               <button
-                onClick={onChangePassword}
-                title="Сменить пароль администратора"
-                className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl transition"
+                onClick={onOpenAccount}
+                title={`Учётная запись «${user.username}»: сменить логин или пароль`}
+                className="flex items-center gap-1.5 p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl transition"
               >
                 <KeyRound className="w-4 h-4" />
+                <span className="hidden md:inline max-w-28 truncate text-xs font-mono">{user.username}</span>
               </button>
 
               <button

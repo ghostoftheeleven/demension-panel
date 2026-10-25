@@ -137,12 +137,13 @@ export function updateSubscriptionSettings(body: Record<string, unknown>): Subsc
 /**
  * HTTP-заголовки подписки. Текстовые значения передаются с префиксом base64:, чтобы допускать кириллицу и эмодзи.
  */
-export function buildSubscriptionHeaders(settings: SubscriptionSettings, userName: string): Record<string, string> {
+export function buildSubscriptionHeaders(settings: SubscriptionSettings, userName: string, extraDescription: string | null = null): Record<string, string> {
   const headers: Record<string, string> = {
     'Profile-Title': base64HeaderValue(renderTitle(settings.title, userName)),
     'Profile-Update-Interval': String(settings.update_interval),
   };
-  if (settings.description) headers['Profile-Description'] = base64HeaderValue(settings.description);
+  const description = [settings.description, extraDescription].filter(Boolean).join('\n');
+  if (description) headers['Profile-Description'] = base64HeaderValue(description);
   if (settings.announce) headers['Announce'] = base64HeaderValue(settings.announce);
   if (settings.announce_url) headers['Announce-Url'] = settings.announce_url;
   if (settings.support_url) headers['Support-Url'] = settings.support_url;
