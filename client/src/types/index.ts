@@ -107,6 +107,20 @@ export interface VersionInfo {
   error: string | null;
 }
 
+/** Обновление панели из интерфейса: GET/POST /api/version/update */
+export interface PanelUpdateStatus {
+  available: boolean;
+  reason: string | null;
+  current: string;
+  state: 'idle' | 'running' | 'success' | 'failed' | 'rolled_back';
+  from: string | null;
+  to: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  message: string | null;
+  log: string;
+}
+
 export interface ServerUpdate {
   name?: string;
   host?: string;

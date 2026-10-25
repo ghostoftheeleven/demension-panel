@@ -18,6 +18,7 @@ import type {
   RemotePanel,
   AmneziaImportResult,
   VersionInfo,
+  PanelUpdateStatus,
   MigrationStatus,
   ProbeCountry,
   ProbeSettings,
@@ -280,6 +281,15 @@ export const api = {
 
   getVersion(refresh = false): Promise<VersionInfo> {
     return request(`${API_BASE}/version${refresh ? '?refresh=1' : ''}`, {}, 'Ошибка проверки версии');
+  },
+
+  // Обновление панели из интерфейса (docs/releases.md)
+  getPanelUpdate(): Promise<PanelUpdateStatus> {
+    return request(`${API_BASE}/version/update`, {}, 'Ошибка получения состояния обновления');
+  },
+
+  startPanelUpdate(version: string): Promise<PanelUpdateStatus> {
+    return request(`${API_BASE}/version/update`, { method: 'POST', ...json({ version }) }, 'Ошибка запуска обновления');
   },
 
   updateSettings(data: Partial<PanelSettings>): Promise<PanelSettings> {

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ArrowUpCircle, RefreshCw } from 'lucide-react';
 import type { VersionInfo } from '../types';
 import { api } from '../api';
+import { PanelUpdateModal } from './PanelUpdateModal';
 
 /** Как часто интерфейс спрашивает версию (сервер сам кэширует ответ GitHub на 6 часов) */
 const POLL_MS = 60 * 60 * 1000;
@@ -21,6 +22,7 @@ function describe(info: VersionInfo): string {
 export const PanelVersion: React.FC = () => {
   const [info, setInfo] = useState<VersionInfo | null>(null);
   const [checking, setChecking] = useState(false);
+  const [updateOpen, setUpdateOpen] = useState(false);
 
   const load = useCallback((refresh: boolean) => {
     setChecking(true);
@@ -68,17 +70,17 @@ export const PanelVersion: React.FC = () => {
         </span>
       )}
       {info.update_available && info.latest && (
-        <a
-          href={info.latest_url || info.releases_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          title="Что нового и как обновить"
+        <button
+          type="button"
+          onClick={() => setUpdateOpen(true)}
+          title="Что нового и обновление панели"
           className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20 hover:bg-amber-500/20 transition"
         >
           <ArrowUpCircle className="w-3 h-3" />
           <span>Доступна {info.latest}</span>
-        </a>
+        </button>
       )}
+      {updateOpen && <PanelUpdateModal info={info} onClose={() => setUpdateOpen(false)} />}
     </div>
   );
 };

@@ -18,6 +18,9 @@ set -euo pipefail
 #   PANEL_CERT_MODE=keep|cf|http|ip|custom|none  PANEL_DOMAIN PANEL_EMAIL CF_API_TOKEN PANEL_CERT_FILE PANEL_KEY_FILE
 #   MIGRATE_REPLACE=1  — заменить данные уже установленной на этом сервере панели (резервная копия в data/backups)
 # Логин и пароль администратора, ноды, клиенты и подписки переезжают без изменений.
+#
+# Обновление из интерфейса панели (docs/releases.md): server/src/scripts/update-panel.sh запускает install.sh нового релиза без
+# терминала с PANEL_UPDATE_REF=vX.Y.Z — обновление до этого тега вместо головы main. Поддержку этой переменной не удалять.
 # ==============================================================================
 
 # Text formatting
@@ -304,8 +307,20 @@ echo -e "\n${CYAN}[3/7] Развертывание кодовой базы в ${
 # Новый код скачивается, пока панель ещё работает: при ошибке (нет сети, локальные правки) она остаётся запущенной
 if [ -d "$INSTALL_DIR/.git" ]; then
   echo "Обновление существующей установки..."
-  # safe.directory: каталог мог быть скопирован из клона обычного пользователя, а установщик работает от root
-  if ! git -c safe.directory="$INSTALL_DIR" -C "$INSTALL_DIR" pull --ff-only origin main; then
+  # safe.directory: каталог мог быть скопирован из клона обычного пользователя, а установщик работает от root.
+  # PANEL_UPDATE_REF=vX.Y.Z — обновление до релиза (так обновляет панель из интерфейса, update-panel.sh), а не до головы main.
+  if [ -n "${PANEL_UPDATE_REF:-}" ]; then
+    if ! [[ "$PANEL_UPDATE_REF" =~ ^v[0-9]{1,4}\.[0-9]{1,4}\.[0-9]{1,6}$ ]]; then
+      echo -e "${RED}[ERROR] PANEL_UPDATE_REF: ожидается версия вида v1.2.3.${NC}"
+      exit 1
+    fi
+    if ! git -c safe.directory="$INSTALL_DIR" -C "$INSTALL_DIR" fetch --no-tags origin "+refs/tags/${PANEL_UPDATE_REF}:refs/tags/${PANEL_UPDATE_REF}" \
+      || ! git -c safe.directory="$INSTALL_DIR" -C "$INSTALL_DIR" merge --ff-only "refs/tags/${PANEL_UPDATE_REF}"; then
+      echo -e "${RED}[ERROR] Не удалось получить релиз ${PANEL_UPDATE_REF}. Панель продолжает работать на прежней версии.${NC}"
+      echo -e "Проверьте доступ к GitHub и локальные изменения: git -C ${INSTALL_DIR} status"
+      exit 1
+    fi
+  elif ! git -c safe.directory="$INSTALL_DIR" -C "$INSTALL_DIR" pull --ff-only origin main; then
     echo -e "${RED}[ERROR] Не удалось получить обновление (git pull). Панель продолжает работать на прежней версии.${NC}"
     echo -e "Проверьте доступ к GitHub и локальные изменения: git -C ${INSTALL_DIR} status"
     exit 1

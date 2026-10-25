@@ -20,7 +20,7 @@ Demension Panel — агентлесс-панель управления нод�
 | [docs/testing.md](docs/testing.md) | Как устроены тесты, хелперы, реальные ноды в Docker, правила для новых тестов |
 | [docs/migration.md](docs/migration.md) | Перенос панели на другой сервер: архив, код, сертификат, заморозка прежней панели, CLI |
 | [docs/probes.md](docs/probes.md) | Проверка доступности нод из выбранных стран (check-host.net) и её показ в подписке |
-| [docs/releases.md](docs/releases.md) | Номер версии `vX.Y.Z`, `CHANGELOG.md`, автоматические релизы GitHub, проверка обновлений в панели |
+| [docs/releases.md](docs/releases.md) | Номер версии `vX.Y.Z`, `CHANGELOG.md`, автоматические релизы GitHub, проверка обновлений и обновление панели из интерфейса |
 
 ## Структура репозитория
 
@@ -32,6 +32,7 @@ server/            Node.js 22.13+ / Express 4 / TypeScript, SQLite через no
   src/services/      бизнес-логика (SSH, провижининг, подписки, партнёры, HTTPS…)
   src/utils/         чистые функции (сети, параметры AWG, ключи Amnezia, HTTP-утилиты)
   src/scripts/deploy-awg.sh  скрипт развёртывания ноды (передаётся по SSH через stdin)
+  src/scripts/update-panel.sh  обновление панели из интерфейса (systemd-run → install.sh релиза, откат при сбое)
   src/cli/reset-admin.ts     сброс логина/пароля администратора
   src/cli/migration.ts       перенос панели на другой сервер (его вызывает install.sh)
   src/middleware/    авторизация, ограничение частоты, заголовки безопасности (CSP), единый обработчик ошибок
@@ -49,7 +50,7 @@ npm run dev:server            # бэкенд :3001 (tsx watch)
 npm run dev:client            # фронтенд :3000, прокси /api, /sub, /ws на :3001
 cd server && npx tsc --noEmit && npm test     # проверка типов и тесты сервера (≈ 1–2 мин)
 cd client && npx tsc -b && npm run lint && npx vite build
-npx shellcheck -S error install.sh server/src/scripts/deploy-awg.sh server/test/docker/nodes.sh server/test/docker/entrypoint.sh
+npx shellcheck -S error install.sh server/src/scripts/deploy-awg.sh server/src/scripts/update-panel.sh server/test/docker/nodes.sh server/test/docker/entrypoint.sh
 server/test/docker/nodes.sh up                # реальные ноды в Docker для real-*.test.ts (без них эти тесты пропускаются)
 server/test/install/run.sh                    # install.sh целиком в чистом Ubuntu + перенос панели между двумя контейнерами + обновление с предыдущего релиза (Docker, ≈ 20 мин) — гонять при любой правке install.sh
 ```
@@ -170,12 +171,16 @@ CI на `main`. Подробно — [docs/releases.md](docs/releases.md).
     данные, проверяются по формату (`ProbeService`); пометки в названии/описании подписки идут только через `getNameMarks`/`getLegend`
     (описание — `base64:`, инвариант 19).
 33. **`/api/health` отвечает по HTTP и при включённом HTTPS**: `install.sh` проверяет запуск панели через `http://127.0.0.1:порт/api/health`.
+34. **Обновление из интерфейса запускает `install.sh` *нового* релиза скриптом *установленной* версии** (`update-panel.sh`, docs/releases.md).
+    Поэтому `install.sh` обязан поддерживать `PANEL_UPDATE_REF=vX.Y.Z` (ff-merge тега вместо `git pull`) и работу без терминала без
+    вопросов и без смены учётных данных; аргументы `update-panel.sh` (каталог, каталог состояния, версия, текущая версия) и формат
+    `data/update/status.json` не меняйте несовместимо. Процесс обновления живёт в отдельной службе `systemd-run`, а не в дочернем процессе панели.
 
 ## Чек-лист перед коммитом
 
 - [ ] `cd server && npx tsc --noEmit && npm test` (при правках провижининга, федерации, WebSocket/HTTPS — с поднятыми нодами `nodes.sh up`)
 - [ ] `cd client && npx tsc -b && npm run lint && npx vite build`
-- [ ] shellcheck, если менялись `install.sh` / `deploy-awg.sh`; при правках `install.sh` — `server/test/install/run.sh`
+- [ ] shellcheck, если менялись `install.sh` / `deploy-awg.sh` / `update-panel.sh`; при правках `install.sh` — `server/test/install/run.sh`
 - [ ] Новые поля сервера/клиента не утекают в API (п. 1) и, если нужны клиенту, добавлены в `client/src/types`
 - [ ] Изменение схемы — новой миграцией (п. 21)
 - [ ] Обновлён документ в `docs/` для изменённой подсистемы (и `AGENTS.md`, если появилось правило или команда)

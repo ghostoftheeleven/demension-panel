@@ -102,6 +102,51 @@ echo "$SERVERS" | grep -q 'upgrade-ssh-secret' && fail "SSH-пароль утё�
 SUBLINK=$(curl -s "http://127.0.0.1:3001/sub/$SUB_TOKEN" | base64 -d 2>/dev/null | head -c 200)
 echo "подписка без нод пуста: [$SUBLINK]"
 
+section "U6. Обновление из панели (update-panel.sh + настоящий install.sh) до тега релиза и откат неудачного релиза"
+# Установка из /work — без .git; для обновления из панели нужен клон: локальный «GitHub» (/origin.git) с релизами новее текущего
+G() { git -c safe.directory='*' -c user.email=test@example.com -c user.name=test "$@"; }
+PANEL=/opt/demension-panel
+CUR="v$NEW_VERSION"
+NEXT="v$(node -p "const v=require('$PANEL/package.json').version.split('.'); v[2]=+v[2]+1; v.join('.')")"
+BROKEN="v$(node -p "const v=require('$PANEL/package.json').version.split('.'); v[2]=+v[2]+2; v.join('.')")"
+G -C "$PANEL" init -q -b main && G -C "$PANEL" add -A && G -C "$PANEL" commit -q -m "release $CUR"
+G init -q --bare -b main /origin.git
+G -C "$PANEL" remote add origin /origin.git && G -C "$PANEL" push -q origin main
+G clone -q /origin.git /next
+sed -i "s/\"version\": \"$NEW_VERSION\"/\"version\": \"${NEXT#v}\"/" /next/package.json
+G -C /next commit -qam "release $NEXT" && G -C /next tag "$NEXT"
+sed -i "s/\"version\": \"${NEXT#v}\"/\"version\": \"${BROKEN#v}\"/" /next/package.json
+echo "const broken: number = 'не число';" >> /next/server/src/index.ts   # релиз, который не собирается
+G -C /next commit -qam "release $BROKEN" && G -C /next tag "$BROKEN"
+G -C /next push -q origin main --tags
+
+node /harness/dump-db.mjs "$PANEL/data/demension.db" > /tmp/before6.json
+bash "$PANEL/server/dist/scripts/update-panel.sh" "$PANEL" "$PANEL/data/update" "$NEXT" "$CUR"
+CODE=$?
+STRIP < "$PANEL/data/update/update.log" | tail -12
+cat "$PANEL/data/update/status.json"
+[ "$CODE" -eq 0 ] || fail "обновление из панели завершилось с ошибкой ($CODE)"
+grep -q '"state":"success"' "$PANEL/data/update/status.json" || fail "состояние обновления не success"
+VERSION=$(api GET /api/version | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).current")
+[ "$VERSION" = "$NEXT" ] || fail "после обновления из панели версия $VERSION, ожидалась $NEXT"
+[ "$(curl -sk -o /dev/null -w '%{http_code}' "$LOCAL/api/auth/me" -H "Authorization: Bearer $TOKEN")" = 200 ] || fail "сессия не пережила обновление из панели"
+[ "$(api GET /api/version/update | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).state")" = success ] || fail "API не показывает результат обновления"
+node /harness/dump-db.mjs "$PANEL/data/demension.db" > /tmp/after6.json
+node /harness/compare-dumps.mjs /tmp/before6.json /tmp/after6.json sessions || fail "данные изменились при обновлении из панели"
+grep -qx 'TRUST_PROXY=loopback' "$PANEL/server/.env" || fail "переменная .env потеряна при обновлении из панели"
+
+bash "$PANEL/server/dist/scripts/update-panel.sh" "$PANEL" "$PANEL/data/update" "$BROKEN" "$NEXT"
+CODE=$?
+STRIP < "$PANEL/data/update/update.log" | tail -8
+cat "$PANEL/data/update/status.json"
+[ "$CODE" -ne 0 ] || fail "несобираемый релиз установился без ошибки"
+grep -q '"state":"rolled_back"' "$PANEL/data/update/status.json" || fail "после неудачного обновления нет отката"
+VERSION=$(api GET /api/version | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).current")
+[ "$VERSION" = "$NEXT" ] || fail "после отката версия $VERSION, ожидалась $NEXT"
+[ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:3001/sub/$SUB_TOKEN")" = 200 ] || fail "подписка не работает после отката"
+node /harness/dump-db.mjs "$PANEL/data/demension.db" > /tmp/after6b.json
+node /harness/compare-dumps.mjs /tmp/before6.json /tmp/after6b.json sessions || fail "данные изменились после отката"
+
 echo
 if [ "$FAILED" -eq 0 ]; then echo "=== ОБНОВЛЕНИЕ С $FROM_TAG: ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ ==="; else echo "=== ОБНОВЛЕНИЕ С $FROM_TAG: ЕСТЬ ПРОВАЛЕННЫЕ ПРОВЕРКИ ==="; fi
 exit "$FAILED"

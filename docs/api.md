@@ -53,6 +53,8 @@ HTTP-кодом. Тела — JSON.
 
 ## Версия
 - `GET /api/version[?refresh=1]` — `{current, latest, latest_url, published_at, update_available, releases_url, checked_at, check_enabled, error}`: версия панели и последний релиз GitHub, см. [releases.md](releases.md).
+- `GET /api/version/update` — `{available, reason, current, state, from, to, started_at, finished_at, message, log}`: можно ли обновить панель из интерфейса (иначе `reason`), состояние последнего обновления (`idle`/`running`/`success`/`failed`/`rolled_back`) и последние 300 строк журнала.
+- `POST /api/version/update` `{version}` — обновить панель до последнего релиза (`version` должна совпасть с `latest`); 409 — недоступно, уже идёт или версия не последняя; 423/410 — во время переноса. См. [releases.md](releases.md#обновление-из-интерфейса).
 - Серверы в `GET /api/servers` содержат версии ПО ноды: `node_awg_go`, `node_awg_tools`, `node_image`, `node_image_created`, `node_info_at`.
 
 ## Настройки
