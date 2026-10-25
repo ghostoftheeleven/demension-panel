@@ -7,11 +7,13 @@
 #    PANEL_RESET_CREDENTIALS, свои значения, занятый порт, отсутствие пароля в .env/журнале, CLI сброса пароля, сохранение
 #    переменных .env при обновлении и обновление из git (при ошибке git pull панель продолжает работать).
 # 2. migration-old.sh + migration-new.sh — перенос панели между двумя контейнерами одной сети: неверный код, перенос данных,
-#    прежние логин и пароль, ключ шифрования, заморозка прежней панели и перенаправление её подписок, обновление панели с HTTPS.
+#    прежние логин и пароль, ключ шифрования, заморозка прежней панели и перенаправление её подписок, интерактивный режим в
+#    терминале (pty-drive.py), отказ заменить данные, обновление панели с HTTPS.
+# 3. upgrade.sh — обновление работающей панели предыдущего релиза (тег v0.1.0) с данными, HTTPS и своим .env до текущей версии.
 #
-#   server/test/install/run.sh          (≈ 12–15 минут)
+#   server/test/install/run.sh          (≈ 20 минут)
 #   SKIP_MIGRATION=1 server/test/install/run.sh      только установка (≈ 5 минут)
-#   SKIP_INSTALL=1 server/test/install/run.sh        только перенос панели
+#   SKIP_INSTALL=1 server/test/install/run.sh        без первой части; SKIP_UPGRADE=1 — без обновления с предыдущего релиза
 set -uo pipefail
 
 # Git Bash на Windows превращает аргументы вида /tmp/файл в Windows-пути, в том числе у docker exec
@@ -55,13 +57,14 @@ if [ "${SKIP_MIGRATION:-}" != 1 ]; then
   fi
 
   CODE="$(docker exec "$OLD" cat /tmp/migration-code | tr -d '[:space:]')"
+  AUTH="$(docker exec "$OLD" cat /tmp/migration-auth | tr -d '[:space:]')"
   SECRET_KEY="$(docker exec "$OLD" cat /tmp/old-secret-key | tr -d '[:space:]')"
   SUB_TOKEN="$(docker exec "$OLD" cat /tmp/sub-token | tr -d '[:space:]')"
 
   echo
   echo "################ Перенос панели: новый сервер"
   docker_run --rm --network "$NET" \
-    -e MIGRATION_CODE="$CODE" -e EXPECT_SECRET_KEY="$SECRET_KEY" -e EXPECT_SUB_TOKEN="$SUB_TOKEN" \
+    -e MIGRATION_CODE="$CODE" -e MIGRATION_AUTH="$AUTH" -e EXPECT_SECRET_KEY="$SECRET_KEY" -e EXPECT_SUB_TOKEN="$SUB_TOKEN" \
     ubuntu:24.04 bash /harness/migration-new.sh || STATUS=1
 
   echo
@@ -75,6 +78,12 @@ if [ "${SKIP_MIGRATION:-}" != 1 ]; then
     "308 http://"*":3001/sub/$SUB_TOKEN") ;;
     *) echo "ТЕСТ ПРОВАЛЕН: подписка прежней панели не перенаправлена на новую"; STATUS=1 ;;
   esac
+fi
+
+if [ "${SKIP_UPGRADE:-}" != 1 ]; then
+  echo
+  echo "################ Обновление работающей панели предыдущего релиза"
+  docker_run --rm ubuntu:24.04 bash /harness/upgrade.sh || STATUS=1
 fi
 
 exit "$STATUS"

@@ -51,7 +51,7 @@ cd server && npx tsc --noEmit && npm test     # проверка типов и �
 cd client && npx tsc -b && npm run lint && npx vite build
 npx shellcheck -S error install.sh server/src/scripts/deploy-awg.sh server/test/docker/nodes.sh server/test/docker/entrypoint.sh
 server/test/docker/nodes.sh up                # реальные ноды в Docker для real-*.test.ts (без них эти тесты пропускаются)
-server/test/install/run.sh                    # install.sh целиком в чистом Ubuntu + перенос панели между двумя контейнерами (Docker, ≈ 12–15 мин) — гонять при любой правке install.sh
+server/test/install/run.sh                    # install.sh целиком в чистом Ubuntu + перенос панели между двумя контейнерами + обновление с предыдущего релиза (Docker, ≈ 20 мин) — гонять при любой правке install.sh
 ```
 
 CI (`.github/workflows/ci.yml`) выполняет всё перечисленное на каждый push в `main`; отдельное задание `e2e` поднимает тестовые
@@ -162,7 +162,7 @@ CI на `main`. Подробно — [docs/releases.md](docs/releases.md).
     передаётся по сети** — в `settings` лежат производные (ключ `enc` под мастер-ключом и SHA-256 от `auth`). Всё, что добавляется в БД или в `data/`,
     должно попадать в снимок (`VACUUM INTO`) и импорт (`importMigrationArchive`). Модули, которые выполняются **до** открытия БД
     (`migration-archive.ts`, `migration-import.service.ts`, `migration-client.ts`, CLI), не импортируют `db/index.ts` статически.
-30. **Пока панель в состоянии `exporting`/`migrated`**, `migrationGuard` отклоняет записи (423/410), а `MigrationService.isBackgroundPaused()` останавливает
+30. **Пока панель в состоянии `exporting`/`migrated`**, `migrationGuard` отклоняет записи (423/410; установку нод по WebSocket — проверка в `index.ts`), а `MigrationService.isBackgroundPaused()` останавливает
     фоновые задачи (опрос нод, партнёры, продление сертификата, проверки из стран): две панели не должны управлять одними нодами. Новый фоновый
     цикл обязан проверять `isBackgroundPaused()`.
 31. **Подтверждение паролем** при смене логина/пароля и выдаче кода переноса считается в `reauthLimiter` (5 неверных за 15 минут на администратора).

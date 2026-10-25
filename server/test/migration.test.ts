@@ -310,6 +310,8 @@ describe('новая панель: импорт архива CLI в чистый
     const result = await runCli(['file', '--path', file], dataDir, { MIGRATION_CODE: code });
     expect(result.status, result.stderr).toBe(0);
     expect(result.stdout).toContain('серверов 1');
+    expect(result.stdout).not.toMatch(/vv\d/);
+    expect(result.stdout).toMatch(/Данные прежней панели \(v\d+\.\d+\.\d+\) перенесены/);
     expect(result.stdout).not.toContain(code);
     expect(result.values).toMatchObject({
       old_admin: 'migadmin', servers: '1', clients: '2', subscribers: '1', ssl_cert_ok: '1', ssl_domain: '203.0.113.9',

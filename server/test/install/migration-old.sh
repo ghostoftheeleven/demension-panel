@@ -29,6 +29,8 @@ PREPARED=$(api POST /api/migration/prepare "{\"password\":\"$PASSWORD\"}")
 node -p "JSON.parse(process.argv[1]).code" "$PREPARED" > /tmp/migration-code
 [ -s /tmp/migration-code ] || { echo "ТЕСТ ПРОВАЛЕН: код переноса не выдан: $PREPARED"; exit 1; }
 cat /opt/demension-panel/data/secret.key > /tmp/old-secret-key
+# Доказательство знания кода (заголовок X-Migration-Auth) — для проверки скачивания архива файлом
+(cd /opt/demension-panel/server && node --input-type=module -e "import { deriveMigrationKeys } from './dist/utils/migration-archive.js'; console.log(deriveMigrationKeys(process.argv[1]).auth)" "$(cat /tmp/migration-code)") > /tmp/migration-auth
 
 touch /tmp/old-ready
 echo "прежняя панель готова к переносу"

@@ -61,7 +61,7 @@ function requireCode(): string {
 async function reportImport(archive: Buffer, flags: Record<string, string>): Promise<void> {
   const { manifest, backupDir } = await importMigrationArchive(archive, requireCode(), { replace: Boolean(flags.replace) });
   console.log(
-    `Данные прежней панели (v${manifest.panelVersion}) перенесены: серверов ${manifest.counts.servers}` +
+    `Данные прежней панели (${manifest.panelVersion}) перенесены: серверов ${manifest.counts.servers}` +
       (manifest.counts.remoteServers ? ` (+${manifest.counts.remoteServers} нод партнёров)` : '') +
       `, клиентов ${manifest.counts.clients}, пользователей ${manifest.counts.subscribers}, партнёров ${manifest.counts.partners}.`
   );

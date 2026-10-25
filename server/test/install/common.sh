@@ -20,7 +20,8 @@ case "$1" in
       WD=$(sed -n 's/^WorkingDirectory=//p' "$UNIT")
       ENVF=$(sed -n 's/^EnvironmentFile=//p' "$UNIT")
       EXEC=$(sed -n 's/^ExecStart=//p' "$UNIT")
-      (cd "$WD" && set -a && . "$ENVF" && set +a && umask 077 && nohup $EXEC >> /var/log/demension.log 2>&1 &)
+      # setsid: служба не должна зависеть от терминала, из которого её запустили (в проверках интерактивного режима это pty)
+      (cd "$WD" && set -a && . "$ENVF" && set +a && umask 077 && setsid nohup $EXEC >> /var/log/demension.log 2>&1 < /dev/null &)
     fi ;;
   is-active) pgrep -f "dist/index.js" >/dev/null ;;
 esac

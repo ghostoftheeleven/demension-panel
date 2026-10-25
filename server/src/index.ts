@@ -234,6 +234,10 @@ wss.on('connection', (ws: WebSocket) => {
 
     try {
       if (msg.type === 'start_install' && Number.isInteger(msg.serverId)) {
+        // Установка меняет БД и ноду: пока панель переносится на другой сервер, это потерялось бы (как и записи через API)
+        if (MigrationService.isBackgroundPaused()) {
+          return send(ws, { type: 'error', message: 'Идёт перенос панели на другой сервер: установка недоступна. Завершите или отмените перенос.' });
+        }
         send(ws, { type: 'log', data: `Запуск задачи установки для сервера #${msg.serverId}...\r\n` });
         const result = await ProvisionService.installServer(msg.serverId, (logChunk) => send(ws, { type: 'log', data: logChunk }));
         send(ws, { type: 'install_finished', result });

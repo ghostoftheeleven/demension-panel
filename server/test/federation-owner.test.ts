@@ -260,7 +260,8 @@ describe('журнал действий партнёра', () => {
     for (let i = 0; i < 1005; i++) PartnerService.audit(partnerId, 'x', String(i), null);
     expect(db.prepare('SELECT COUNT(*) AS c FROM partner_audit WHERE partner_id = ?').get(partnerId)).toEqual({ c: 1000 });
     expect(db.prepare('SELECT MIN(details + 0) AS oldest FROM partner_audit WHERE partner_id = ?').get(partnerId)).toEqual({ oldest: 5 });
-  });
+    // 1005 записей с отдельной фиксацией каждой — на Linux в Docker около 3,5 с при лимите vitest 5 с: без запаса тест случайно падал под нагрузкой
+  }, 30000);
 });
 
 describe('управление партнёрами (админ-API)', () => {
