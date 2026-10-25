@@ -4,10 +4,10 @@ import type { MigrationStatus } from '../types';
 import { api } from '../api';
 import { copyToClipboard } from '../utils';
 
-const INSTALL_COMMAND = 'curl -sSL https://raw.githubusercontent.com/ghostoftheeleven/demension-panel/main/install.sh | sudo bash';
+const INSTALL_COMMAND = 'curl -sSL https://raw.githubusercontent.com/ghostoftheeleven/dementia-panel/main/install.sh | sudo bash';
 
 const inputClass =
-  'w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-ink transition text-sm';
+  'w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-mint transition text-sm';
 
 const CopyRow: React.FC<{ label: string; value: string; secret?: boolean }> = ({ label, value, secret }) => {
   const [copied, setCopied] = useState(false);
@@ -25,7 +25,7 @@ const CopyRow: React.FC<{ label: string; value: string; secret?: boolean }> = ({
       <button
         type="button"
         onClick={copy}
-        className="w-full flex items-center gap-2 text-left bg-paper border-2 border-ink hover:border-ink rounded-xl px-3 py-2 transition"
+        className="w-full flex items-center gap-2 text-left bg-paper border border-line hover:border-faint rounded-xl px-3 py-2 transition"
         title="Скопировать"
       >
         <span className={`flex-1 font-mono break-all ${secret ? 'text-lg tracking-widest text-ok' : 'text-xs text-ink'}`}>{value}</span>
@@ -120,9 +120,9 @@ export const MigrationCard: React.FC<{ publicUrl: string | null; onStateChange?:
   const expires = status.expiresAt ? new Date(status.expiresAt).toLocaleString() : '';
 
   return (
-    <div className="bg-card border-2 border-ink rounded-2xl p-6 sm:p-8 shadow-brutal space-y-6">
-      <div className="flex items-center gap-3 pb-4 border-b-2 border-ink">
-        <div className="w-10 h-10 rounded-2xl bg-accent-soft border-2 border-ink flex items-center justify-center">
+    <div className="bg-card border border-line rounded-2xl p-6 sm:p-8 shadow-pop space-y-6">
+      <div className="flex items-center gap-3 pb-4 border-b border-line">
+        <div className="w-10 h-10 rounded-2xl bg-accent-soft border border-line flex items-center justify-center">
           <ArrowRightLeft className="w-5 h-5 text-accent" />
         </div>
         <div>
@@ -135,10 +135,10 @@ export const MigrationCard: React.FC<{ publicUrl: string | null; onStateChange?:
 
       {message && (
         <div
-          className={`p-3 rounded-xl border-2 text-xs ${
+          className={`p-3 rounded-xl border text-xs ${
             message.type === 'success'
-              ? 'bg-ok-soft border-ink text-ok'
-              : 'bg-bad-soft border-ink text-bad'
+              ? 'bg-ok-soft border-line text-ok'
+              : 'bg-bad-soft border-line text-bad'
           }`}
         >
           {message.text}
@@ -146,13 +146,13 @@ export const MigrationCard: React.FC<{ publicUrl: string | null; onStateChange?:
       )}
 
       {status.state === 'migrated' && (
-        <div className="p-3 rounded-xl border-2 bg-warn-soft border-ink text-warn text-xs">
+        <div className="p-3 rounded-xl border bg-warn-soft border-line text-warn text-xs">
           Панель перенесена{status.newUrl ? <> на <span className="font-mono">{status.newUrl}</span></> : ''}.
         </div>
       )}
 
       {status.state === 'exporting' && (
-        <div className="p-4 rounded-2xl border-2 bg-warn-soft border-ink text-warn text-xs space-y-3">
+        <div className="p-4 rounded-2xl border bg-warn-soft border-line text-warn text-xs space-y-3">
           <div className="flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
             <span>
@@ -163,7 +163,7 @@ export const MigrationCard: React.FC<{ publicUrl: string | null; onStateChange?:
           <button
             onClick={handleCancel}
             disabled={busy}
-            className="flex items-center gap-2 bg-soft hover:bg-soft-2 disabled:opacity-50 text-ink font-medium text-xs px-4 py-2 rounded-xl transition border-2 border-ink"
+            className="flex items-center gap-2 bg-soft hover:bg-soft-2 disabled:opacity-50 text-ink font-medium text-xs px-4 py-2 rounded-xl transition border border-line"
           >
             <XCircle className="w-3.5 h-3.5 text-bad" />
             <span>Отменить перенос</span>
@@ -181,7 +181,7 @@ export const MigrationCard: React.FC<{ publicUrl: string | null; onStateChange?:
           </ol>
           <button
             onClick={() => setAsking(true)}
-            className="flex items-center gap-2 bg-violet hover:bg-violet text-ink font-bold text-xs px-5 py-2.5 rounded-xl transition shadow-brutal-sm border-2 border-ink btn-press"
+            className="flex items-center gap-2 bg-violet hover:bg-violet text-on-accent font-bold text-xs px-5 py-2.5 rounded-full transition btn-press"
           >
             <ArrowRightLeft className="w-3.5 h-3.5" />
             <span>Подготовить перенос</span>
@@ -209,7 +209,7 @@ export const MigrationCard: React.FC<{ publicUrl: string | null; onStateChange?:
             <button
               type="submit"
               disabled={busy || !password}
-              className="flex items-center gap-2 bg-violet hover:bg-violet disabled:opacity-50 text-ink font-bold text-xs px-5 py-2.5 rounded-xl transition border-2 border-ink shadow-brutal-sm btn-press"
+              className="flex items-center gap-2 bg-violet hover:bg-violet disabled:opacity-50 text-on-accent font-bold text-xs px-5 py-2.5 rounded-full transition btn-press"
             >
               {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <KeyRound className="w-3.5 h-3.5" />}
               <span>Выдать код переноса</span>
@@ -235,7 +235,7 @@ export const MigrationCard: React.FC<{ publicUrl: string | null; onStateChange?:
 
       {status.state === 'prepared' && issued && (
         <div className="space-y-4">
-          <div className="p-3 rounded-xl border-2 bg-warn-soft border-ink text-warn text-xs flex items-start gap-2">
+          <div className="p-3 rounded-xl border bg-warn-soft border-line text-warn text-xs flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
             <span>Код показан один раз и действует до {new Date(issued.expiresAt).toLocaleString()}. Он расшифровывает данные переноса — не публикуйте его.</span>
           </div>
@@ -244,7 +244,7 @@ export const MigrationCard: React.FC<{ publicUrl: string | null; onStateChange?:
           <CopyRow label="Адрес этой панели (укажите его на новом сервере)" value={panelAddress} />
           <CopyRow label="Команда для нового сервера (выберите «2) Перенос панели»)" value={INSTALL_COMMAND} />
 
-          <div className="p-3 rounded-xl bg-paper border-2 border-ink text-[11px] text-muted space-y-1">
+          <div className="p-3 rounded-xl bg-paper border border-line text-[11px] text-muted space-y-1">
             <p>
               <b className="text-ink">Если новый сервер не достучится до этой панели</b> — скачайте архив файлом, скопируйте на новый сервер
               (например, scp) и в установщике укажите путь к файлу вместо адреса.
@@ -259,7 +259,7 @@ export const MigrationCard: React.FC<{ publicUrl: string | null; onStateChange?:
             <button
               onClick={handleDownload}
               disabled={busy}
-              className="flex items-center gap-2 bg-soft hover:bg-soft-2 disabled:opacity-50 text-ink font-medium text-xs px-4 py-2 rounded-xl transition border-2 border-ink"
+              className="flex items-center gap-2 bg-soft hover:bg-soft-2 disabled:opacity-50 text-ink font-medium text-xs px-4 py-2 rounded-xl transition border border-line"
             >
               <Download className="w-3.5 h-3.5 text-accent" />
               <span>Скачать архив файлом</span>

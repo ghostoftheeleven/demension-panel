@@ -37,11 +37,11 @@
 ## Проверка обновлений в панели
 
 `GET /api/version` → `VersionService.getInfo`: текущая версия и последний релиз
-`https://api.github.com/repos/ghostoftheeleven/demension-panel/releases/latest`.
+`https://api.github.com/repos/ghostoftheeleven/dementia-panel/releases/latest`.
 
 - Ответ кэшируется на 6 ч, после ошибки — повтор через 30 мин; `?refresh=1` (клик по версии в шапке) — не чаще раза в минуту.
 - Ответ GitHub — внешние данные: принимается только тег `vX.Y.Z` и ссылка на страницу релиза этого репозитория.
-- `DEMENSION_UPDATE_CHECK=0` в `server/.env` отключает обращения к GitHub.
+- `DEMENTIA_UPDATE_CHECK=0` в `server/.env` отключает обращения к GitHub.
 - В шапке интерфейса (`PanelVersion.tsx`): текущая версия, «актуальная (GitHub: vX.Y.Z)» или ссылка «Доступна vX.Y.Z».
 - Панель не обновляется сама: обновление запускает администратор — кнопкой в интерфейсе или повторным запуском `install.sh` (README).
 
@@ -54,7 +54,7 @@
 Как устроено (`services/update.service.ts`, `scripts/update-panel.sh`):
 
 1. Панель копирует `update-panel.sh` в `data/update/` (git и сборка заменяют файлы панели) и запускает его через
-   `systemd-run --unit=demension-update --collect` — отдельной службой: `install.sh` останавливает `demension.service`, и
+   `systemd-run --unit=dementia-update --collect` — отдельной службой: `install.sh` останавливает `dementia.service`, и
    дочерний процесс службы был бы убит вместе с ней.
 2. Скрипт скачивает тег релиза (`git fetch origin refs/tags/vX.Y.Z`) и запускает **`install.sh` из этого релиза** без терминала с
    `PANEL_UPDATE_REF=vX.Y.Z`: вместо `git pull origin main` установщик делает `git merge --ff-only` тега. Дальше — обычное
@@ -68,7 +68,7 @@
 
 Обновление из интерфейса доступно, только если панель установлена `install.sh`: Linux, служба systemd от root (`INVOCATION_ID`),
 каталог панели — клон git с `install.sh`, есть `systemd-run`. Иначе окно объясняет причину и показывает команду для терминала.
-`DEMENSION_SELF_UPDATE=0` в `server/.env` отключает обновление из интерфейса, `DEMENSION_UPDATE_CHECK=0` — вместе с проверкой.
+`DEMENTIA_SELF_UPDATE=0` в `server/.env` отключает обновление из интерфейса, `DEMENTIA_UPDATE_CHECK=0` — вместе с проверкой.
 
 **Совместимость:** скрипт обновления берётся из *установленной* версии, а `install.sh` — из *новой*. Поэтому `install.sh` обязан
 продолжать поддерживать `PANEL_UPDATE_REF` и работу без терминала (инвариант 34 в AGENTS.md). Проверки: `test/panel-update.test.ts`

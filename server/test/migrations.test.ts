@@ -24,9 +24,9 @@ afterEach(() => {
 });
 
 async function openFresh() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'demension-migration-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dementia-migration-'));
   dirs.push(dir);
-  process.env.DEMENSION_DATA_DIR = dir;
+  process.env.DEMENTIA_DATA_DIR = dir;
   vi.resetModules();
   const dbModule = await import('../src/db/index.js');
   const secrets = await import('../src/services/secrets.service.js');

@@ -15,7 +15,7 @@ apt-get install -y -qq curl python3 >/dev/null 2>&1
 LOCAL=http://127.0.0.1:3001
 ADMIN=old.admin
 PASSWORD='OldAdminPass-123'
-INSTALL=/opt/demension-panel
+INSTALL=/opt/dementia-panel
 STRIP() { sed 's/\x1b\[[0-9;]*m//g'; }
 login_status() { curl -s -o /tmp/login.json -w '%{http_code}' -X POST "$1/api/auth/login" -H 'Content-Type: application/json' -d "{\"username\":\"$ADMIN\",\"password\":\"$PASSWORD\"}"; }
 
@@ -69,17 +69,17 @@ STRIP < /tmp/wrong.out | tail -6
 [ "$CODE" -ne 0 ] || fail "перенос с неверным кодом завершился успехом"
 STRIP < /tmp/wrong.out | grep -q "Неверный или просроченный код" || fail "нет сообщения о неверном коде"
 [ "$(sha256sum $INSTALL/data/secret.key | cut -d' ' -f1)" = "$SECRET_HASH" ] || fail "данные изменились после неверного кода"
-ls $INSTALL/data/demension.db > /dev/null || fail "база пропала после неверного кода"
+ls $INSTALL/data/dementia.db > /dev/null || fail "база пропала после неверного кода"
 
 MIGRATE_FROM=http://mig-old:3001 PANEL_CERT_MODE=none bash install.sh > /tmp/refused.out 2>&1
 CODE=$?
 STRIP < /tmp/refused.out | tail -6
 [ "$CODE" -ne 0 ] || fail "перенос поверх панели с данными без подтверждения завершился успехом"
 STRIP < /tmp/refused.out | grep -q "Перенос отменён" || fail "нет сообщения об отмене переноса"
-STRIP < /tmp/refused.out | grep -q "systemctl start demension" || fail "нет подсказки, как запустить остановленную панель"
+STRIP < /tmp/refused.out | grep -q "systemctl start dementia" || fail "нет подсказки, как запустить остановленную панель"
 [ "$(sha256sum $INSTALL/data/secret.key | cut -d' ' -f1)" = "$SECRET_HASH" ] || fail "данные изменились без подтверждения замены"
 ls -d $INSTALL/data/backups/pre-migration-* > /dev/null 2>&1 && fail "копия «до замены» создана, хотя замена не подтверждена"
-systemctl start demension.service
+systemctl start dementia.service
 sleep 4
 
 section "S3. Перенос по сети с заменой данных: данные, логин и пароль, ключ шифрования, заморозка прежней панели"
@@ -112,19 +112,19 @@ section "S3b. Ключ шифрования переехал, код перен�
 [ "$(cat $INSTALL/data/secret.key)" = "$EXPECT_SECRET_KEY" ] || fail "ключ шифрования отличается от прежнего"
 ENVF=$INSTALL/server/.env
 cat "$ENVF"
-grep -q DEMENSION_SECRET_KEY "$ENVF" && fail "ключ шифрования записан в .env"
+grep -q DEMENTIA_SECRET_KEY "$ENVF" && fail "ключ шифрования записан в .env"
 [ "$(stat -c '%a' "$ENVF")" = 600 ] || fail "права .env не 600"
 [ "$(stat -c '%a' $INSTALL/data/secret.key)" = 600 ] || fail "права secret.key не 600"
 BARE=$(echo "$MIGRATION_CODE" | tr -d '-')
-grep -rqE "$MIGRATION_CODE|$BARE" $INSTALL/data $INSTALL/server/.env /var/log/demension.log 2>/dev/null && fail "код переноса остался в данных или журнале"
+grep -rqE "$MIGRATION_CODE|$BARE" $INSTALL/data $INSTALL/server/.env /var/log/dementia.log 2>/dev/null && fail "код переноса остался в данных или журнале"
 grep -q "$MIGRATION_CODE" /tmp/migrate.out && fail "код переноса напечатан в консоль"
-LEFT=$(cd $INSTALL && node -e "const { DatabaseSync } = require('node:sqlite'); const db = new DatabaseSync('data/demension.db', { readOnly: true }); console.log(db.prepare(\"SELECT COUNT(*) AS c FROM settings WHERE substr(key, 1, 9) = 'migration'\").get().c)")
+LEFT=$(cd $INSTALL && node -e "const { DatabaseSync } = require('node:sqlite'); const db = new DatabaseSync('data/dementia.db', { readOnly: true }); console.log(db.prepare(\"SELECT COUNT(*) AS c FROM settings WHERE substr(key, 1, 9) = 'migration'\").get().c)")
 [ "$LEFT" = 0 ] || fail "служебные настройки переноса остались в БД ($LEFT)"
 
 section "S4. Обновление перенесённой панели с включённым HTTPS: проверка запуска работает по HTTP"
 (cd $INSTALL && node server/dist/cli/migration.js ssl --mode ip --ip 127.0.0.1) > /tmp/ssl-ip.out 2>&1
 grep -v '^@@' /tmp/ssl-ip.out
-systemctl restart demension.service
+systemctl restart dementia.service
 sleep 4
 HEALTH=$(curl -s "$LOCAL/api/health")
 echo "health по HTTP при включённом HTTPS: $HEALTH"

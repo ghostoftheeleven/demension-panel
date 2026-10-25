@@ -4,6 +4,7 @@ import { SubscriptionSettingsView } from './components/SubscriptionSettingsView'
 import { PartnersView } from './components/PartnersView';
 import { ServerCards } from './components/ServerCards';
 import { ProbesCard } from './components/ProbesCard';
+import { ServersOverview } from './components/ServersOverview';
 import { ClientList } from './components/ClientList';
 import { SubscribersList } from './components/SubscribersList';
 import { SecurityView } from './components/SecurityView';
@@ -134,7 +135,7 @@ export const App: React.FC = () => {
 
   if (authChecking) {
     return (
-      <div className="min-h-screen bg-paper flex items-center justify-center text-faint text-sm">
+      <div className="min-h-screen bg-page flex items-center justify-center text-faint text-sm">
         Загрузка панели...
       </div>
     );
@@ -222,7 +223,7 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-paper text-ink flex flex-col font-sans selection:bg-ok-soft selection:text-ok">
+    <div className="min-h-screen bg-page text-ink flex flex-col font-sans selection:bg-ok-soft selection:text-ok">
       <Navbar
         servers={servers}
         user={user}
@@ -241,7 +242,7 @@ export const App: React.FC = () => {
       />
 
       {migrationState === 'exporting' && (
-        <div className="bg-warn-soft border-b-2 border-ink text-warn text-xs">
+        <div className="bg-warn-soft border-b border-line text-warn text-xs">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex flex-wrap items-center gap-2">
             <AlertTriangle className="w-4 h-4 flex-shrink-0" />
             <span>
@@ -292,14 +293,14 @@ export const App: React.FC = () => {
           />
         ) : servers.length === 0 ? (
           /* Empty Servers Screen */
-          <div className="max-w-2xl mx-auto text-center py-16 px-6 bg-card border-2 border-ink rounded-2xl shadow-brutal space-y-6">
-            <div className="w-16 h-16 rounded-2xl bg-mint mx-auto flex items-center justify-center shadow-brutal">
-              <ShieldCheck className="w-9 h-9 text-ink stroke-[2.5]" />
+          <div className="max-w-2xl mx-auto text-center py-16 px-6 bg-card border border-line rounded-2xl shadow-pop space-y-6">
+            <div className="w-16 h-16 rounded-2xl bg-mint mx-auto flex items-center justify-center shadow-pop">
+              <ShieldCheck className="w-9 h-9 text-on-accent stroke-[2.5]" />
             </div>
 
             <div className="space-y-2">
               <h2 className="text-2xl font-bold text-ink tracking-tight">
-                Добро пожаловать в Demension Panel
+                Добро пожаловать в Dementia Panel
               </h2>
               <p className="text-sm text-muted max-w-lg mx-auto">
                 Добавляйте удаленные серверы по SSH, и панель автоматически развернет изолированный Docker-контейнер с AmneziaWG и сгенерирует подписки для клиентов.
@@ -307,19 +308,19 @@ export const App: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-left pt-2">
-              <div className="p-4 bg-paper border-2 border-ink rounded-2xl">
+              <div className="p-4 bg-paper border border-line rounded-2xl">
                 <Terminal className="w-5 h-5 text-ok mb-2" />
                 <h4 className="text-xs font-semibold text-ink">Agentless по SSH</h4>
                 <p className="text-[11px] text-muted mt-1">Никаких сторонних демонов на сервере — только чистый Docker.</p>
               </div>
 
-              <div className="p-4 bg-paper border-2 border-ink rounded-2xl">
+              <div className="p-4 bg-paper border border-line rounded-2xl">
                 <Sparkles className="w-5 h-5 text-info mb-2" />
                 <h4 className="text-xs font-semibold text-ink">DPI Bypass</h4>
                 <p className="text-[11px] text-muted mt-1">Автоматическая рандомизация H1..H4, Jc, S1, S2.</p>
               </div>
 
-              <div className="p-4 bg-paper border-2 border-ink rounded-2xl">
+              <div className="p-4 bg-paper border border-line rounded-2xl">
                 <Zap className="w-5 h-5 text-warn mb-2" />
                 <h4 className="text-xs font-semibold text-ink">Подписки HAPP / Incy</h4>
                 <p className="text-[11px] text-muted mt-1">Автообновление списка серверов без ручной настройки.</p>
@@ -329,7 +330,7 @@ export const App: React.FC = () => {
             <div className="pt-4">
               <button
                 onClick={() => setIsAddServerOpen(true)}
-                className="inline-flex items-center gap-2 bg-mint text-ink font-bold text-sm px-6 py-3 rounded-2xl transition shadow-brutal-sm border-2 border-ink btn-press"
+                className="inline-flex items-center gap-2 bg-mint text-on-accent font-bold text-sm px-6 py-3 rounded-2xl transition border border-line btn-press"
               >
                 <Plus className="w-4 h-4" />
                 <span>Добавить первый сервер</span>
@@ -339,6 +340,8 @@ export const App: React.FC = () => {
         ) : (
           /* Servers & Clients View */
           <>
+            <ServersOverview servers={servers} />
+
             <ProbesCard onChanged={loadData} />
 
             <ServerCards

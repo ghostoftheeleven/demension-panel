@@ -1,4 +1,4 @@
-// Содержимое всех таблиц БД панели в JSON (только чтение): node dump-db.mjs путь/к/demension.db > файл.json
+// Содержимое всех таблиц БД панели в JSON (только чтение): node dump-db.mjs путь/к/dementia.db > файл.json
 import { DatabaseSync } from 'node:sqlite';
 
 const db = new DatabaseSync(process.argv[2], { readOnly: true });

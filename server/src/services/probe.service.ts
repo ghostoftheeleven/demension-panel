@@ -69,7 +69,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function providerFetch(path: string): Promise<any> {
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: { Accept: 'application/json', 'User-Agent': `demension-panel/${PANEL_VERSION}` },
+    headers: { Accept: 'application/json', 'User-Agent': `dementia-panel/${PANEL_VERSION}` },
     signal: AbortSignal.timeout(15000),
   });
   if (!res.ok) throw new Error(`check-host.net ответил HTTP ${res.status}`);

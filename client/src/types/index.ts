@@ -68,7 +68,7 @@ export interface Server {
   i5: string | null;
   header_protection_key: string | null;
   extra_params: Record<string, string>;
-  /** Контейнер на ноде: панели (demension) или найденный контейнер приложения Amnezia */
+  /** Контейнер на ноде: панели (dementia) или найденный контейнер приложения Amnezia */
   container_name: string;
   managed_by: 'demension' | 'amnezia' | 'partner';
   /** Нода партнёрской панели (управляется владельцем, без SSH) */

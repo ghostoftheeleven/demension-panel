@@ -10,7 +10,7 @@ import { eventually, startPanel, type PanelProcess } from './helpers/panel-proce
  * Обе панели — отдельные процессы с собственными БД. Без запущенного Docker-узла (SSH на 2222) тесты пропускаются.
  */
 
-const NODE_CONTAINER = 'demension-node-1';
+const NODE_CONTAINER = 'dementia-node-1';
 const SSH_PORT = 2222;
 
 function isPortOpen(port: number): Promise<boolean> {

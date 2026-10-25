@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ==============================================================================
-# Demension Panel - Automated Server Deployment Script
+# Dementia Panel - Automated Server Deployment Script
 #
 # Интерактивно:      curl -sSL .../install.sh | sudo bash
 # Без вопросов:      curl -sSL .../install.sh | sudo PANEL_PORT=3001 bash
@@ -19,6 +19,10 @@ set -euo pipefail
 #   MIGRATE_REPLACE=1  — заменить данные уже установленной на этом сервере панели (резервная копия в data/backups)
 # Логин и пароль администратора, ноды, клиенты и подписки переезжают без изменений.
 #
+# До v0.1.4 проект назывался Demension: /opt/demension-panel и служба demension.service. Обновление переносит такую
+# установку в /opt/dementia-panel (на прежнем месте остаётся символическая ссылка), служба становится dementia.service
+# с псевдонимом demension.service, переменные DEMENSION_* в server/.env — DEMENTIA_* (старые имена панель тоже читает).
+#
 # Обновление из интерфейса панели (docs/releases.md): server/src/scripts/update-panel.sh запускает install.sh нового релиза без
 # терминала с PANEL_UPDATE_REF=vX.Y.Z — обновление до этого тега вместо головы main. Поддержку этой переменной не удалять.
 # ==============================================================================
@@ -31,13 +35,24 @@ YELLOW='\033[1;33m'
 BOLD='\033[1m'
 NC='\033[0m' # No Color
 
-INSTALL_DIR="/opt/demension-panel"
-REPO_URL="https://github.com/ghostoftheeleven/demension-panel.git"
+INSTALL_DIR="/opt/dementia-panel"
+REPO_URL="https://github.com/ghostoftheeleven/dementia-panel.git"
+SERVICE="dementia.service"
+# Прежнее имя проекта (до v0.1.4)
+LEGACY_DIR="/opt/demension-panel"
+LEGACY_SERVICE="demension.service"
+# Код прежней установки обновляется на месте, а после остановки службы каталог переносится в INSTALL_DIR
+CODE_DIR="$INSTALL_DIR"
+RENAME_LEGACY=false
+if [ ! -e "$INSTALL_DIR" ] && [ -d "$LEGACY_DIR" ] && [ ! -L "$LEGACY_DIR" ]; then
+  CODE_DIR="$LEGACY_DIR"
+  RENAME_LEGACY=true
+fi
 MIN_NODE="22.13.0"
 
 echo -e "${CYAN}${BOLD}"
 echo "======================================================================"
-echo "          DEMENSION PANEL - УСТАНОВОЧНЫЙ СКРИПТ ПАНЕЛИ                "
+echo "          DEMENTIA PANEL - УСТАНОВОЧНЫЙ СКРИПТ ПАНЕЛИ                "
 echo "        Управление инфраструктурой серверов AmneziaWG                 "
 echo "======================================================================"
 echo -e "${NC}"
@@ -193,7 +208,7 @@ fi
 
 # 2. Detect existing installation
 UPDATE=false
-if [ -f "$INSTALL_DIR/server/package.json" ]; then
+if [ -f "$CODE_DIR/server/package.json" ]; then
   UPDATE=true
 fi
 
@@ -249,8 +264,8 @@ if [ "$MIGRATE_MODE" = true ]; then
 fi
 
 CURRENT_PORT=""
-if [ -f "$INSTALL_DIR/server/.env" ]; then
-  CURRENT_PORT=$(grep -E '^PORT=' "$INSTALL_DIR/server/.env" | cut -d= -f2 || true)
+if [ -f "$CODE_DIR/server/.env" ]; then
+  CURRENT_PORT=$(grep -E '^PORT=' "$CODE_DIR/server/.env" | cut -d= -f2 || true)
 fi
 DEFAULT_PORT="${MIGRATE_DEFAULT_PORT:-${CURRENT_PORT:-3001}}"
 ask PANEL_PORT "Порт панели [${DEFAULT_PORT}]: " "$DEFAULT_PORT"
@@ -292,7 +307,7 @@ fi
 
 # Порт панели должен быть свободен (кроме случая, когда его уже занимает сама обновляемая панель)
 if [ -n "$(port_listeners "$PANEL_PORT")" ]; then
-  if [ "$UPDATE" = true ] && [ "$PANEL_PORT" = "${CURRENT_PORT:-3001}" ] && systemctl is-active --quiet demension.service 2>/dev/null; then
+  if [ "$UPDATE" = true ] && [ "$PANEL_PORT" = "${CURRENT_PORT:-3001}" ] && { systemctl is-active --quiet "$SERVICE" 2>/dev/null || systemctl is-active --quiet "$LEGACY_SERVICE" 2>/dev/null; }; then
     :
   else
     echo -e "${RED}[ERROR] TCP-порт ${PANEL_PORT} уже занят:${NC}"
@@ -307,6 +322,10 @@ echo -e "\n${CYAN}[3/7] Развертывание кодовой базы в ${
 # Новый код скачивается, пока панель ещё работает: при ошибке (нет сети, локальные правки) она остаётся запущенной
 if [ -d "$INSTALL_DIR/.git" ]; then
   echo "Обновление существующей установки..."
+  # Репозиторий переименован (demension-panel → dementia-panel): GitHub перенаправляет старый адрес, но храним новый
+  if git -c safe.directory="$CODE_DIR" -C "$CODE_DIR" remote get-url origin 2>/dev/null | grep -q 'ghostoftheeleven/demension-panel'; then
+    git -c safe.directory="$CODE_DIR" -C "$CODE_DIR" remote set-url origin "$REPO_URL" || true
+  fi
   # safe.directory: каталог мог быть скопирован из клона обычного пользователя, а установщик работает от root.
   # PANEL_UPDATE_REF=vX.Y.Z — обновление до релиза (так обновляет панель из интерфейса, update-panel.sh), а не до головы main.
   if [ -n "${PANEL_UPDATE_REF:-}" ]; then
@@ -314,30 +333,41 @@ if [ -d "$INSTALL_DIR/.git" ]; then
       echo -e "${RED}[ERROR] PANEL_UPDATE_REF: ожидается версия вида v1.2.3.${NC}"
       exit 1
     fi
-    if ! git -c safe.directory="$INSTALL_DIR" -C "$INSTALL_DIR" fetch --no-tags origin "+refs/tags/${PANEL_UPDATE_REF}:refs/tags/${PANEL_UPDATE_REF}" \
-      || ! git -c safe.directory="$INSTALL_DIR" -C "$INSTALL_DIR" merge --ff-only "refs/tags/${PANEL_UPDATE_REF}"; then
+    if ! git -c safe.directory="$CODE_DIR" -C "$CODE_DIR" fetch --no-tags origin "+refs/tags/${PANEL_UPDATE_REF}:refs/tags/${PANEL_UPDATE_REF}" \
+      || ! git -c safe.directory="$CODE_DIR" -C "$CODE_DIR" merge --ff-only "refs/tags/${PANEL_UPDATE_REF}"; then
       echo -e "${RED}[ERROR] Не удалось получить релиз ${PANEL_UPDATE_REF}. Панель продолжает работать на прежней версии.${NC}"
-      echo -e "Проверьте доступ к GitHub и локальные изменения: git -C ${INSTALL_DIR} status"
+      echo -e "Проверьте доступ к GitHub и локальные изменения: git -C ${CODE_DIR} status"
       exit 1
     fi
-  elif ! git -c safe.directory="$INSTALL_DIR" -C "$INSTALL_DIR" pull --ff-only origin main; then
+  elif ! git -c safe.directory="$CODE_DIR" -C "$CODE_DIR" pull --ff-only origin main; then
     echo -e "${RED}[ERROR] Не удалось получить обновление (git pull). Панель продолжает работать на прежней версии.${NC}"
-    echo -e "Проверьте доступ к GitHub и локальные изменения: git -C ${INSTALL_DIR} status"
+    echo -e "Проверьте доступ к GitHub и локальные изменения: git -C ${CODE_DIR} status"
     exit 1
   fi
 fi
 
+if [ "$UPDATE" = true ] || [ "$RENAME_LEGACY" = true ]; then
+  systemctl stop "$SERVICE" 2>/dev/null || true
+  systemctl stop "$LEGACY_SERVICE" 2>/dev/null || true
+fi
+if [ "$RENAME_LEGACY" = true ]; then
+  # Служба остановлена — каталог прежней установки переезжает; старый путь остаётся ссылкой (им пользуются скрипты и
+  # процесс обновления из интерфейса прежней версии)
+  mv "$LEGACY_DIR" "$INSTALL_DIR"
+  ln -s "$INSTALL_DIR" "$LEGACY_DIR"
+  echo -e "${GREEN}✓ Панель перенесена в ${INSTALL_DIR} (проект переименован в Dementia; ${LEGACY_DIR} — ссылка на новый каталог).${NC}"
+fi
 if [ "$UPDATE" = true ]; then
-  systemctl stop demension.service 2>/dev/null || true
-  if [ -f "$INSTALL_DIR/data/demension.db" ]; then
+  if [ -f "$INSTALL_DIR/data/dementia.db" ] || [ -f "$INSTALL_DIR/data/demension.db" ]; then
     BACKUP_DIR="$INSTALL_DIR/data/backups"
     mkdir -p "$BACKUP_DIR"
     STAMP=$(date +%Y%m%d-%H%M%S)
-    for f in "$INSTALL_DIR"/data/demension.db*; do
+    for f in "$INSTALL_DIR"/data/dementia.db* "$INSTALL_DIR"/data/demension.db*; do
+      [ -f "$f" ] || continue
       cp -a "$f" "$BACKUP_DIR/$(basename "$f").$STAMP"
     done
     chmod -R go-rwx "$BACKUP_DIR"
-    echo -e "${GREEN}✓ Резервная копия БД: ${BACKUP_DIR}/demension.db.${STAMP}${NC}"
+    echo -e "${GREEN}✓ Резервная копия БД: ${BACKUP_DIR}/dementia.db.${STAMP}${NC}"
   fi
 fi
 
@@ -365,7 +395,7 @@ mkdir -p "$INSTALL_DIR/data"
 chmod 700 "$INSTALL_DIR/data"
 
 # Пароль в .env не хранится: учётные данные записываются сразу в БД (только хэш).
-# Добавленные вручную переменные (DEMENSION_SECRET_KEY, TRUST_PROXY и т.п.) сохраняются: без DEMENSION_SECRET_KEY панель
+# Добавленные вручную переменные (DEMENTIA_SECRET_KEY, TRUST_PROXY и т.п.) сохраняются: без DEMENTIA_SECRET_KEY панель
 # не расшифровала бы SSH-доступы к нодам. PANEL_USER/PANEL_PASSWORD от старых версий установщика удаляются.
 umask 077
 ENV_FILE="$INSTALL_DIR/server/.env"
@@ -374,8 +404,10 @@ if [ -f "$ENV_FILE" ]; then
   KEPT_ENV="$(grep -Ev '^[[:space:]]*(export[[:space:]]+)?(PORT|NODE_ENV|PANEL_USER|PANEL_PASSWORD)[[:space:]]*=' "$ENV_FILE" || true)"
   if [ "$MIGRATE_MODE" = true ]; then
     # Ключ шифрования приезжает вместе с данными прежней панели (data/secret.key); другой ключ в .env сломал бы расшифровку SSH-доступов
-    KEPT_ENV="$(printf '%s\n' "$KEPT_ENV" | grep -Ev '^[[:space:]]*(export[[:space:]]+)?DEMENSION_SECRET_KEY[[:space:]]*=' || true)"
+    KEPT_ENV="$(printf '%s\n' "$KEPT_ENV" | grep -Ev '^[[:space:]]*(export[[:space:]]+)?DEMEN(TIA|SION)_SECRET_KEY[[:space:]]*=' || true)"
   fi
+  # Прежние имена переменных (DEMENSION_*) переводятся на новые; панель понимает и те и другие
+  KEPT_ENV="$(printf '%s\n' "$KEPT_ENV" | sed -E 's/^([[:space:]]*(export[[:space:]]+)?)DEMENSION_/\1DEMENTIA_/')"
 fi
 {
   echo "PORT=${PANEL_PORT}"
@@ -531,14 +563,14 @@ if [ "$MIGRATE_MODE" = true ]; then
         ;;
       *)
         echo -e "${RED}Перенос отменён: данные установленной панели не менялись.${NC}"
-        if [ "$UPDATE" = true ]; then echo -e "Панель на этом сервере остановлена на время установки: systemctl start demension"; fi
+        if [ "$UPDATE" = true ]; then echo -e "Панель на этом сервере остановлена на время установки: systemctl start dementia"; fi
         exit 1
         ;;
     esac
   fi
   if [ "$MIG_STATUS" != 0 ]; then
     echo -e "${RED}[ERROR] Перенос данных не выполнен. На прежней панели ничего не изменилось: при необходимости отмените перенос в разделе «Безопасность».${NC}"
-    if [ "$UPDATE" = true ]; then echo -e "Установленная на этом сервере панель остановлена и не менялась: systemctl start demension"; fi
+    if [ "$UPDATE" = true ]; then echo -e "Установленная на этом сервере панель остановлена и не менялась: systemctl start dementia"; fi
     exit 1
   fi
   OLD_ADMIN="$(mig_value old_admin)"
@@ -571,9 +603,15 @@ unset PANEL_PASSWORD
 echo -e "\n${CYAN}[5/7] Создание и запуск системной службы systemd...${NC}"
 NODE_BIN=$(command -v node)
 
-cat > /etc/systemd/system/demension.service <<EOF
+# Служба прежнего имени заменяется псевдонимом новой (systemctl restart demension продолжит работать)
+if [ -f "/etc/systemd/system/$LEGACY_SERVICE" ] && [ ! -L "/etc/systemd/system/$LEGACY_SERVICE" ]; then
+  systemctl disable "$LEGACY_SERVICE" >/dev/null 2>&1 || true
+  rm -f "/etc/systemd/system/$LEGACY_SERVICE"
+fi
+
+cat > /etc/systemd/system/dementia.service <<EOF
 [Unit]
-Description=Demension Panel - AmneziaWG Management Server
+Description=Dementia Panel - AmneziaWG Management Server
 After=network-online.target
 Wants=network-online.target
 
@@ -591,12 +629,13 @@ ProtectHome=read-only
 
 [Install]
 WantedBy=multi-user.target
+Alias=demension.service
 EOF
-chmod 644 /etc/systemd/system/demension.service
+chmod 644 /etc/systemd/system/dementia.service
 
 systemctl daemon-reload
-systemctl enable demension.service
-systemctl restart demension.service
+systemctl enable dementia.service
+systemctl restart dementia.service
 
 # 7. Firewall Configuration
 echo -e "\n${CYAN}[6/7] Настройка сетевого экрана (Firewall)...${NC}"
@@ -634,7 +673,7 @@ setup_fail2ban() {
   SSH_PORT=${SSH_PORT:-ssh}
   if [ -f /var/log/auth.log ] || [ -f /var/log/secure ]; then BACKEND=auto; else BACKEND=systemd; fi
   mkdir -p /etc/fail2ban/jail.d
-  cat > /etc/fail2ban/jail.d/demension-sshd.local <<EOF
+  cat > /etc/fail2ban/jail.d/dementia-sshd.local <<EOF
 [sshd]
 enabled = true
 port = ${SSH_PORT}
@@ -644,7 +683,7 @@ maxretry = 4
 findtime = 600
 bantime = 86400
 EOF
-  chmod 644 /etc/fail2ban/jail.d/demension-sshd.local
+  chmod 644 /etc/fail2ban/jail.d/dementia-sshd.local
   systemctl enable fail2ban >/dev/null 2>&1 || true
   systemctl restart fail2ban >/dev/null 2>&1 || true
   echo -e "${GREEN}✓ Защита SSH (Fail2ban) активирована (порт ${SSH_PORT}, maxretry=4, bantime=24ч).${NC}"
@@ -664,8 +703,8 @@ for _ in $(seq 1 30); do
 done
 if [ "$PANEL_UP" != true ]; then
   echo -e "${RED}[ERROR] Панель не отвечает на порту ${PANEL_PORT}. Последние строки журнала:${NC}"
-  journalctl -u demension.service -n 40 --no-pager 2>/dev/null || true
-  echo -e "Повторить запуск: systemctl restart demension; журнал: journalctl -u demension -f"
+  journalctl -u dementia.service -n 40 --no-pager 2>/dev/null || true
+  echo -e "Повторить запуск: systemctl restart dementia; журнал: journalctl -u dementia -f"
   exit 1
 fi
 echo -e "${GREEN}✓ Панель запущена.${NC}"
@@ -684,7 +723,7 @@ if [ "$MIGRATE_MODE" = true ]; then
     if run_migration_cli "${FINISH_ARGS[@]}"; then
       OLD_PANEL_FROZEN=true
     else
-      echo -e "${YELLOW}Не удалось уведомить прежнюю панель. Остановите её вручную (systemctl disable --now demension) или отмените перенос в её разделе «Безопасность».${NC}"
+      echo -e "${YELLOW}Не удалось уведомить прежнюю панель. Остановите её вручную (systemctl disable --now dementia, на версиях до v0.1.4 — demension) или отмените перенос в её разделе «Безопасность».${NC}"
     fi
   fi
 fi
@@ -699,7 +738,7 @@ echo -e "\n${GREEN}${BOLD}======================================================
 if [ "$MIGRATE_MODE" = true ]; then
   echo -e "${GREEN}${BOLD}🎉 УСПЕХ: панель перенесена на этот сервер и запущена!${NC}"
 else
-  echo -e "${GREEN}${BOLD}🎉 УСПЕХ: Demension Panel установлена и запущена!${NC}"
+  echo -e "${GREEN}${BOLD}🎉 УСПЕХ: Dementia Panel установлена и запущена!${NC}"
 fi
 echo -e "${GREEN}${BOLD}======================================================================${NC}"
 echo -e "Адрес панели:         ${BOLD}${CYAN}${PANEL_ADDRESS}${NC}"
@@ -718,7 +757,7 @@ elif [ "$SET_CREDENTIALS" = true ]; then
 else
   echo -e "Логин и пароль:       не менялись (прежние)"
 fi
-echo -e "Служба systemd:       ${BOLD}systemctl status demension${NC}"
+echo -e "Служба systemd:       ${BOLD}systemctl status dementia${NC}"
 echo -e "Новый пароль:         ${BOLD}cd ${INSTALL_DIR} && node server/dist/cli/reset-admin.js${NC}  (выдаст случайный)"
 echo -e "Директория:           ${BOLD}${INSTALL_DIR}${NC} (данные и ключ шифрования — ${INSTALL_DIR}/data, делайте его резервную копию)"
 echo -e "======================================================================"
@@ -736,7 +775,7 @@ if [ "$MIGRATE_MODE" = true ]; then
     echo "  • Прежняя панель заморожена; её ссылки подписок перенаправляются на новый адрес, пока она включена."
     echo "    Не выключайте её, если домен или порт панели изменились, пока пользователи не получат новые ссылки."
   else
-    echo "  • Прежняя панель ещё не отключена: остановите её (systemctl disable --now demension) — две панели не должны управлять одними нодами."
+    echo "  • Прежняя панель ещё не отключена: остановите её (systemctl disable --now dementia, на версиях до v0.1.4 — demension) — две панели не должны управлять одними нодами."
   fi
   echo "  • Если домен панели остался прежним, переключите его запись A на IP этого сервера (${SERVER_IP}): ссылки подписок продолжат работать."
   echo "  • Партнёры, подключённые к вашим нодам, и панели, к которым подключены вы, должны обновить адрес, если он изменился."

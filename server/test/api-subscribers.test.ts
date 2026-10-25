@@ -102,7 +102,7 @@ describe('API: Подписчики и подписки (интеграцион�
     expect(config.proxies[0].type).toBe('wireguard');
     expect(config.proxies[0]['amnezia-wg-option']).toBeDefined();
     expect(config['proxy-groups']).toHaveLength(1);
-    expect(config.rules).toEqual(['MATCH,Demension']);
+    expect(config.rules).toEqual(['MATCH,Dementia']);
   });
 
   it('поддерживает формат JSON (?format=json)', async () => {

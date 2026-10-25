@@ -326,5 +326,5 @@ loadTls();
 
 const PORT = Number(process.env.PORT) || 3001;
 mainServer.listen(PORT, () => {
-  console.log(`🚀 Demension Panel ${PANEL_VERSION} running on port ${PORT} (${SslService.isActive() ? 'HTTPS + HTTP для подписок' : 'HTTP'})`);
+  console.log(`🚀 Dementia Panel ${PANEL_VERSION} running on port ${PORT} (${SslService.isActive() ? 'HTTPS + HTTP для подписок' : 'HTTP'})`);
 });

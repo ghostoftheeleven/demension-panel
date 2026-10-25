@@ -103,10 +103,10 @@ export const InstallLogsModal: React.FC<InstallLogsModalProps> = ({
   if (!isOpen || !server) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/60 animate-in fade-in duration-200">
-      <div className="bg-paper border-2 border-ink rounded-2xl w-full max-w-3xl shadow-brutal flex flex-col h-[75vh] overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 animate-in fade-in duration-200">
+      <div className="bg-paper border border-line rounded-2xl w-full max-w-3xl shadow-pop flex flex-col h-[75vh] overflow-hidden">
         {/* Terminal Header */}
-        <div className="flex items-center justify-between px-6 py-3.5 border-b-2 border-ink bg-card">
+        <div className="flex items-center justify-between px-6 py-3.5 border-b border-line bg-card">
           <div className="flex items-center gap-2.5">
             <Terminal className="w-5 h-5 text-ok" />
             <div>
@@ -119,19 +119,19 @@ export const InstallLogsModal: React.FC<InstallLogsModalProps> = ({
 
           <div className="flex items-center gap-3">
             {status === 'running' && (
-              <div className="flex items-center gap-2 text-xs text-warn bg-warn-soft px-2.5 py-1 rounded-full border-2 border-ink">
+              <div className="flex items-center gap-2 text-xs text-warn bg-warn-soft px-2.5 py-1 rounded-full border border-line">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 <span>Установка...</span>
               </div>
             )}
             {status === 'success' && (
-              <div className="flex items-center gap-1.5 text-xs text-ok bg-ok-soft px-2.5 py-1 rounded-full border-2 border-ink">
+              <div className="flex items-center gap-1.5 text-xs text-ok bg-ok-soft px-2.5 py-1 rounded-full border border-line">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 <span>Успешно завершено</span>
               </div>
             )}
             {status === 'error' && (
-              <div className="flex items-center gap-1.5 text-xs text-bad bg-bad-soft px-2.5 py-1 rounded-full border-2 border-ink">
+              <div className="flex items-center gap-1.5 text-xs text-bad bg-bad-soft px-2.5 py-1 rounded-full border border-line">
                 <AlertCircle className="w-3.5 h-3.5" />
                 <span>Ошибка</span>
               </div>
@@ -139,7 +139,7 @@ export const InstallLogsModal: React.FC<InstallLogsModalProps> = ({
 
             <button
               onClick={onClose}
-              className="text-muted hover:text-ink transition p-1 rounded-lg hover:bg-soft border-2 border-ink"
+              className="text-muted hover:text-ink transition p-1 rounded-lg hover:bg-soft border border-line"
             >
               <X className="w-5 h-5" />
             </button>
@@ -149,7 +149,7 @@ export const InstallLogsModal: React.FC<InstallLogsModalProps> = ({
         {/* Terminal Console */}
         <div
           ref={logContainerRef}
-          className="flex-1 p-5 font-mono text-xs text-ink overflow-y-auto bg-ink/60 space-y-1 select-text leading-relaxed whitespace-pre-wrap"
+          className="flex-1 p-5 font-mono text-xs text-ink overflow-y-auto bg-black/70 space-y-1 select-text leading-relaxed whitespace-pre-wrap"
         >
           {logs.length === 0 && status === 'connecting' && (
             <div className="text-faint italic">Подключение к удаленному серверу по SSH...</div>
@@ -179,18 +179,18 @@ export const InstallLogsModal: React.FC<InstallLogsModalProps> = ({
           })}
 
           {errorMessage && (
-            <div className="text-bad bg-bad-soft border-2 border-ink p-3 rounded-lg my-2">
+            <div className="text-bad bg-bad-soft border border-line p-3 rounded-lg my-2">
               {errorMessage}
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3 border-t-2 border-ink bg-card flex items-center justify-between text-xs text-faint">
+        <div className="px-6 py-3 border-t border-line bg-card flex items-center justify-between text-xs text-faint">
           <span>Поддерживаемые ОС: Ubuntu 20.04+, Debian 11+, AlmaLinux 9+</span>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-soft hover:bg-soft-2 text-ink rounded-lg transition font-medium border-2 border-ink"
+            className="px-4 py-1.5 bg-soft hover:bg-soft-2 text-ink rounded-lg transition font-medium border border-line"
           >
             Закрыть
           </button>

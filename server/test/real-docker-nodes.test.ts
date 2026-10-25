@@ -38,9 +38,9 @@ describe.skipIf(!isDockerRunning)('Real Docker VPS Node E2E Integration Suite', 
   let clientKp: any;
 
   beforeAll(async () => {
-    tmpDir = path.join(os.tmpdir(), `demension-docker-test-${Date.now()}`);
+    tmpDir = path.join(os.tmpdir(), `dementia-docker-test-${Date.now()}`);
     fs.mkdirSync(tmpDir, { recursive: true });
-    process.env.DEMENSION_DATA_DIR = tmpDir;
+    process.env.DEMENTIA_DATA_DIR = tmpDir;
 
     const dbModule = await import('../src/db/index.js');
     db = dbModule.db;

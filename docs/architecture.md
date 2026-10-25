@@ -5,7 +5,7 @@
 ```
  Браузер админа ──HTTPS/HTTP──► Панель (server/src/index.ts)
                                  │  Express API /api/*, SPA client/dist, подписки /sub/:token, WebSocket /ws
-                                 │  SQLite data/demension.db
+                                 │  SQLite data/dementia.db
                                  │
                                  ├──SSH──► Нода 1: Docker-контейнер AmneziaWG (панели или приложения Amnezia)
                                  ├──SSH──► Нода N
@@ -21,7 +21,7 @@
 | Файл | Назначение |
 |---|---|
 | `index.ts` | Порядок middleware, роутеры, единый порт HTTP+HTTPS (сниффинг первого байта), WebSocket установки, фоновые задачи |
-| `config.ts` | Каталог данных (`DEMENSION_DATA_DIR`, по умолчанию `./data`) |
+| `config.ts` | Каталог данных (`DEMENTIA_DATA_DIR`, по умолчанию `./data`) |
 | `db/index.ts` | Схема, миграции, `transaction`, `getSetting`/`setSetting` |
 | `middleware/auth.middleware.ts` | `requireAuth` (Bearer-токен сессии) |
 | `middleware/rate-limit.ts` | `FailureLimiter` — счётчик неудачных попыток (логин, токены партнёров) |

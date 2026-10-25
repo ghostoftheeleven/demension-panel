@@ -15,7 +15,12 @@ export const ARCHIVE_FORMAT = 1;
 /** Предел размера расшифрованного архива (защита от «бомбы»); БД панели занимает единицы мегабайт */
 const MAX_PLAIN_BYTES = 1024 * 1024 * 1024;
 /** Файлы, которые разрешено восстановить из архива (архив не может записать произвольный путь) */
-export const ARCHIVE_FILES = ['demension.db', 'secret.key', 'ssl/fullchain.pem', 'ssl/privkey.pem', 'ssl/acme-account.key'] as const;
+/**
+ * Имена в архиве — часть формата переноса между версиями: архив прежней панели (Demension) должен открываться новой.
+ * Поэтому БД в архиве по-прежнему называется demension.db, а соль KDF не меняется.
+ */
+export const ARCHIVE_DB_ENTRY = 'demension.db';
+export const ARCHIVE_FILES = [ARCHIVE_DB_ENTRY, 'secret.key', 'ssl/fullchain.pem', 'ssl/privkey.pem', 'ssl/acme-account.key'] as const;
 export type ArchiveFileName = (typeof ARCHIVE_FILES)[number];
 
 // Без похожих символов (O/0, I/1): код вводят вручную
@@ -93,7 +98,7 @@ export function sealArchive(content: ArchiveContent, encKey: Buffer): Buffer {
 export function openArchive(archive: Buffer, encKey: Buffer): ArchiveContent {
   const headerLength = ARCHIVE_MAGIC.length + 12 + 16;
   if (archive.length <= headerLength || !archive.subarray(0, ARCHIVE_MAGIC.length).equals(ARCHIVE_MAGIC)) {
-    throw new MigrationArchiveError('Это не архив переноса панели Demension (или файл повреждён)');
+    throw new MigrationArchiveError('Это не архив переноса панели Dementia (или файл повреждён)');
   }
   let plain: Buffer;
   try {
@@ -125,7 +130,7 @@ export function openArchive(archive: Buffer, encKey: Buffer): ArchiveContent {
     }
     files[name as ArchiveFileName] = Buffer.from(data, 'base64');
   }
-  if (!files['demension.db'] || !files['secret.key']) {
+  if (!files[ARCHIVE_DB_ENTRY] || !files['secret.key']) {
     throw new MigrationArchiveError('В архиве нет базы данных или ключа шифрования');
   }
   return { manifest: manifest as MigrationManifest, files };

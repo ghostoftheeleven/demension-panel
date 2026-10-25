@@ -8,9 +8,9 @@ const TITLE_MAX = 25;
 const ANNOUNCE_MAX = 200;
 
 const inputClass =
-  'w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-ink transition text-sm';
+  'w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-mint transition text-sm';
 const labelClass = 'block text-xs font-medium text-muted mb-1';
-const cardClass = 'bg-card border-2 border-ink rounded-2xl p-6 shadow-brutal space-y-4';
+const cardClass = 'bg-card border border-line rounded-2xl p-6 shadow-pop space-y-4';
 
 function renderTitle(template: string, user: string): string {
   const title = (template || '{user}').split('{user}').join(user);
@@ -58,7 +58,7 @@ export const SubscriptionSettingsView: React.FC<{ subscribers: Subscriber[]; pub
 
   if (!settings) {
     return message ? (
-      <div className="p-4 rounded-2xl border-2 bg-bad-soft border-ink text-bad text-xs">{message.text}</div>
+      <div className="p-4 rounded-2xl border bg-bad-soft border-line text-bad text-xs">{message.text}</div>
     ) : (
       <div className="flex items-center justify-center py-24 text-faint text-sm">Загрузка настроек подписки...</div>
     );
@@ -128,7 +128,7 @@ export const SubscriptionSettingsView: React.FC<{ subscribers: Subscriber[]; pub
         <button
           type="submit"
           disabled={saving}
-          className="flex items-center justify-center gap-2 bg-mint hover:bg-mint disabled:opacity-50 text-ink font-bold text-sm px-5 py-2.5 rounded-xl transition shadow-brutal-sm border-2 border-ink btn-press"
+          className="flex items-center justify-center gap-2 bg-mint hover:bg-mint disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2.5 rounded-full transition btn-press hover:text-on-accent"
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           <span>Сохранить</span>
@@ -137,10 +137,10 @@ export const SubscriptionSettingsView: React.FC<{ subscribers: Subscriber[]; pub
 
       {message && (
         <div
-          className={`p-4 rounded-2xl border-2 text-xs ${
+          className={`p-4 rounded-2xl border text-xs ${
             message.type === 'success'
-              ? 'bg-ok-soft border-ink text-ok'
-              : 'bg-bad-soft border-ink text-bad'
+              ? 'bg-ok-soft border-line text-ok'
+              : 'bg-bad-soft border-line text-bad'
           }`}
         >
           {message.text}
@@ -303,14 +303,14 @@ export const SubscriptionSettingsView: React.FC<{ subscribers: Subscriber[]; pub
                 ))}
               </select>
             )}
-            <div className="rounded-2xl bg-paper border-2 border-ink p-4 space-y-3">
+            <div className="rounded-2xl bg-paper border border-line p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <Smartphone className="w-4 h-4 text-faint" />
                 <span className="text-sm font-semibold text-ink">{renderTitle(settings.title, previewSubscriber?.name || 'Пользователь')}</span>
               </div>
               {settings.description && <p className="text-xs text-muted whitespace-pre-line">{settings.description}</p>}
               {settings.announce && (
-                <p className="text-xs text-warn bg-warn-soft border-2 border-ink rounded-lg p-2 whitespace-pre-line line-clamp-5">
+                <p className="text-xs text-warn bg-warn-soft border border-line rounded-lg p-2 whitespace-pre-line line-clamp-5">
                   {settings.announce}
                 </p>
               )}
@@ -335,7 +335,7 @@ export const SubscriptionSettingsView: React.FC<{ subscribers: Subscriber[]; pub
                     key={link.label}
                     type="button"
                     onClick={() => copyToClipboard(link.url).then((ok) => !ok && alert(link.url))}
-                    className="w-full flex items-center gap-2 text-left text-[11px] bg-paper border-2 border-ink hover:border-ink rounded-lg px-2.5 py-2 transition"
+                    className="w-full flex items-center gap-2 text-left text-[11px] bg-paper border border-line hover:border-faint rounded-lg px-2.5 py-2 transition"
                     title="Скопировать ссылку"
                   >
                     <Link2 className="w-3.5 h-3.5 text-ok flex-shrink-0" />

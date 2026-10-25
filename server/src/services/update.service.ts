@@ -4,14 +4,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { dataDir } from '../config.js';
+import { panelEnv } from '../utils/env.js';
 import { HttpError } from '../utils/http.js';
 import { PANEL_VERSION, parseVersion, VersionService } from './version.service.js';
 
 const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-/** Служба systemd, в которой идёт обновление: install.sh останавливает demension.service, а эта продолжает работать */
-export const UPDATE_UNIT = 'demension-update';
+/** Служба systemd, в которой идёт обновление: install.sh останавливает dementia.service, а эта продолжает работать */
+export const UPDATE_UNIT = 'dementia-update';
 /** Обновление, которое «идёт» дольше, считается прерванным (перезагрузка сервера, убитый процесс) */
 const STALE_MS = 45 * 60 * 1000;
 const LOG_TAIL_BYTES = 64 * 1024;
@@ -129,7 +130,7 @@ export class UpdateService {
    * и systemd-run, чтобы обновление пережило остановку службы панели.
    */
   static environmentProblem(): string | null {
-    if (process.env.DEMENSION_SELF_UPDATE === '0') return 'Обновление из панели отключено (DEMENSION_SELF_UPDATE=0 в server/.env)';
+    if (panelEnv('SELF_UPDATE') === '0') return 'Обновление из панели отключено (DEMENTIA_SELF_UPDATE=0 в server/.env)';
     if (process.platform !== 'linux') return 'Обновление из панели работает только на Linux-сервере, где панель установлена через install.sh';
     if (!process.env.INVOCATION_ID) return 'Панель запущена не службой systemd (install.sh) — обновите её из терминала';
     if (typeof process.getuid === 'function' && process.getuid() !== 0) return 'Служба панели работает не от root — обновите панель из терминала';
@@ -156,7 +157,7 @@ export class UpdateService {
     if (readStoredStatus().state === 'running') throw new HttpError(409, 'Обновление уже выполняется');
 
     const info = await VersionService.getInfo();
-    if (!info.check_enabled) throw new HttpError(409, 'Проверка обновлений отключена (DEMENSION_UPDATE_CHECK=0) — обновите панель из терминала');
+    if (!info.check_enabled) throw new HttpError(409, 'Проверка обновлений отключена (DEMENTIA_UPDATE_CHECK=0) — обновите панель из терминала');
     if (!info.update_available || !info.latest) throw new HttpError(409, 'Установлена последняя версия панели');
     if (version !== info.latest) throw new HttpError(409, `Последняя версия панели — ${info.latest}. Обновите страницу`);
     const target = info.latest;
@@ -191,7 +192,7 @@ export class UpdateService {
       `--unit=${UPDATE_UNIT}`,
       '--collect',
       '--quiet',
-      '--description=Demension Panel update',
+      '--description=Dementia Panel update',
       '--setenv=HOME=/root',
       '/bin/bash',
       ...args,

@@ -1,9 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { dataDir, sslDir } from '../config.js';
+import { dataDir, dbFile, sslDir } from '../config.js';
+import { panelEnv } from '../utils/env.js';
 import {
   ARCHIVE_FILES,
+  ARCHIVE_DB_ENTRY,
   ArchiveFileName,
   ExistingDataError,
   MigrationArchiveError,
@@ -29,15 +31,13 @@ export interface ImportOptions {
   replace?: boolean;
 }
 
-const dbFile = path.join(dataDir, 'demension.db');
-
 function targetPath(name: ArchiveFileName): string {
   return name.startsWith('ssl/') ? path.join(sslDir, name.slice('ssl/'.length)) : path.join(dataDir, name);
 }
 
 /** Файлы, которыми перенос владеет (БД со служебными файлами, ключ шифрования, сертификат) */
 function ownedPaths(): string[] {
-  return [dbFile, `${dbFile}-wal`, `${dbFile}-shm`, ...ARCHIVE_FILES.filter((n) => n !== 'demension.db').map(targetPath)];
+  return [dbFile, `${dbFile}-wal`, `${dbFile}-shm`, ...ARCHIVE_FILES.filter((n) => n !== ARCHIVE_DB_ENTRY).map(targetPath)];
 }
 
 /** Есть ли в БД этой панели что терять: ноды, клиенты или пользователи */
@@ -77,10 +77,10 @@ export async function importMigrationArchive(archive: Buffer, code: string, opti
   const secretKey = files['secret.key']!.toString('utf8').trim();
   if (Buffer.from(secretKey, 'base64').length !== 32) throw new MigrationArchiveError('В архиве повреждён ключ шифрования');
   // Ключ из окружения приоритетнее файла: другой ключ не расшифровал бы SSH-доступы к нодам
-  const envKey = process.env.DEMENSION_SECRET_KEY;
+  const envKey = panelEnv('SECRET_KEY');
   if (envKey && Buffer.from(envKey, 'base64').toString('base64') !== Buffer.from(secretKey, 'base64').toString('base64')) {
     throw new MigrationArchiveError(
-      'В окружении задан DEMENSION_SECRET_KEY, отличающийся от ключа прежней панели: уберите его из server/.env (ключ приходит вместе с архивом)'
+      'В окружении задан DEMENTIA_SECRET_KEY, отличающийся от ключа прежней панели: уберите его из server/.env (ключ приходит вместе с архивом)'
     );
   }
 
@@ -110,7 +110,7 @@ export async function importMigrationArchive(archive: Buffer, code: string, opti
 
   try {
     for (const file of ownedPaths()) fs.rmSync(file, { force: true });
-    writeFileAtomic(dbFile, files['demension.db']!, 0o600);
+    writeFileAtomic(dbFile, files[ARCHIVE_DB_ENTRY]!, 0o600);
     writeFileAtomic(targetPath('secret.key'), Buffer.from(secretKey + '\n'), 0o600);
     for (const name of ['ssl/fullchain.pem', 'ssl/privkey.pem', 'ssl/acme-account.key'] as const) {
       const data = files[name];

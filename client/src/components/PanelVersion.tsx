@@ -8,7 +8,7 @@ import { PanelUpdateModal } from './PanelUpdateModal';
 const POLL_MS = 60 * 60 * 1000;
 
 function describe(info: VersionInfo): string {
-  if (!info.check_enabled) return 'Проверка обновлений отключена (DEMENSION_UPDATE_CHECK=0)';
+  if (!info.check_enabled) return 'Проверка обновлений отключена (DEMENTIA_UPDATE_CHECK=0)';
   const checked = info.checked_at ? `Проверено: ${new Date(info.checked_at).toLocaleString('ru-RU')}` : '';
   if (info.error && !info.latest) return [info.error, checked].filter(Boolean).join('\n');
   const latest = info.latest ? `Последняя версия на GitHub: ${info.latest}` : '';
@@ -74,7 +74,7 @@ export const PanelVersion: React.FC = () => {
           type="button"
           onClick={() => setUpdateOpen(true)}
           title="Что нового и обновление панели"
-          className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-warn-soft text-warn border-2 border-ink hover:bg-warn-soft transition"
+          className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-warn-soft text-warn border border-line hover:bg-warn-soft transition"
         >
           <ArrowUpCircle className="w-3 h-3" />
           <span>Доступна {info.latest}</span>

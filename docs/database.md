@@ -1,6 +1,6 @@
 # База данных
 
-SQLite (`node:sqlite`, Node ≥ 22.13), файл `data/demension.db`, режим WAL, `foreign_keys = ON`, `busy_timeout = 5000`.
+SQLite (`node:sqlite`, Node ≥ 22.13), файл `data/dementia.db`, режим WAL, `foreign_keys = ON`, `busy_timeout = 5000`.
 
 ## Миграции
 
@@ -41,7 +41,7 @@ SQLite (`node:sqlite`, Node ≥ 22.13), файл `data/demension.db`, режим
 | `needs_sync`, `needs_apply` | Изменения ещё не доставлены на ноду (повторяются фоновым опросом) |
 | `last_error`, `fail_count`, `last_seen` | Состояние опроса; 3 неудачи подряд → `offline` |
 | `container_name`, `iface`, `conf_path`, `awg_tool` | Где AmneziaWG на ноде (`amnezia-awg`/`awg0`/`/opt/amnezia/awg/awg0.conf`/`awg` у панели) |
-| `managed_by` | `demension` — контейнер панели, `amnezia` — контейнер приложения Amnezia, `partner` — нода партнёра |
+| `managed_by` | `dementia` — контейнер панели, `amnezia` — контейнер приложения Amnezia, `partner` — нода партнёра |
 | `sub_name`, `sub_order` | Отображаемое имя и порядок в подписке |
 | `remote_panel_id`, `remote_node_id` | Нода партнёрской панели (без SSH); каскадное удаление с `remote_panels` |
 | `probe_port` | Порт TCP-проверки доступности из стран; NULL — ICMP-ping ([probes.md](probes.md)) |

@@ -59,12 +59,12 @@ export function freePort(): Promise<number> {
 }
 
 export async function startPanel(extraEnv: Record<string, string> = {}): Promise<PanelProcess> {
-  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'demension-process-'));
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dementia-process-'));
   const port = await freePort();
   let output = '';
   const child = spawn(process.execPath, ['--import', 'tsx', 'src/index.ts'], {
     cwd: SERVER_DIR,
-    env: { ...process.env, DEMENSION_DATA_DIR: dataDir, PORT: String(port), PANEL_USER, PANEL_PASSWORD, ALLOW_INSECURE_FEDERATION: '', ...extraEnv },
+    env: { ...process.env, DEMENTIA_DATA_DIR: dataDir, PORT: String(port), PANEL_USER, PANEL_PASSWORD, ALLOW_INSECURE_FEDERATION: '', ...extraEnv },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   child.stdout!.on('data', (chunk) => (output += chunk));

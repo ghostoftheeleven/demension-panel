@@ -115,7 +115,8 @@ export class Fail2banService {
       if [ -f /var/log/auth.log ] || [ -f /var/log/secure ]; then BACKEND=auto; else BACKEND=systemd; fi
 
       mkdir -p /etc/fail2ban/jail.d
-      cat > /etc/fail2ban/jail.d/demension-sshd.local <<EOF
+      rm -f /etc/fail2ban/jail.d/demension-sshd.local
+      cat > /etc/fail2ban/jail.d/dementia-sshd.local <<EOF
 [sshd]
 enabled = true
 port = \${SSH_PORT}

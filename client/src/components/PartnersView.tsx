@@ -20,10 +20,10 @@ import type { Partner, PartnerAuditEntry, PartnerClient, RemotePanel, Server } f
 import { api } from '../api';
 import { copyToClipboard, formatBytes, GIB } from '../utils';
 
-const cardClass = 'bg-card border-2 border-ink rounded-2xl p-6 shadow-brutal space-y-4';
+const cardClass = 'bg-card border border-line rounded-2xl p-6 shadow-pop space-y-4';
 const inputClass =
-  'w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-ink transition text-sm';
-const iconButton = 'p-1.5 text-muted hover:bg-soft rounded-lg transition border-2 border-ink';
+  'w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-mint transition text-sm';
+const iconButton = 'p-1.5 text-muted hover:bg-soft rounded-lg transition border border-line';
 
 const AUDIT_LABELS: Record<string, string> = {
   created: 'Доступ создан',
@@ -96,16 +96,16 @@ const PartnerModal: React.FC<{
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/60 animate-in fade-in duration-200">
-      <form onSubmit={handleSubmit} className="bg-card border-2 border-ink rounded-2xl w-full max-w-lg shadow-brutal overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="flex items-center justify-between px-6 py-4 border-b-2 border-ink">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 animate-in fade-in duration-200">
+      <form onSubmit={handleSubmit} className="bg-card border border-line rounded-2xl w-full max-w-lg shadow-pop overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-line">
           <h2 className="text-base font-semibold text-ink">{partner ? 'Изменить доступ партнёра' : 'Выдать доступ к нодам'}</h2>
-          <button type="button" onClick={onClose} className="text-muted hover:text-ink p-1 rounded-lg hover:bg-soft border-2 border-ink">
+          <button type="button" onClick={onClose} className="text-muted hover:text-ink p-1 rounded-lg hover:bg-soft border border-line">
             <X className="w-5 h-5" />
           </button>
         </div>
         <div className="p-6 space-y-4 overflow-y-auto">
-          {error && <div className="p-3 bg-bad-soft border-2 border-ink rounded-xl text-bad text-xs">{error}</div>}
+          {error && <div className="p-3 bg-bad-soft border border-line rounded-xl text-bad text-xs">{error}</div>}
           <div>
             <label className="block text-xs font-medium text-muted mb-1">Партнёр</label>
             <input required value={name} onChange={(e) => setName(e.target.value)} placeholder="например: Панель Пети" className={inputClass} />
@@ -117,7 +117,7 @@ const PartnerModal: React.FC<{
             ) : (
               <div className="space-y-1.5 max-h-48 overflow-y-auto">
                 {ownServers.map((s) => (
-                  <label key={s.id} className="flex items-center gap-2 text-xs text-ink bg-paper border-2 border-ink rounded-xl px-3 py-2 cursor-pointer">
+                  <label key={s.id} className="flex items-center gap-2 text-xs text-ink bg-paper border border-line rounded-xl px-3 py-2 cursor-pointer">
                     <input type="checkbox" checked={nodeIds.includes(s.id)} onChange={() => toggleNode(s.id)} />
                     <span className="font-medium">{s.name}</span>
                     <span className="font-mono text-faint">{s.host}</span>
@@ -146,11 +146,11 @@ const PartnerModal: React.FC<{
             вы видите клиентов, их трафик и можете блокировать их.
           </p>
         </div>
-        <div className="px-6 py-3 border-t-2 border-ink flex justify-end gap-2">
+        <div className="px-6 py-3 border-t border-line flex justify-end gap-2">
           <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-muted hover:text-ink">
             Отмена
           </button>
-          <button type="submit" disabled={saving} className="flex items-center gap-2 bg-mint hover:bg-mint disabled:opacity-50 text-ink text-sm font-bold px-5 py-2 rounded-xl border-2 border-ink shadow-brutal-sm btn-press">
+          <button type="submit" disabled={saving} className="flex items-center gap-2 bg-mint hover:bg-mint disabled:opacity-50 text-on-accent text-sm font-bold px-5 py-2 rounded-full btn-press hover:text-on-accent">
             {saving && <Loader2 className="w-4 h-4 animate-spin" />}
             <span>{partner ? 'Сохранить' : 'Создать доступ'}</span>
           </button>
@@ -168,8 +168,8 @@ const TokenModal: React.FC<{ connectString: string; onClose: () => void }> = ({ 
   const [copied, setCopied] = useState(false);
   const insecure = connectString.startsWith('http:');
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/60 animate-in fade-in duration-200">
-      <div className="bg-card border-2 border-ink rounded-2xl w-full max-w-lg shadow-brutal p-6 space-y-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 animate-in fade-in duration-200">
+      <div className="bg-card border border-line rounded-2xl w-full max-w-lg shadow-pop p-6 space-y-4">
         <h2 className="text-base font-semibold text-ink flex items-center gap-2">
           <KeyRound className="w-5 h-5 text-warn" />
           <span>Строка подключения для партнёра</span>
@@ -180,7 +180,7 @@ const TokenModal: React.FC<{ connectString: string; onClose: () => void }> = ({ 
         </p>
         <textarea readOnly value={connectString} rows={3} className={`${inputClass} font-mono text-xs select-all`} />
         {insecure && (
-          <p className="text-xs text-bad bg-bad-soft border-2 border-ink rounded-xl p-3">
+          <p className="text-xs text-bad bg-bad-soft border border-line rounded-xl p-3">
             Панель открыта по HTTP: партнёр не сможет подключиться, пока вы не включите HTTPS (раздел «Безопасность») или не укажете
             публичный https-адрес в настройках панели.
           </p>
@@ -193,12 +193,12 @@ const TokenModal: React.FC<{ connectString: string; onClose: () => void }> = ({ 
                 setTimeout(() => setCopied(false), 2000);
               }
             }}
-            className="flex items-center gap-2 bg-mint hover:bg-mint text-ink text-sm font-bold px-4 py-2 rounded-xl border-2 border-ink shadow-brutal-sm btn-press"
+            className="flex items-center gap-2 bg-mint hover:bg-mint text-on-accent text-sm font-bold px-4 py-2 rounded-full btn-press hover:text-on-accent"
           >
             <Copy className="w-4 h-4" />
             <span>{copied ? 'Скопировано' : 'Копировать'}</span>
           </button>
-          <button onClick={onClose} className="px-4 py-2 bg-soft hover:bg-soft-2 text-ink rounded-xl text-sm border-2 border-ink">
+          <button onClick={onClose} className="px-4 py-2 bg-soft hover:bg-soft-2 text-ink rounded-xl text-sm border border-line">
             Готово
           </button>
         </div>
@@ -247,7 +247,7 @@ const PartnerDetails: React.FC<{ partner: Partner }> = ({ partner }) => {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
-                <tr className="text-faint border-b-2 border-ink">
+                <tr className="text-faint border-b border-line">
                   <th className="pb-2 font-medium">Клиент</th>
                   <th className="pb-2 font-medium">Нода</th>
                   <th className="pb-2 font-medium">IP</th>
@@ -256,7 +256,7 @@ const PartnerDetails: React.FC<{ partner: Partner }> = ({ partner }) => {
                   <th className="pb-2" />
                 </tr>
               </thead>
-              <tbody className="divide-y-2 divide-ink">
+              <tbody className="divide-y divide-line">
                 {clients.map((c) => (
                   <tr key={c.id}>
                     <td className="py-2 text-ink">
@@ -436,7 +436,7 @@ export const PartnersView: React.FC<{ servers: Server[]; publicUrl: string | nul
           </div>
           <button
             onClick={() => setModalPartner(null)}
-            className="flex items-center gap-1.5 bg-mint hover:bg-mint text-ink text-xs font-bold px-3.5 py-2 rounded-xl border-2 border-ink shadow-brutal-sm btn-press"
+            className="flex items-center gap-1.5 bg-mint hover:bg-mint text-on-accent text-xs font-bold px-3.5 py-2 rounded-full btn-press hover:text-on-accent"
           >
             <Plus className="w-4 h-4" />
             <span>Выдать доступ</span>
@@ -444,9 +444,9 @@ export const PartnersView: React.FC<{ servers: Server[]; publicUrl: string | nul
         </div>
 
         {partners.length === 0 ? (
-          <p className="text-xs text-faint py-4 text-center border-2 border-dashed border-ink rounded-xl">Доступы ещё не выданы</p>
+          <p className="text-xs text-faint py-4 text-center border border-dashed border-line rounded-xl">Доступы ещё не выданы</p>
         ) : (
-          <div className="divide-y-2 divide-ink">
+          <div className="divide-y divide-line">
             {partners.map((p) => {
               const status = !p.enabled ? 'отключён' : p.expired ? 'срок истёк' : p.suspended ? 'лимит исчерпан' : 'активен';
               const ok = status === 'активен';
@@ -460,8 +460,8 @@ export const PartnersView: React.FC<{ servers: Server[]; publicUrl: string | nul
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-ink">{p.name}</span>
                         <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border-2 ${
-                            ok ? 'bg-ok-soft text-ok border-ink' : 'bg-warn-soft text-warn border-ink'
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                            ok ? 'bg-ok-soft text-ok border-line' : 'bg-warn-soft text-warn border-line'
                           }`}
                         >
                           {status}
@@ -530,7 +530,7 @@ export const PartnersView: React.FC<{ servers: Server[]; publicUrl: string | nul
           <button
             type="submit"
             disabled={connecting}
-            className="flex items-center justify-center gap-1.5 bg-mint hover:bg-mint disabled:opacity-50 text-ink text-xs font-bold px-4 py-2 rounded-xl border-2 border-ink shadow-brutal-sm btn-press"
+            className="flex items-center justify-center gap-1.5 bg-mint hover:bg-mint disabled:opacity-50 text-on-accent text-xs font-bold px-4 py-2 rounded-full btn-press hover:text-on-accent"
           >
             {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
             <span>Подключить</span>
@@ -538,9 +538,9 @@ export const PartnersView: React.FC<{ servers: Server[]; publicUrl: string | nul
         </form>
 
         {panels.length === 0 ? (
-          <p className="text-xs text-faint py-4 text-center border-2 border-dashed border-ink rounded-xl">Панели партнёров не подключены</p>
+          <p className="text-xs text-faint py-4 text-center border border-dashed border-line rounded-xl">Панели партнёров не подключены</p>
         ) : (
-          <div className="divide-y-2 divide-ink">
+          <div className="divide-y divide-line">
             {panels.map((panel) => {
               const statusLabel =
                 panel.status === 'online' ? 'на связи' : panel.status === 'revoked' ? 'доступ отозван' : panel.status === 'pending' ? 'подключение' : 'ошибка';
@@ -550,10 +550,10 @@ export const PartnersView: React.FC<{ servers: Server[]; publicUrl: string | nul
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-ink">{panel.name}</span>
                       <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border-2 ${
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
                           panel.status === 'online'
-                            ? 'bg-ok-soft text-ok border-ink'
-                            : 'bg-warn-soft text-warn border-ink'
+                            ? 'bg-ok-soft text-ok border-line'
+                            : 'bg-warn-soft text-warn border-line'
                         }`}
                       >
                         {statusLabel}

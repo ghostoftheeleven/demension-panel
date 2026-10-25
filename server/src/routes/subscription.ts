@@ -89,7 +89,7 @@ export function buildClashConfig(entries: { name: string; server: any; client: a
     };
   });
 
-  const group = 'Demension';
+  const group = 'Dementia';
   return JSON.stringify(
     {
       'mixed-port': 7890,

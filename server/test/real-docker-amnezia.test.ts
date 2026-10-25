@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
  * (без томов), start.sh поднимает интерфейс при каждом запуске контейнера. Без запущенной ноды (SSH 2223) тесты пропускаются.
  */
 
-const NODE = 'demension-node-2';
+const NODE = 'dementia-node-2';
 const SSH_PORT = 2223;
 const AWG_PORT = 55424;
 
@@ -103,8 +103,8 @@ describe.skipIf(!dockerNodeAvailable)('Сервер с уже установле
   }
 
   beforeAll(async () => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'demension-docker-amnezia-'));
-    process.env.DEMENSION_DATA_DIR = tmpDir;
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dementia-docker-amnezia-'));
+    process.env.DEMENTIA_DATA_DIR = tmpDir;
     const dbModule = await import('../src/db/index.js');
     dbModule.initDatabase();
     const helpers = await import('./helpers/db.js');

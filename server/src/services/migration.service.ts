@@ -7,6 +7,7 @@ import { db, getSetting, setSetting } from '../db/index.js';
 import { HttpError } from '../utils/http.js';
 import {
   ARCHIVE_FORMAT,
+  ARCHIVE_DB_ENTRY,
   ArchiveContent,
   MigrationManifest,
   deriveMigrationKeys,
@@ -150,7 +151,7 @@ export class MigrationService {
     const ssl = SslService.getStatus();
 
     const files: ArchiveContent['files'] = {
-      'demension.db': this.snapshotDatabase(),
+      [ARCHIVE_DB_ENTRY]: this.snapshotDatabase(),
       'secret.key': Buffer.from(exportSecretKey() + '\n'),
     };
     if (SslService.hasCertificate()) {

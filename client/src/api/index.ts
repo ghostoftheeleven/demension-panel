@@ -27,9 +27,18 @@ import type {
 
 const API_BASE = '/api';
 
+const TOKEN_KEY = 'dementia_token';
+/** Ключ до переименования проекта (Demension, v0.1.3 и раньше) */
+const LEGACY_TOKEN_KEY = 'demension_token';
+
 export function getToken(): string | null {
   try {
-    return localStorage.getItem('demension_token');
+    const legacy = localStorage.getItem(LEGACY_TOKEN_KEY);
+    if (legacy) {
+      localStorage.removeItem(LEGACY_TOKEN_KEY);
+      if (!localStorage.getItem(TOKEN_KEY)) localStorage.setItem(TOKEN_KEY, legacy);
+    }
+    return localStorage.getItem(TOKEN_KEY);
   } catch {
     return null;
   }
@@ -37,7 +46,7 @@ export function getToken(): string | null {
 
 export function setToken(token: string) {
   try {
-    localStorage.setItem('demension_token', token);
+    localStorage.setItem(TOKEN_KEY, token);
   } catch {
     // storage недоступен (приватный режим) — сессия будет жить до перезагрузки страницы
   }
@@ -45,7 +54,8 @@ export function setToken(token: string) {
 
 export function clearToken() {
   try {
-    localStorage.removeItem('demension_token');
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(LEGACY_TOKEN_KEY);
   } catch {
     // ignore
   }
@@ -405,7 +415,7 @@ export const api = {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `demension-migration-${new Date().toISOString().slice(0, 10)}.dpm`;
+    link.download = `dementia-migration-${new Date().toISOString().slice(0, 10)}.dpm`;
     document.body.appendChild(link);
     link.click();
     link.remove();

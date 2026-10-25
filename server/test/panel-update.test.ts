@@ -53,7 +53,7 @@ describe('обновление панели из интерфейса (/api/vers
   });
   afterEach(() => {
     vi.restoreAllMocks();
-    delete process.env.DEMENSION_SELF_UPDATE;
+    delete process.env.DEMENTIA_SELF_UPDATE;
   });
 
   it('только для администратора', async () => {
@@ -80,9 +80,9 @@ describe('обновление панели из интерфейса (/api/vers
     }
   });
 
-  it('DEMENSION_SELF_UPDATE=0 отключает обновление из панели', () => {
-    process.env.DEMENSION_SELF_UPDATE = '0';
-    expect(UpdateService.environmentProblem()).toMatch(/DEMENSION_SELF_UPDATE=0/);
+  it('DEMENTIA_SELF_UPDATE=0 отключает обновление из панели', () => {
+    process.env.DEMENTIA_SELF_UPDATE = '0';
+    expect(UpdateService.environmentProblem()).toMatch(/DEMENTIA_SELF_UPDATE=0/);
   });
 
   it('запускает обновление до последнего релиза отдельной службой и показывает, что оно идёт', async () => {
@@ -133,14 +133,14 @@ describe('обновление панели из интерфейса (/api/vers
   it('проверка обновлений отключена — обновление из панели не запускается', async () => {
     vi.spyOn(UpdateService, 'environmentProblem').mockReturnValue(null);
     const launch = vi.spyOn(UpdateService, 'launch').mockResolvedValue();
-    process.env.DEMENSION_UPDATE_CHECK = '0';
+    process.env.DEMENTIA_UPDATE_CHECK = '0';
     try {
       const res = await admin.api('/api/version/update', 'POST', { version: newer });
       expect(res.status).toBe(409);
-      expect(res.body.error).toContain('DEMENSION_UPDATE_CHECK=0');
+      expect(res.body.error).toContain('DEMENTIA_UPDATE_CHECK=0');
       expect(launch).not.toHaveBeenCalled();
     } finally {
-      delete process.env.DEMENSION_UPDATE_CHECK;
+      delete process.env.DEMENTIA_UPDATE_CHECK;
     }
   });
 

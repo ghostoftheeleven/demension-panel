@@ -17,11 +17,11 @@ afterEach(() => {
   for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
 
-function runCli(env: Record<string, string>, dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'demension-cli-'))) {
+function runCli(env: Record<string, string>, dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dementia-cli-'))) {
   if (!dirs.includes(dataDir)) dirs.push(dataDir);
   const result = spawnSync(process.execPath, ['--import', 'tsx', 'src/cli/reset-admin.ts'], {
     cwd: SERVER_DIR,
-    env: { ...process.env, DEMENSION_DATA_DIR: dataDir, PANEL_USER: '', PANEL_PASSWORD: '', ...env },
+    env: { ...process.env, DEMENTIA_DATA_DIR: dataDir, PANEL_USER: '', PANEL_PASSWORD: '', ...env },
     encoding: 'utf-8',
     timeout: 60000,
   });
@@ -29,7 +29,7 @@ function runCli(env: Record<string, string>, dataDir = fs.mkdtempSync(path.join(
 }
 
 function readAdmins(dataDir: string) {
-  const db = new DatabaseSync(path.join(dataDir, 'demension.db'));
+  const db = new DatabaseSync(path.join(dataDir, 'dementia.db'));
   try {
     return {
       admins: db.prepare('SELECT username, password_hash, salt FROM admins').all() as { username: string; password_hash: string; salt: string }[],
@@ -47,7 +47,7 @@ describe('reset-admin CLI', () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('Учётные данные администратора "root_admin" обновлены');
-    expect(result.stdout).toContain('systemctl restart demension');
+    expect(result.stdout).toContain('systemctl restart dementia');
     expect(result.stdout + result.stderr).not.toContain('LongEnough-Pass1');
     const { admins } = readAdmins(result.dataDir);
     expect(admins).toHaveLength(1);
@@ -76,7 +76,7 @@ describe('reset-admin CLI', () => {
     const initial = readAdmins(first.dataDir).admins[0];
     const firstPassword = /Новый пароль: (\S+)/.exec(first.stdout)![1];
 
-    const db = new DatabaseSync(path.join(first.dataDir, 'demension.db'));
+    const db = new DatabaseSync(path.join(first.dataDir, 'dementia.db'));
     db.exec("INSERT INTO sessions (token, admin_id, expires_at) VALUES ('x', 1, '2999-01-01T00:00:00.000Z')");
     db.exec("INSERT INTO trusted_login_ips (ip, last_login_at) VALUES ('203.0.113.1', '2999-01-01T00:00:00.000Z')");
     db.close();

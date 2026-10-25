@@ -1,4 +1,7 @@
-# Demension Panel
+# Dementia Panel
+
+> До v0.1.4 проект назывался **Demension Panel**. Уже установленные панели обновляются как обычно: установщик сам переносит
+> `/opt/demension-panel` → `/opt/dementia-panel` и службу `demension` → `dementia` (старые имена продолжают работать).
 
 > Агентлесс (agentless) панель управления инфраструктурой **AmneziaWG** (WireGuard с защитой от DPI) с авторизацией, гибким распределением серверов и автообновляемыми подписками для **Incy** и клиентов на ядре **mihomo** (Clash Verge Rev, FlClash и др.).
 
@@ -29,13 +32,13 @@
 Требования: Ubuntu / Debian / AlmaLinux, Node.js **≥ 22.13** (устанавливается автоматически).
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/ghostoftheeleven/demension-panel/main/install.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/ghostoftheeleven/dementia-panel/main/install.sh | sudo bash
 ```
 
 Без вопросов (например, для автоматизации):
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/ghostoftheeleven/demension-panel/main/install.sh | sudo PANEL_PORT=3001 bash
+curl -sSL https://raw.githubusercontent.com/ghostoftheeleven/dementia-panel/main/install.sh | sudo PANEL_PORT=3001 bash
 ```
 
 Скрипт:
@@ -43,7 +46,7 @@ curl -sSL https://raw.githubusercontent.com/ghostoftheeleven/demension-panel/mai
 2. Спросит **порт** панели (по умолчанию 3001) и проверит, что он свободен.
 3. **Сгенерирует случайные логин и пароль администратора** (в БД хранится только хэш пароля). Свои значения можно передать
    через `PANEL_USER` / `PANEL_PASSWORD`.
-4. Настроит службу **systemd** (`demension.service`) и дождётся, пока панель ответит.
+4. Настроит службу **systemd** (`dementia.service`) и дождётся, пока панель ответит.
 5. Откроет порт панели в UFW/firewalld, если они активны, и настроит fail2ban для SSH (если fail2ban уже есть на сервере —
    его настройки не меняются).
 6. **Выведет в консоль адрес панели, логин и пароль.** Пароль показывается один раз — сохраните его. Потерянный пароль заменяет
@@ -63,14 +66,14 @@ curl -sSL https://raw.githubusercontent.com/ghostoftheeleven/demension-panel/mai
 ### Версии и обновления
 
 Текущая версия панели видна в шапке интерфейса рядом с названием; там же — последняя версия из
-[релизов на GitHub](https://github.com/ghostoftheeleven/demension-panel/releases) и ссылка «Доступна vX.Y.Z», если вышло обновление.
+[релизов на GitHub](https://github.com/ghostoftheeleven/dementia-panel/releases) и ссылка «Доступна vX.Y.Z», если вышло обновление.
 Что изменилось в каждой версии — [CHANGELOG.md](CHANGELOG.md). **Обновление — прямо из панели:** нажмите «Доступна vX.Y.Z» →
 «Обновить» (резервная копия БД, сборка, перезапуск; если новая версия не запустится — панель вернётся на прежнюю). Данные, логин
 и пароль сохраняются. Из терминала обновляет повторный запуск команды установки выше. В карточке
 сервера показаны версии AmneziaWG на ноде (amneziawg-go, утилиты, дата сборки образа); свежий образ ставит «Переустановить AWG».
 
 Номер `vX.Y.Z`: **X** — сверхкрупные переработки, **Y** — исправления критических уязвимостей и сбоев, **Z** — обычные
-исправления и доработки. Проверку обновлений можно отключить: `DEMENSION_UPDATE_CHECK=0` в `server/.env`.
+исправления и доработки. Проверку обновлений можно отключить: `DEMENTIA_UPDATE_CHECK=0` в `server/.env`.
 
 ### Если на сервере уже установлен AmneziaWG (например, из приложения AmneziaVPN)
 
@@ -82,14 +85,14 @@ curl -sSL https://raw.githubusercontent.com/ghostoftheeleven/demension-panel/mai
 
 Управление службой:
 ```bash
-systemctl status demension    # Проверка статуса
-systemctl restart demension   # Перезапуск
-journalctl -u demension -f    # Логи в реальном времени
+systemctl status dementia    # Проверка статуса
+systemctl restart dementia   # Перезапуск
+journalctl -u dementia -f    # Логи в реальном времени
 ```
 
 Сброс пароля администратора (без параметров — новый случайный пароль при прежнем логине, он будет показан один раз):
 ```bash
-cd /opt/demension-panel && node server/dist/cli/reset-admin.js
+cd /opt/dementia-panel && node server/dist/cli/reset-admin.js
 # или свои значения: PANEL_USER=имя PANEL_PASSWORD='новый-пароль' node server/dist/cli/reset-admin.js
 ```
 
@@ -98,8 +101,8 @@ cd /opt/demension-panel && node server/dist/cli/reset-admin.js
 ## 💻 Локальный запуск (Разработка)
 
 ```bash
-git clone https://github.com/ghostoftheeleven/demension-panel.git
-cd demension-panel
+git clone https://github.com/ghostoftheeleven/dementia-panel.git
+cd dementia-panel
 
 npm install --prefix server
 npm install --prefix client

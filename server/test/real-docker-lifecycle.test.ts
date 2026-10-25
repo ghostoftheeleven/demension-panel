@@ -54,8 +54,8 @@ describe.skipIf(!dockerNodeAvailable)('Жизненный цикл ноды на
   const readConf = async () => (await ssh('docker exec amnezia-awg cat /opt/amnezia/awg/awg0.conf')).stdout as string;
 
   beforeAll(async () => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'demension-docker-lifecycle-'));
-    process.env.DEMENSION_DATA_DIR = tmpDir;
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dementia-docker-lifecycle-'));
+    process.env.DEMENTIA_DATA_DIR = tmpDir;
     const dbModule = await import('../src/db/index.js');
     dbModule.initDatabase();
     const helpers = await import('./helpers/db.js');

@@ -43,7 +43,7 @@ export const AmneziaImportPanel: React.FC<{ onImported: () => void; onClose: () 
           {results.map((r, i) => {
             const view = STATUS_VIEW[r.status];
             return (
-              <div key={i} className="p-3 bg-paper border-2 border-ink rounded-xl text-xs space-y-1">
+              <div key={i} className="p-3 bg-paper border border-line rounded-xl text-xs space-y-1">
                 <div className="flex items-center gap-2">
                   {view.icon}
                   <span className="font-medium text-ink">{r.name || r.key}</span>
@@ -62,7 +62,7 @@ export const AmneziaImportPanel: React.FC<{ onImported: () => void; onClose: () 
           <button type="button" onClick={() => setResults(null)} className="px-4 py-2 text-sm text-muted hover:text-ink">
             Импортировать ещё
           </button>
-          <button type="button" onClick={onClose} className="px-4 py-2 bg-soft hover:bg-soft-2 text-ink rounded-xl text-sm border-2 border-ink">
+          <button type="button" onClick={onClose} className="px-4 py-2 bg-soft hover:bg-soft-2 text-ink rounded-xl text-sm border border-line">
             Готово
           </button>
         </div>
@@ -72,8 +72,8 @@ export const AmneziaImportPanel: React.FC<{ onImported: () => void; onClose: () 
 
   return (
     <form onSubmit={handleImport} className="p-6 space-y-4 overflow-y-auto">
-      {error && <div className="p-3 bg-bad-soft border-2 border-ink rounded-xl text-bad text-sm">{error}</div>}
-      <div className="p-3 bg-paper border-2 border-ink rounded-xl text-xs text-muted space-y-1">
+      {error && <div className="p-3 bg-bad-soft border border-line rounded-xl text-bad text-sm">{error}</div>}
+      <div className="p-3 bg-paper border border-line rounded-xl text-xs text-muted space-y-1">
         <p>
           В приложении AmneziaVPN откройте сервер → <strong className="text-ink">«Поделиться»</strong> →{' '}
           <strong className="text-ink">«Полный доступ»</strong> и скопируйте ключ <code>vpn://…</code>.
@@ -89,7 +89,7 @@ export const AmneziaImportPanel: React.FC<{ onImported: () => void; onClose: () 
         value={keys}
         onChange={(e) => setKeys(e.target.value)}
         placeholder="vpn://AAAB..."
-        className="w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-ink transition font-mono text-xs"
+        className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-mint transition font-mono text-xs"
       />
       <p className="text-[11px] text-warn">
         Ключ полного доступа содержит пароль или SSH-ключ сервера. В панели он хранится зашифрованным, сам ключ не сохраняется.
@@ -101,7 +101,7 @@ export const AmneziaImportPanel: React.FC<{ onImported: () => void; onClose: () 
         <button
           type="submit"
           disabled={loading}
-          className="flex items-center gap-2 bg-mint hover:bg-mint disabled:opacity-50 text-ink font-bold text-sm px-5 py-2 rounded-xl transition border-2 border-ink shadow-brutal-sm btn-press"
+          className="flex items-center gap-2 bg-mint hover:bg-mint disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2 rounded-full transition btn-press hover:text-on-accent"
         >
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
           <span>{loading ? 'Подключение к серверам...' : 'Импортировать'}</span>

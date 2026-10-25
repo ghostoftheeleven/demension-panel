@@ -4,7 +4,7 @@
  *
  * Новый сервер (до запуска службы):
  *   MIGRATION_CODE=… node dist/cli/migration.js pull --from https://old.example.com:3001 [--replace]
- *   MIGRATION_CODE=… node dist/cli/migration.js file --path /root/demension-migration.dpm [--replace]
+ *   MIGRATION_CODE=… node dist/cli/migration.js file --path /root/dementia-migration.dpm [--replace]
  *   node dist/cli/migration.js dns-check --domain panel.example.com
  *   node dist/cli/migration.js ssl --mode keep|cf|http|ip|custom|none [--domain d] [--email e] [--ip x] [--cert f --key f] [--a-record yes|no]
  *   node dist/cli/migration.js url --host panel.example.com --port 3001 [--scheme https]
@@ -233,7 +233,7 @@ async function main(): Promise<void> {
       const { MigrationService } = await import('../services/migration.service.js');
       initDatabase();
       MigrationService.cancel();
-      console.log('Состояние переноса сброшено: панель работает в обычном режиме. Перезапустите службу: systemctl restart demension');
+      console.log('Состояние переноса сброшено: панель работает в обычном режиме. Перезапустите службу: systemctl restart dementia');
       break;
     }
     default:

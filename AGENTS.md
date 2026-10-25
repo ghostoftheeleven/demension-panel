@@ -1,8 +1,8 @@
 # AGENTS.md — руководство для ИИ-агентов и разработчиков
 
-Demension Panel — агентлесс-панель управления нодами **AmneziaWG**: разворачивает AmneziaWG в Docker на удалённых
+Dementia Panel — агентлесс-панель управления нодами **AmneziaWG**: разворачивает AmneziaWG в Docker на удалённых
 серверах по SSH, выдаёт клиентские конфиги и автообновляемые подписки, умеет подключать уже установленные серверы
-(в т.ч. из приложения AmneziaVPN) и делиться нодами между панелями.
+(в т.ч. из приложения AmneziaVPN) и делиться нодами между панелями. До v0.1.4 проект назывался **Demension** — см. инвариант 36.
 
 Перед любыми изменениями прочитайте этот файл целиком, а затем документ подсистемы, которую трогаете.
 
@@ -38,7 +38,7 @@ server/            Node.js 22.13+ / Express 4 / TypeScript, SQLite через no
   src/middleware/    авторизация, ограничение частоты, заголовки безопасности (CSP), единый обработчик ошибок
   test/              vitest: *.test.ts, helpers/ (API, БД, подмена SSH и панели партнёра, процесс панели), docker/ (тестовые ноды)
 client/            React 19 + Vite + Tailwind 4 (SPA, собирается в client/dist и раздаётся сервером)
-  src/index.css      тема neo-brutal: семантические цвета (paper, card, ink, muted, mint…), тени shadow-brutal, шрифты
+  src/index.css      тема Bento: семантические цвета (page, card, line, ink, muted, mint, on-accent…), шрифты
 install.sh         установка панели на VPS (systemd)
 docs/              документация
 ```
@@ -65,9 +65,10 @@ CI (`.github/workflows/ci.yml`) выполняет всё перечисленн
 - Shell-скрипты хранятся с LF (`.gitattributes`). На Windows с `core.autocrlf=true` рабочие файлы могут быть с CRLF —
   учитывайте это в скриптах, которые патчат исходники.
 - Тексты интерфейса и сообщения об ошибках — на русском.
-- Оформление интерфейса — neo-brutal (выбрал владелец): чёрные рамки `border-2 border-ink`, жёсткие тени `shadow-brutal(-sm)`,
-  плоские заливки, кнопки-действия с `btn-press`. Цвета — только семантические токены из `client/src/index.css`
-  (`bg-card`, `text-muted`, `bg-ok-soft text-ok`…), не палитра Tailwind (`zinc`, `emerald`…), без градиентов и размытия.
+- Оформление интерфейса — Bento (выбрал владелец): тёмный фон, плитки `bg-card border border-line rounded-2xl`, сочные плоские
+  акценты (лайм `bg-mint`, оранжевый, голубой, розовый), кнопки-действия — пилюли `rounded-full btn-press`, заголовки Unbounded.
+  Цвета — только семантические токены из `client/src/index.css` (`bg-card`, `text-muted`, `bg-ok-soft text-ok`…), не палитра
+  Tailwind (`zinc`, `emerald`…), без градиентов. **Текст на яркой заливке — `text-on-accent`**, а не `text-ink` (он светлый).
 - Новые функции и правки поведения сопровождайте тестами в `server/test` и обновлением документа в `docs/`; новое правило,
   которое легко нарушить, — пунктом в инвариантах ниже. Изменили данные для ИИ-агентов (этот файл, `docs/`) — обновляйте их в том
   же коммите. Правила тестов — [docs/testing.md](docs/testing.md): проверяйте реальный код, тест на баг должен падать на старом коде,
@@ -96,7 +97,7 @@ CI на `main`. Подробно — [docs/releases.md](docs/releases.md).
    `server_private_key`, `preshared_key`; `serializeClient` — `client_private_key`. Приватный ключ клиента попадает
    только в `.conf`/QR/подписку.
 2. **SSH-пароли/ключи и токен Cloudflare хранятся зашифрованными** (`encryptSecret`/`decryptSecret`, ключ
-   `data/secret.key` или `DEMENSION_SECRET_KEY`). Никогда не пишите их в БД напрямую и не логируйте.
+   `data/secret.key` или `DEMENTIA_SECRET_KEY`). Никогда не пишите их в БД напрямую и не логируйте.
 3. **Токены сессий и партнёров хранятся только как SHA-256.** Сам токен показывается один раз.
 4. **Токен авторизации — только в заголовке `Authorization: Bearer`.** Не принимайте его из query-string; скачивание
    конфигов идёт через `fetch` + Blob. WebSocket авторизуется первым сообщением `{type:'auth', token}`.
@@ -160,7 +161,7 @@ CI на `main`. Подробно — [docs/releases.md](docs/releases.md).
 28. **Панель уже работает у пользователей — обновление не должно ломать установку.** Порт/подсеть/параметры, которые не удалось
     применить на ноде, откатываются в БД (`applyOrRollback`, routes/servers.ts): подписки не должны раздавать то, чего нет на ноде.
     `install.sh` скачивает обновление до остановки службы и сохраняет добавленные вручную переменные `server/.env`
-    (в т.ч. `DEMENSION_SECRET_KEY` — без него не расшифровать SSH-доступы).
+    (в т.ч. `DEMENTIA_SECRET_KEY` — без него не расшифровать SSH-доступы).
 
 ### Перенос панели, проверка из стран, учётная запись
 29. **Архив переноса** (`utils/migration-archive.ts`) восстанавливает только файлы из белого списка `ARCHIVE_FILES`; **код переноса не хранится и не
@@ -182,6 +183,12 @@ CI на `main`. Подробно — [docs/releases.md](docs/releases.md).
 35. **Интерфейс не загружает ничего извне** (CSP: `default-src 'self'`, security-headers.ts): шрифты и прочие файлы лежат в сборке
     (`@fontsource/*`, `client/src/assets`), а `assetsInlineLimit: 0` в vite.config.ts не даёт встроить их как `data:` — такие шрифты CSP
     блокирует. CI проверяет CSS сборки.
+36. **Проект переименован Demension → Dementia (v0.1.4), уже установленные панели должны продолжить работать.** `install.sh`
+    переносит `/opt/demension-panel` в `/opt/dementia-panel` (старый путь — ссылка), служба `dementia.service` с псевдонимом
+    `demension.service`, `DEMENSION_*` в `.env` → `DEMENTIA_*`. Код читает переменные через `panelEnv()` (utils/env.ts, оба имени),
+    `config.ts` подхватывает `data/demension.db` (`adoptLegacyDatabase`), клиент — прежний ключ токена. **Не переименовывать:**
+    имя БД и соль KDF в архиве переноса (`ARCHIVE_DB_ENTRY`, migration-archive.ts — архивы старых панелей), `managed_by = 'demension'`
+    (значение в БД, задано старой миграцией), метку `/opt/amnezia/awg/demension.env` на нодах (её читает start.sh работающих контейнеров).
 
 ## Чек-лист перед коммитом
 

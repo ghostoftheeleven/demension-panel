@@ -29,4 +29,4 @@ if (!providedPassword) {
   console.log(`Новый пароль: ${password}`);
   console.log('Сохраните его: он показан один раз.');
 }
-console.log('Если вход заблокирован из-за неудачных попыток, счётчики сбросятся после перезапуска службы: systemctl restart demension');
+console.log('Если вход заблокирован из-за неудачных попыток, счётчики сбросятся после перезапуска службы: systemctl restart dementia');

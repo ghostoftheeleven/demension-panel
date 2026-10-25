@@ -31,7 +31,7 @@ if [ "${SKIP_INSTALL:-}" != 1 ]; then
 fi
 
 if [ "${SKIP_MIGRATION:-}" != 1 ]; then
-  NET="demension-migration-$$"
+  NET="dementia-migration-$$"
   OLD="mig-old-$$"
   cleanup() {
     docker rm -f "$OLD" >/dev/null 2>&1 || true

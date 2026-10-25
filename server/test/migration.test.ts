@@ -332,7 +332,7 @@ describe('новая панель: импорт архива CLI в чистый
     if (process.platform !== 'win32') {
       expect(fs.statSync(path.join(dataDir, 'secret.key')).mode & 0o077).toBe(0);
       expect(fs.statSync(path.join(dataDir, 'ssl', 'privkey.pem')).mode & 0o077).toBe(0);
-      expect(fs.statSync(path.join(dataDir, 'demension.db')).mode & 0o077).toBe(0);
+      expect(fs.statSync(path.join(dataDir, 'dementia.db')).mode & 0o077).toBe(0);
     }
   }, 120000);
 
@@ -344,7 +344,7 @@ describe('новая панель: импорт архива CLI в чистый
     const result = await runCli(['file', '--path', file], dataDir, { MIGRATION_CODE: generateMigrationCode() });
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('неверный код переноса');
-    expect(fs.existsSync(path.join(dataDir, 'demension.db'))).toBe(false);
+    expect(fs.existsSync(path.join(dataDir, 'dementia.db'))).toBe(false);
     expect(fs.existsSync(path.join(dataDir, 'secret.key'))).toBe(false);
 
     const noCode = await runCli(['file', '--path', file], dataDir);
@@ -383,28 +383,28 @@ describe('новая панель: импорт архива CLI в чистый
     expect((await runCli(['file', '--path', file], dataDir, { MIGRATION_CODE: code })).status).toBe(0);
 
     // На этом «сервере» уже есть данные: второй импорт без --replace отказывает и ничего не меняет
-    const before = fs.readFileSync(path.join(dataDir, 'demension.db'));
+    const before = fs.readFileSync(path.join(dataDir, 'dementia.db'));
     const refused = await runCli(['file', '--path', file], dataDir, { MIGRATION_CODE: code });
     expect(refused.status).toBe(3);
     expect(refused.stderr).toContain('--replace');
-    expect(fs.readFileSync(path.join(dataDir, 'demension.db')).equals(before)).toBe(true);
+    expect(fs.readFileSync(path.join(dataDir, 'dementia.db')).equals(before)).toBe(true);
 
     const replaced = await runCli(['file', '--path', file, '--replace'], dataDir, { MIGRATION_CODE: code });
     expect(replaced.status, replaced.stderr).toBe(0);
     const backupDir = replaced.values.backup_dir;
     expect(backupDir).toContain(path.join(dataDir, 'backups', 'pre-migration-'));
-    expect(fs.readdirSync(backupDir).some((name) => name.includes('demension.db'))).toBe(true);
+    expect(fs.readdirSync(backupDir).some((name) => name.includes('dementia.db'))).toBe(true);
     expect(fs.readdirSync(backupDir).some((name) => name.includes('secret.key'))).toBe(true);
   }, 180000);
 
-  it('другой DEMENSION_SECRET_KEY в окружении отклоняется до записи: иначе SSH-доступы к нодам не расшифровались бы', async () => {
+  it('другой DEMENTIA_SECRET_KEY в окружении отклоняется до записи: иначе SSH-доступы к нодам не расшифровались бы', async () => {
     const dataDir = newDataDir();
     const file = path.join(dataDir, 'incoming.dpm');
     fs.writeFileSync(file, archive);
 
-    const result = await runCli(['file', '--path', file], dataDir, { MIGRATION_CODE: code, DEMENSION_SECRET_KEY: Buffer.alloc(32, 7).toString('base64') });
+    const result = await runCli(['file', '--path', file], dataDir, { MIGRATION_CODE: code, DEMENTIA_SECRET_KEY: Buffer.alloc(32, 7).toString('base64') });
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain('DEMENSION_SECRET_KEY');
-    expect(fs.existsSync(path.join(dataDir, 'demension.db'))).toBe(false);
+    expect(result.stderr).toContain('DEMENTIA_SECRET_KEY');
+    expect(fs.existsSync(path.join(dataDir, 'dementia.db'))).toBe(false);
   }, 120000);
 });

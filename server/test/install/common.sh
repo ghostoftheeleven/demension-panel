@@ -10,18 +10,20 @@ chown -R 1000:1000 /work
 cat > /usr/local/bin/systemctl <<'SHIM'
 #!/bin/bash
 echo "systemctl $*" >> /var/log/systemctl-shim.log
-UNIT=/etc/systemd/system/demension.service
+# Служба называется dementia.service; у версий до v0.1.4 — demension.service (новая создаёт её как псевдоним)
+UNIT=/etc/systemd/system/dementia.service
+[ -f "$UNIT" ] || UNIT=/etc/systemd/system/demension.service
 case "$1" in
   stop) pkill -f "dist/index.js" 2>/dev/null || true ;;
   restart|start)
-    if [ "${2:-}" = "demension.service" ] && [ -f "$UNIT" ]; then
+    if { [ "${2:-}" = "dementia.service" ] || [ "${2:-}" = "demension.service" ]; } && [ -f "$UNIT" ]; then
       pkill -f "dist/index.js" 2>/dev/null || true
       sleep 1
       WD=$(sed -n 's/^WorkingDirectory=//p' "$UNIT")
       ENVF=$(sed -n 's/^EnvironmentFile=//p' "$UNIT")
       EXEC=$(sed -n 's/^ExecStart=//p' "$UNIT")
       # setsid: служба не должна зависеть от терминала, из которого её запустили (в проверках интерактивного режима это pty)
-      (cd "$WD" && set -a && . "$ENVF" && set +a && umask 077 && setsid nohup $EXEC >> /var/log/demension.log 2>&1 < /dev/null &)
+      (cd "$WD" && set -a && . "$ENVF" && set +a && umask 077 && setsid nohup $EXEC >> /var/log/dementia.log 2>&1 < /dev/null &)
     fi ;;
   is-active) pgrep -f "dist/index.js" >/dev/null ;;
 esac

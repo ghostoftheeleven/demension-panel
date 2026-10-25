@@ -2,22 +2,23 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { dataDir } from '../config.js';
+import { panelEnv } from '../utils/env.js';
 
 const PREFIX = 'enc:v1:';
 let cachedKey: Buffer | null = null;
 
 /**
- * Мастер-ключ шифрования секретов в БД: DEMENSION_SECRET_KEY (base64, 32 байта)
+ * Мастер-ключ шифрования секретов в БД: DEMENTIA_SECRET_KEY (base64, 32 байта)
  * или файл data/secret.key, создаваемый при первом запуске с правами 600.
  */
 function getKey(): Buffer {
   if (cachedKey) return cachedKey;
 
-  const fromEnv = process.env.DEMENSION_SECRET_KEY;
+  const fromEnv = panelEnv('SECRET_KEY');
   if (fromEnv) {
     const key = Buffer.from(fromEnv, 'base64');
     if (key.length !== 32) {
-      throw new Error('DEMENSION_SECRET_KEY должен содержать 32 байта в base64');
+      throw new Error('DEMENTIA_SECRET_KEY должен содержать 32 байта в base64');
     }
     cachedKey = key;
     return key;

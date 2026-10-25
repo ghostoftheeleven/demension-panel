@@ -9,7 +9,7 @@
 
 | Тип | container_name | iface | conf_path | awg_tool | Где конфиг |
 |---|---|---|---|---|---|
-| Контейнер панели (`demension`) | `amnezia-awg` | `awg0` | `/opt/amnezia/awg/awg0.conf` | `awg` | На хосте, смонтирован в контейнер |
+| Контейнер панели (`dementia`) | `amnezia-awg` | `awg0` | `/opt/amnezia/awg/awg0.conf` | `awg` | На хосте, смонтирован в контейнер |
 | Приложение Amnezia, AWG (`amnezia`) | `amnezia-awg2` или `amnezia-awg` | `awg0` | `/opt/amnezia/awg/awg0.conf` | `awg` | Внутри контейнера |
 | Приложение Amnezia, legacy (`amnezia`) | `amnezia-awg` | `wg0` | `/opt/amnezia/awg/wg0.conf` | `wg` | Внутри контейнера |
 
@@ -40,8 +40,8 @@
    `AWG_NETWORK`, корректная обработка SIGTERM) → контейнер с `--cap-add NET_ADMIN --device /dev/net/tun` →
    открытие UDP-порта в ufw/firewalld → fail2ban (порт из `sshd -T`, backend auto/systemd, `ignoreip` с IP панели) →
    ожидание интерфейса до 20 с.
-5. Успех определяется по маркеру `---DEMENSION_OK---` и коду 0. После успеха сервер становится `managed_by =
-   demension`, `deployed_port = awg_port`.
+5. Успех определяется по маркеру `---DEMENTIA_OK---` и коду 0. После успеха сервер становится `managed_by =
+   dementia`, `deployed_port = awg_port`.
 
 Переустановка **сохраняет клиентов** (они есть в конфиге из БД). Подключённый ранее контейнер Amnezia заменяется
 контейнером панели с теми же ключами — выданные конфиги продолжают работать.
@@ -75,7 +75,7 @@ PUT и randomize ждут результата (`applyOrRollback` в routes/serv
 1. `detectContainers`: одной SSH-командой перебирает `docker ps -a`, берёт контейнеры, у которых имя или образ
    содержит `amnezia-awg`/`amneziawg`; для работающих читает `awg0.conf` или `wg0.conf`, определяет утилиту
    (`awg`/`wg`), читает `clientsTable` (имена клиентов Amnezia), отмечает контейнер панели (есть `demension.env`).
-   Вывод размечен маркерами `---CONTAINER/---CONF/---TOOL/---CLIENTS/---DEMENSION` (`parseScanOutput`).
+   Вывод размечен маркерами `---CONTAINER/---CONF/---TOOL/---CLIENTS/---DEMENTIA` (`parseScanOutput`).
 2. Выбирается контейнер панели, иначе первый работающий с конфигом.
 3. `parseServerConfig` извлекает ключ, адрес, порт, параметры (версия 3, если есть S3/S4/HPK/диапазоны H) и пиры.
 4. `adoptConfig` в транзакции: обновляет сервер фактическими значениями (порт, подсеть, ключи, параметры, поля

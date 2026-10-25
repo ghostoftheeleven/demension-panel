@@ -75,7 +75,7 @@ migrationRouter.get('/download', asyncHandler(async (req, res) => {
   const archive = MigrationService.buildArchive();
   console.log('[MIGRATION] Архив переноса скачан администратором: изменения в панели заблокированы до завершения переноса');
   res.setHeader('Cache-Control', 'no-store');
-  res.setHeader('Content-Disposition', contentDisposition('attachment', `demension-migration-${new Date().toISOString().slice(0, 10)}.dpm`));
+  res.setHeader('Content-Disposition', contentDisposition('attachment', `dementia-migration-${new Date().toISOString().slice(0, 10)}.dpm`));
   res.type('application/octet-stream').send(archive);
 }));
 

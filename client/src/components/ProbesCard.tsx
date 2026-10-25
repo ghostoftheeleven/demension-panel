@@ -8,7 +8,7 @@ import { ProbeBadges } from './ProbeBadges';
 const INTERVALS = [10, 15, 30, 60, 120, 360, 720, 1440];
 
 const inputClass =
-  'bg-paper border-2 border-ink rounded-xl px-3 py-1.5 text-ink placeholder-faint focus:outline-none focus:border-ink transition text-xs';
+  'bg-paper border border-line rounded-xl px-3 py-1.5 text-ink placeholder-faint focus:outline-none focus:border-mint transition text-xs';
 
 function intervalLabel(minutes: number): string {
   return minutes < 60 ? `${minutes} мин` : minutes === 1440 ? 'сутки' : `${minutes / 60} ч`;
@@ -125,7 +125,7 @@ export const ProbesCard: React.FC<{ onChanged?: () => void }> = ({ onChanged }) 
   const resultsFor = (serverId: number) => overview.results.filter((r) => r.server_id === serverId);
 
   return (
-    <div className="bg-card border-2 border-ink rounded-2xl shadow-brutal">
+    <div className="bg-card border border-line rounded-2xl shadow-pop">
       <button
         type="button"
         onClick={() => {
@@ -147,8 +147,8 @@ export const ProbesCard: React.FC<{ onChanged?: () => void }> = ({ onChanged }) 
       </button>
 
       {open && (
-        <form onSubmit={handleSave} className="px-5 pb-5 space-y-5 border-t-2 border-ink pt-4">
-          <div className="p-3 rounded-xl border-2 bg-warn-soft border-ink text-warn text-xs flex items-start gap-2">
+        <form onSubmit={handleSave} className="px-5 pb-5 space-y-5 border-t border-line pt-4">
+          <div className="p-3 rounded-xl border bg-warn-soft border-line text-warn text-xs flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
             <span>
               Проверку выполняют узлы сервиса <b>check-host.net</b> в выбранных странах: ему передаются адреса ваших нод. Проверяется
@@ -158,10 +158,10 @@ export const ProbesCard: React.FC<{ onChanged?: () => void }> = ({ onChanged }) 
 
           {message && (
             <div
-              className={`p-3 rounded-xl border-2 text-xs ${
+              className={`p-3 rounded-xl border text-xs ${
                 message.type === 'success'
-                  ? 'bg-ok-soft border-ink text-ok'
-                  : 'bg-bad-soft border-ink text-bad'
+                  ? 'bg-ok-soft border-line text-ok'
+                  : 'bg-bad-soft border-line text-bad'
               }`}
             >
               {message.text}
@@ -191,7 +191,7 @@ export const ProbesCard: React.FC<{ onChanged?: () => void }> = ({ onChanged }) 
                     type="button"
                     key={code}
                     onClick={() => toggleCountry(code)}
-                    className="text-[11px] bg-info-soft border-2 border-ink text-info rounded-lg px-2 py-1 hover:bg-info-soft"
+                    className="text-[11px] bg-info-soft border border-line text-info rounded-lg px-2 py-1 hover:bg-info-soft"
                     title="Убрать"
                   >
                     {countryFlag(code)} {countryName(code)} ✕
@@ -215,9 +215,9 @@ export const ProbesCard: React.FC<{ onChanged?: () => void }> = ({ onChanged }) 
                     <label
                       key={c.code}
                       title={c.cities.join(', ')}
-                      className={`flex items-center gap-2 text-xs rounded-lg px-2 py-1.5 border-2 cursor-pointer ${
-                        selected ? 'bg-info-soft border-ink text-ink' : 'bg-paper border-ink text-ink'
-                      } ${disabled ? 'opacity-40 cursor-not-allowed' : 'hover:border-ink'}`}
+                      className={`flex items-center gap-2 text-xs rounded-lg px-2 py-1.5 border cursor-pointer ${
+                        selected ? 'bg-info-soft border-line text-ink' : 'bg-paper border-line text-ink'
+                      } ${disabled ? 'opacity-40 cursor-not-allowed' : 'hover:border-faint'}`}
                     >
                       <input type="checkbox" checked={selected} disabled={disabled} onChange={() => toggleCountry(c.code)} />
                       <span>{countryFlag(c.code)}</span>
@@ -267,7 +267,7 @@ export const ProbesCard: React.FC<{ onChanged?: () => void }> = ({ onChanged }) 
             {overview.servers.length === 0 ? (
               <p className="text-xs text-faint">Установленных нод пока нет.</p>
             ) : (
-              <div className="border-2 border-ink rounded-xl overflow-hidden">
+              <div className="border border-line rounded-xl overflow-hidden">
                 <table className="w-full text-xs text-left">
                   <thead className="bg-paper text-muted">
                     <tr>
@@ -276,7 +276,7 @@ export const ProbesCard: React.FC<{ onChanged?: () => void }> = ({ onChanged }) 
                       <th className="p-2.5 font-medium">Результат</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y-2 divide-ink bg-paper">
+                  <tbody className="divide-y divide-line bg-paper">
                     {overview.servers.map((s) => (
                       <tr key={s.id}>
                         <td className="p-2.5">
@@ -330,7 +330,7 @@ export const ProbesCard: React.FC<{ onChanged?: () => void }> = ({ onChanged }) 
                 type="button"
                 onClick={handleRun}
                 disabled={!overview.settings.enabled || overview.status.running}
-                className="flex items-center gap-2 bg-soft hover:bg-soft-2 disabled:opacity-40 text-ink font-medium text-xs px-4 py-2 rounded-xl transition border-2 border-ink"
+                className="flex items-center gap-2 bg-soft hover:bg-soft-2 disabled:opacity-40 text-ink font-medium text-xs px-4 py-2 rounded-xl transition border border-line"
               >
                 <RefreshCw className={`w-3.5 h-3.5 text-info ${overview.status.running ? 'animate-spin' : ''}`} />
                 <span>Проверить сейчас</span>
@@ -338,7 +338,7 @@ export const ProbesCard: React.FC<{ onChanged?: () => void }> = ({ onChanged }) 
               <button
                 type="submit"
                 disabled={saving}
-                className="flex items-center gap-2 bg-mint hover:bg-mint disabled:opacity-50 text-ink font-bold text-xs px-5 py-2 rounded-xl transition border-2 border-ink shadow-brutal-sm btn-press"
+                className="flex items-center gap-2 bg-mint hover:bg-mint disabled:opacity-50 text-on-accent font-bold text-xs px-5 py-2 rounded-full transition btn-press hover:text-on-accent"
               >
                 {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                 <span>Сохранить</span>

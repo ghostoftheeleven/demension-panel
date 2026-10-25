@@ -1,7 +1,7 @@
 # Тесты
 
 Тесты сервера — vitest, каталог `server/test` (клиент проверяется типами, линтером и сборкой). Каждый тестовый файл
-получает собственный каталог данных (`test/setup.ts` → `DEMENSION_DATA_DIR`) и, следовательно, свою БД; файлы
+получает собственный каталог данных (`test/setup.ts` → `DEMENTIA_DATA_DIR`) и, следовательно, свою БД; файлы
 выполняются последовательно (`fileParallelism: false`).
 
 ```bash
@@ -79,7 +79,7 @@ npx vitest run --coverage --coverage.provider=v8 --coverage.include='src/**'
 скрипт — в `server/test/docker`:
 
 ```bash
-server/test/docker/nodes.sh up       # собрать образ, запустить demension-node-1 (SSH 2222) и demension-node-2 (SSH 2223)
+server/test/docker/nodes.sh up       # собрать образ, запустить dementia-node-1 (SSH 2222) и dementia-node-2 (SSH 2223)
 server/test/docker/nodes.sh status
 server/test/docker/nodes.sh down
 ```

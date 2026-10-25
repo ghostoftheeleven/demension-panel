@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # ==============================================================================
-# Demension Panel - AmneziaWG Remote Deployment Script
+# Dementia Panel - AmneziaWG Remote Deployment Script
 #
 # Скрипт передаётся панелью через stdin (не сохраняется на диск) с переменными:
 #   AWG_PORT      - UDP-порт AmneziaWG
@@ -189,7 +189,8 @@ if command -v fail2ban-client >/dev/null 2>&1; then
     *) IGNORE_IP="$IGNORE_IP $PANEL_IP" ;;
   esac
   mkdir -p /etc/fail2ban/jail.d
-  cat > /etc/fail2ban/jail.d/demension-sshd.local <<EOF
+  rm -f /etc/fail2ban/jail.d/demension-sshd.local
+  cat > /etc/fail2ban/jail.d/dementia-sshd.local <<EOF
 [sshd]
 enabled = true
 port = ${SSH_PORT}
@@ -200,7 +201,7 @@ maxretry = 4
 findtime = 600
 bantime = 86400
 EOF
-  chmod 644 /etc/fail2ban/jail.d/demension-sshd.local
+  chmod 644 /etc/fail2ban/jail.d/dementia-sshd.local
   systemctl enable fail2ban >/dev/null 2>&1 || true
   systemctl restart fail2ban >/dev/null 2>&1 || true
   echo "✓ Защита SSH (fail2ban) активирована (порт ${SSH_PORT}, maxretry=4, bantime=24h)"
@@ -212,7 +213,7 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
     echo "================================================================="
     echo "🎉 УСПЕХ: AmneziaWG успешно запущен и работает!"
     echo "================================================================="
-    echo "---DEMENSION_OK---"
+    echo "---DEMENTIA_OK---"
     exit 0
   fi
   sleep 2

@@ -50,7 +50,7 @@ describe('новая панель: откат при неудачном импо
     const { code, archive } = await exportOldPanel();
     const dataDir = newDataDir();
     await importInto(dataDir, code, archive);
-    const dbBefore = fs.readFileSync(path.join(dataDir, 'demension.db'));
+    const dbBefore = fs.readFileSync(path.join(dataDir, 'dementia.db'));
     const keyBefore = fs.readFileSync(path.join(dataDir, 'secret.key'));
 
     // БД «из будущего»: схема новее, чем умеет эта сборка
@@ -69,7 +69,7 @@ describe('новая панель: откат при неудачном импо
     const result = await runCli(['file', '--path', badFile, '--replace'], dataDir, { MIGRATION_CODE: code });
     expect(result.status).toBe(1);
     expect(result.stderr).toContain('более новой версией панели');
-    expect(fs.readFileSync(path.join(dataDir, 'demension.db')).equals(dbBefore)).toBe(true);
+    expect(fs.readFileSync(path.join(dataDir, 'dementia.db')).equals(dbBefore)).toBe(true);
     expect(fs.readFileSync(path.join(dataDir, 'secret.key')).equals(keyBefore)).toBe(true);
     expect(fs.existsSync(path.join(dataDir, 'ssl', 'fullchain.pem'))).toBe(true);
   }, 180000);
@@ -85,7 +85,7 @@ describe('новая панель: откат при неудачном импо
 
     const result = await runCli(['file', '--path', badFile], dataDir, { MIGRATION_CODE: code });
     expect(result.status).toBe(1);
-    expect(fs.existsSync(path.join(dataDir, 'demension.db'))).toBe(false);
+    expect(fs.existsSync(path.join(dataDir, 'dementia.db'))).toBe(false);
     expect(fs.existsSync(path.join(dataDir, 'secret.key'))).toBe(false);
   }, 120000);
 });
@@ -171,7 +171,7 @@ describe('новая панель: выбор сертификата после 
     expect(fs.existsSync(path.join(dataDir, 'ssl', 'privkey.pem'))).toBe(false);
     expect(setting('cf_token')).toMatch(/^enc:v1:/);
 
-    const target = new DatabaseSync(path.join(dataDir, 'demension.db'));
+    const target = new DatabaseSync(path.join(dataDir, 'dementia.db'));
     target.exec("DELETE FROM settings WHERE key = 'public_url'");
     target.close();
     const url = await runCli(['url', '--host', '203.0.113.5', '--port', '3001'], dataDir);

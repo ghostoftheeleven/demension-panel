@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Обновление панели из интерфейса (docs/releases.md). Запускается панелью через systemd-run отдельной службой
-# demension-update: install.sh останавливает demension.service, и процесс обновления не должен остановиться вместе с ней.
+# dementia-update: install.sh останавливает dementia.service, и процесс обновления не должен остановиться вместе с ней.
 #
 #   update-panel.sh КАТАЛОГ_ПАНЕЛИ КАТАЛОГ_СОСТОЯНИЯ ВЕРСИЯ ТЕКУЩАЯ_ВЕРСИЯ
 #
@@ -59,8 +59,14 @@ panel_up() { # ждёт ответа /api/health до 60 секунд
   return 1
 }
 
+service_name() { # dementia.service; до v0.1.4 служба называлась demension.service (install.sh мог не дойти до её замены)
+  if systemctl cat dementia.service >/dev/null 2>&1; then echo dementia.service; else echo demension.service; fi
+}
+
 ensure_running() { # панель не должна остаться остановленной
-  if ! systemctl is-active --quiet demension.service; then systemctl start demension.service || true; fi
+  local service
+  service="$(service_name)"
+  if ! systemctl is-active --quiet "$service"; then systemctl start "$service" || true; fi
 }
 
 OLD_REV="$(git_ rev-parse HEAD 2>/dev/null || true)"
@@ -102,29 +108,37 @@ fi
 
 echo "--- Откат на прежнюю версию ($OLD_REV)"
 write_status running "Обновление не удалось, откат на $FROM"
-systemctl stop demension.service || true
+systemctl stop "$(service_name)" || true
 git_ reset --hard "$OLD_REV"
 
-# БД — из резервной копии этого обновления (install.sh копирует её после остановки службы): новая версия могла изменить схему
+# БД — из резервной копии этого обновления (install.sh копирует её после остановки службы): новая версия могла изменить схему.
+# Файл БД до v0.1.4 назывался demension.db: копия восстанавливается под своим именем — его и ждёт возвращённая версия.
 BACKUP=""
-for f in "$INSTALL_DIR"/data/backups/demension.db.*; do
-  [ -f "$f" ] || continue
-  stamp="${f##*/demension.db.}"
-  if [[ "$stamp" =~ ^[0-9]{8}-[0-9]{6}$ ]] && [[ ! "$stamp" < "$START_STAMP" ]]; then BACKUP="$stamp"; fi
-done
-if [ -n "$BACKUP" ]; then
-  rm -f "$INSTALL_DIR/data/demension.db-wal" "$INSTALL_DIR/data/demension.db-shm"
-  for suffix in "" "-wal" "-shm"; do
-    if [ -f "$INSTALL_DIR/data/backups/demension.db${suffix}.$BACKUP" ]; then
-      cp -a "$INSTALL_DIR/data/backups/demension.db${suffix}.$BACKUP" "$INSTALL_DIR/data/demension.db${suffix}"
+BACKUP_NAME=""
+for name in dementia.db demension.db; do
+  for f in "$INSTALL_DIR"/data/backups/"$name".*; do
+    [ -f "$f" ] || continue
+    stamp="${f##*/$name.}"
+    if [[ "$stamp" =~ ^[0-9]{8}-[0-9]{6}$ ]] && [[ ! "$stamp" < "$START_STAMP" ]] && [[ ! "$stamp" < "$BACKUP" ]]; then
+      BACKUP="$stamp"
+      BACKUP_NAME="$name"
     fi
   done
-  echo "БД восстановлена из резервной копии $BACKUP"
+done
+if [ -n "$BACKUP" ]; then
+  rm -f "$INSTALL_DIR"/data/dementia.db "$INSTALL_DIR"/data/dementia.db-wal "$INSTALL_DIR"/data/dementia.db-shm
+  rm -f "$INSTALL_DIR"/data/demension.db "$INSTALL_DIR"/data/demension.db-wal "$INSTALL_DIR"/data/demension.db-shm
+  for suffix in "" "-wal" "-shm"; do
+    if [ -f "$INSTALL_DIR/data/backups/$BACKUP_NAME${suffix}.$BACKUP" ]; then
+      cp -a "$INSTALL_DIR/data/backups/$BACKUP_NAME${suffix}.$BACKUP" "$INSTALL_DIR/data/$BACKUP_NAME${suffix}"
+    fi
+  done
+  echo "БД восстановлена из резервной копии $BACKUP_NAME.$BACKUP"
 fi
 
 ROLLBACK_OK=false
 if (cd "$INSTALL_DIR" && npm ci --prefix server && npm ci --prefix client && npm run build); then
-  systemctl restart demension.service || true
+  systemctl restart "$(service_name)" || true
   if panel_up; then ROLLBACK_OK=true; fi
 fi
 

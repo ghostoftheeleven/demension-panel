@@ -15,7 +15,7 @@ CODE=$?
 tail -5 /tmp/busy.out
 [ "$CODE" -ne 0 ] || fail "установка при занятом порту завершилась успехом"
 grep -q "уже занят" /tmp/busy.out || fail "нет сообщения о занятом порте"
-[ ! -d /opt/demension-panel ] || fail "каталог установки создан, хотя порт занят"
+[ ! -d /opt/dementia-panel ] || fail "каталог установки создан, хотя порт занят"
 pkill -f "nc -l -p 3099" || true
 
 section "2. Первая установка без каких-либо переменных (порт по умолчанию 3001)"
@@ -54,13 +54,13 @@ API_VERSION=$(curl -s "$LOCAL_URL/api/version" -H "Authorization: Bearer $TOKEN"
 [ "$API_VERSION" = "$EXPECTED" ] || fail "API вернул версию «$API_VERSION»"
 
 section "4. Безопасность установки"
-stat -c '%a %U %n' /opt/demension-panel/server/.env /opt/demension-panel/data
-grep -q "$PASS" /opt/demension-panel/server/.env && fail "пароль записан в .env"
-grep -rq "$PASS" /opt/demension-panel/data 2>/dev/null && fail "пароль в открытом виде найден в data/"
-grep -q "$PASS" /var/log/demension.log 2>/dev/null && fail "пароль попал в журнал службы"
-cat /opt/demension-panel/server/.env
-cat /etc/systemd/system/demension.service | sed -n 1,20p
-grep -c "demension" /var/log/systemctl-shim.log | sed 's/^/вызовов systemctl: /'
+stat -c '%a %U %n' /opt/dementia-panel/server/.env /opt/dementia-panel/data
+grep -q "$PASS" /opt/dementia-panel/server/.env && fail "пароль записан в .env"
+grep -rq "$PASS" /opt/dementia-panel/data 2>/dev/null && fail "пароль в открытом виде найден в data/"
+grep -q "$PASS" /var/log/dementia.log 2>/dev/null && fail "пароль попал в журнал службы"
+cat /opt/dementia-panel/server/.env
+cat /etc/systemd/system/dementia.service | sed -n 1,20p
+grep -c "dementia" /var/log/systemctl-shim.log | sed 's/^/вызовов systemctl: /'
 
 section "5. Обновление поверх установленной панели: учётные данные не меняются"
 bash install.sh > /tmp/install2.out 2>&1
@@ -93,7 +93,7 @@ STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$LOCAL_URL/api/auth/log
 [ "$STATUS" = "200" ] || fail "заданные логин/пароль не подходят"
 
 section "8. CLI сброса пароля: без параметров выдаёт случайный пароль, логин сохраняется"
-CLI=$(cd /opt/demension-panel && node server/dist/cli/reset-admin.js)
+CLI=$(cd /opt/dementia-panel && node server/dist/cli/reset-admin.js)
 echo "$CLI"
 NEWPASS=$(echo "$CLI" | sed -n 's/^Новый пароль: //p' | tr -d '[:space:]')
 STATUS=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$LOCAL_URL/api/auth/login" -H 'Content-Type: application/json' -d "{\"username\":\"my.login\",\"password\":\"$NEWPASS\"}")
@@ -105,7 +105,7 @@ PANEL_USER='bad user!' PANEL_PASSWORD='LongEnough-123' bash install.sh > /tmp/ba
 PANEL_PORT=70000 bash install.sh > /tmp/badport.out 2>&1; [ $? -ne 0 ] && echo "OK: некорректный порт отклонён" || fail "некорректный порт принят"
 
 section "10. Обновление сохраняет добавленные вручную переменные .env и убирает пароль старых версий"
-ENVF=/opt/demension-panel/server/.env
+ENVF=/opt/dementia-panel/server/.env
 printf 'TRUST_PROXY=loopback\n# комментарий администратора\nPANEL_USER=old\nPANEL_PASSWORD=OldPlainPassword-1\n' >> "$ENVF"
 bash install.sh > /tmp/install5.out 2>&1 || fail "обновление с дополненным .env завершилось с ошибкой"
 cat "$ENVF"
@@ -116,24 +116,24 @@ grep -q 'PANEL_PASSWORD\|OldPlainPassword' "$ENVF" && fail "пароль ста�
 [ "$(stat -c '%a' "$ENVF")" = 600 ] || fail "права .env не 600"
 
 section "11. Обновление из git: код скачивается, пока панель работает"
-# /opt/demension-panel скопирован из /work и принадлежит не root: доверие к нему install.sh задаёт сам (safe.directory),
+# /opt/dementia-panel скопирован из /work и принадлежит не root: доверие к нему install.sh задаёт сам (safe.directory),
 # тестовой обвязке — через G; удалённый репозиторий /tmp/origin создаётся root
 git config --global user.email test@example.com && git config --global user.name test
-G() { git -c safe.directory=/opt/demension-panel "$@"; }
+G() { git -c safe.directory=/opt/dementia-panel "$@"; }
 rm -rf /tmp/origin && mkdir /tmp/origin && cp -r /work/. /tmp/origin/
 git -C /tmp/origin init -q -b main && git -C /tmp/origin add -A && git -C /tmp/origin commit -qm base
-G -C /opt/demension-panel init -q -b main
-G -C /opt/demension-panel remote add origin /tmp/origin
-G -C /opt/demension-panel fetch -q origin && G -C /opt/demension-panel reset -q origin/main
+G -C /opt/dementia-panel init -q -b main
+G -C /opt/dementia-panel remote add origin /tmp/origin
+G -C /opt/dementia-panel fetch -q origin && G -C /opt/dementia-panel reset -q origin/main
 echo marker > /tmp/origin/UPDATE_MARKER && git -C /tmp/origin add -A && git -C /tmp/origin commit -qm update
 bash install.sh > /tmp/install6.out 2>&1
 CODE=$?
 sed 's/\x1b\[[0-9;]*m//g' /tmp/install6.out | grep -E "Обновление|УСПЕХ|ERROR" || true
 [ "$CODE" -eq 0 ] || fail "обновление из git завершилось с ошибкой"
-[ -f /opt/demension-panel/UPDATE_MARKER ] || fail "git pull не выполнен"
+[ -f /opt/dementia-panel/UPDATE_MARKER ] || fail "git pull не выполнен"
 
 section "12. Ошибка git pull: панель не останавливается"
-G -C /opt/demension-panel remote set-url origin /nonexistent
+G -C /opt/dementia-panel remote set-url origin /nonexistent
 : > /var/log/systemctl-shim.log
 bash install.sh > /tmp/install7.out 2>&1
 CODE=$?

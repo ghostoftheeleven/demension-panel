@@ -117,17 +117,17 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/60 animate-in fade-in duration-200">
-      <div className="bg-card border-2 border-ink rounded-2xl w-full max-w-lg shadow-brutal overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 animate-in fade-in duration-200">
+      <div className="bg-card border border-line rounded-2xl w-full max-w-lg shadow-pop overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b-2 border-ink bg-card">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-line bg-card">
           <div className="flex items-center gap-2">
             <Server className="w-5 h-5 text-ok" />
             <h2 className="text-lg font-semibold text-ink">{editing ? 'Настройки сервера' : 'Добавить сервер'}</h2>
           </div>
           <button
             onClick={onClose}
-            className="text-muted hover:text-ink transition p-1 rounded-lg hover:bg-soft border-2 border-ink"
+            className="text-muted hover:text-ink transition p-1 rounded-lg hover:bg-soft border border-line"
           >
             <X className="w-5 h-5" />
           </button>
@@ -136,7 +136,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
         {/* Form */}
         {!editing && (
           <div className="px-6 pt-4">
-            <div className="grid grid-cols-2 gap-2 p-1 bg-paper border-2 border-ink rounded-xl">
+            <div className="grid grid-cols-2 gap-2 p-1 bg-paper border border-line rounded-xl">
               {(['manual', 'amnezia'] as const).map((m) => (
                 <button
                   key={m}
@@ -156,7 +156,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
         ) : (
         <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
           {error && (
-            <div className="p-3 bg-bad-soft border-2 border-ink rounded-xl text-bad text-sm">
+            <div className="p-3 bg-bad-soft border border-line rounded-xl text-bad text-sm">
               {error}
             </div>
           )}
@@ -171,7 +171,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
               placeholder="например: Frankfurt-01"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-ink transition text-sm"
+              className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-mint transition text-sm"
             />
           </div>
 
@@ -186,7 +186,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
                 placeholder="194.87.12.34"
                 value={host}
                 onChange={(e) => setHost(e.target.value)}
-                className="w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-ink transition text-sm"
+                className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-mint transition text-sm"
               />
             </div>
             <div>
@@ -197,7 +197,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
                 type="number"
                 value={sshPort}
                 onChange={(e) => setSshPort(e.target.value)}
-                className="w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2 text-ink focus:outline-none focus:border-ink transition text-sm"
+                className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink focus:outline-none focus:border-mint transition text-sm"
               />
             </div>
           </div>
@@ -210,7 +210,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
               type="text"
               value={sshUser}
               onChange={(e) => setSshUser(e.target.value)}
-              className="w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2 text-ink focus:outline-none focus:border-ink transition text-sm"
+              className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink focus:outline-none focus:border-mint transition text-sm"
             />
           </div>
 
@@ -219,7 +219,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
             <label className="block text-xs font-medium text-muted mb-1.5">
               Аутентификация SSH
             </label>
-            <div className="grid grid-cols-2 gap-2 p-1 bg-paper border-2 border-ink rounded-xl mb-3">
+            <div className="grid grid-cols-2 gap-2 p-1 bg-paper border border-line rounded-xl mb-3">
               <button
                 type="button"
                 onClick={() => setAuthType('password')}
@@ -252,7 +252,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
                 placeholder={editing && editingServer?.has_ssh_password ? 'Оставьте пустым, чтобы не менять' : 'Введите пароль SSH'}
                 value={sshPassword}
                 onChange={(e) => setSshPassword(e.target.value)}
-                className="w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-ink transition text-sm"
+                className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-mint transition text-sm"
               />
             ) : (
               <textarea
@@ -260,13 +260,13 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
                 placeholder={editing && editingServer?.has_ssh_key ? 'Оставьте пустым, чтобы не менять ключ' : 'Вставьте приватный ключ (-----BEGIN OPENSSH PRIVATE KEY-----)'}
                 value={sshKey}
                 onChange={(e) => setSshKey(e.target.value)}
-                className="w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-ink transition font-mono text-xs"
+                className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-mint transition font-mono text-xs"
               />
             )}
           </div>
 
           {/* AmneziaWG Network Settings */}
-          <div className="pt-2 border-t-2 border-ink">
+          <div className="pt-2 border-t border-line">
             <div className="flex items-center gap-1.5 text-xs font-medium text-ok mb-2">
               <Shield className="w-3.5 h-3.5" />
               <span>Параметры AmneziaWG</span>
@@ -280,7 +280,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
                   type="number"
                   value={awgPort}
                   onChange={(e) => setAwgPort(e.target.value)}
-                  className="w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2 text-ink focus:outline-none focus:border-ink transition text-sm"
+                  className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink focus:outline-none focus:border-mint transition text-sm"
                 />
               </div>
               <div>
@@ -293,7 +293,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
                   disabled={editing && hasClients}
                   title={editing && hasClients ? 'Подсеть нельзя менять, пока на сервере есть клиенты' : undefined}
                   onChange={(e) => setSubnet(e.target.value)}
-                  className="w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2 text-ink focus:outline-none focus:border-ink transition text-sm"
+                  className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink focus:outline-none focus:border-mint transition text-sm"
                 />
               </div>
             </div>
@@ -335,7 +335,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
             <button
               type="submit"
               disabled={loading}
-              className="bg-mint hover:bg-mint disabled:opacity-50 text-ink font-bold text-sm px-5 py-2 rounded-xl transition shadow-brutal-sm border-2 border-ink btn-press"
+              className="bg-mint hover:bg-mint disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2 rounded-full transition btn-press hover:text-on-accent"
             >
               {loading ? 'Сохранение...' : 'Сохранить сервер'}
             </button>

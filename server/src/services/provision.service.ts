@@ -109,7 +109,7 @@ function readDeployScript(): string {
 }
 
 /**
- * Разбор вывода скрипта сканирования (маркеры ---CONTAINER / ---CONF / ---TOOL / ---CLIENTS / ---DEMENSION)
+ * Разбор вывода скрипта сканирования (маркеры ---CONTAINER / ---CONF / ---TOOL / ---CLIENTS / ---DEMENTIA)
  */
 export function parseScanOutput(output: string): DetectedContainer[] {
   const containers: DetectedContainer[] = [];
@@ -160,7 +160,7 @@ export function parseScanOutput(output: string): DetectedContainer[] {
       current.tool = line.includes('awg') ? 'awg' : 'wg';
     } else if (current && line === '---CLIENTS') {
       mode = 'clients';
-    } else if (current && line === '---DEMENSION') {
+    } else if (current && line === '---DEMENTIA') {
       current.managedBy = 'demension';
     }
   }
@@ -285,7 +285,7 @@ export class ProvisionService {
       '  done',
       '  if docker exec "$c" sh -c "command -v awg" >/dev/null 2>&1; then echo "---TOOL awg"; else echo "---TOOL wg"; fi',
       `  if docker exec "$c" test -f ${AWG_DIR}/clientsTable; then echo "---CLIENTS"; docker exec "$c" cat ${AWG_DIR}/clientsTable; echo; echo "---ENDCLIENTS"; fi`,
-      `  if [ "$c" = "${PANEL_CONTAINER}" ] && [ -f ${AWG_DIR}/demension.env ] && docker inspect -f "{{range .Mounts}}{{.Destination}} {{end}}" "$c" 2>/dev/null | grep -q "${AWG_DIR}"; then echo "---DEMENSION"; fi`,
+      `  if [ "$c" = "${PANEL_CONTAINER}" ] && [ -f ${AWG_DIR}/demension.env ] && docker inspect -f "{{range .Mounts}}{{.Destination}} {{end}}" "$c" 2>/dev/null | grep -q "${AWG_DIR}"; then echo "---DEMENTIA"; fi`,
       'done',
     ].join('\n');
 
@@ -509,7 +509,7 @@ export class ProvisionService {
           : '';
         throw new Error(`Скрипт завершился с кодом ошибки ${result.code}.${hint}`);
       }
-      if (!result.stdout.includes('---DEMENSION_OK---')) {
+      if (!result.stdout.includes('---DEMENTIA_OK---')) {
         throw new Error('Скрипт не подтвердил успешный запуск AmneziaWG');
       }
 

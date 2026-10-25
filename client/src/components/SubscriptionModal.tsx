@@ -68,10 +68,10 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/60 animate-in fade-in duration-200">
-      <div className="bg-card border-2 border-ink rounded-2xl w-full max-w-lg shadow-brutal overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 animate-in fade-in duration-200">
+      <div className="bg-card border border-line rounded-2xl w-full max-w-lg shadow-pop overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b-2 border-ink bg-card">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-line bg-card">
           <div className="flex items-center gap-2.5">
             <Link2 className="w-5 h-5 text-ok" />
             <div>
@@ -81,7 +81,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="text-muted hover:text-ink transition p-1 rounded-lg hover:bg-soft border-2 border-ink"
+            className="text-muted hover:text-ink transition p-1 rounded-lg hover:bg-soft border border-line"
           >
             <X className="w-5 h-5" />
           </button>
@@ -96,14 +96,14 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
             </label>
             <div className="flex flex-wrap gap-1.5">
               {subscriber.servers.length === 0 ? (
-                <span className="text-xs text-warn bg-warn-soft px-2.5 py-1 rounded-lg border-2 border-ink">
+                <span className="text-xs text-warn bg-warn-soft px-2.5 py-1 rounded-lg border border-line">
                   Нет назначенных нод. Выберите серверы в настройках пользователя.
                 </span>
               ) : (
                 subscriber.servers.map((s) => (
                   <span
                     key={s.id}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-paper border-2 border-ink text-ink"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-paper border border-line text-ink"
                   >
                     <ServerIcon className="w-3.5 h-3.5 text-ok" />
                     <span>{s.name}</span>
@@ -135,11 +135,11 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                 type="text"
                 readOnly
                 value={subUrl}
-                className="flex-1 bg-paper border-2 border-ink rounded-xl px-3.5 py-2.5 text-xs text-ink font-mono focus:outline-none select-all"
+                className="flex-1 bg-paper border border-line rounded-xl px-3.5 py-2.5 text-xs text-ink font-mono focus:outline-none select-all"
               />
               <button
                 onClick={handleCopy}
-                className="flex items-center gap-1.5 bg-mint hover:bg-mint text-ink font-bold text-xs px-4 py-2.5 rounded-xl transition shadow-brutal-sm flex-shrink-0 border-2 border-ink btn-press"
+                className="flex items-center gap-1.5 bg-mint hover:bg-mint text-on-accent font-bold text-xs px-4 py-2.5 rounded-full transition flex-shrink-0 btn-press hover:text-on-accent"
               >
                 {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                 <span>{copied ? 'Скопировано!' : 'Копировать'}</span>
@@ -150,7 +150,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
           {/* QR Code */}
           {qrCodeUrl && (
             <div className="flex flex-col items-center space-y-2 pt-1">
-              <div className="p-3 bg-white rounded-2xl shadow-brutal">
+              <div className="p-3 bg-white rounded-2xl shadow-pop">
                 <img
                   src={qrCodeUrl}
                   alt="Subscription QR Code"
@@ -165,7 +165,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
           )}
 
           {/* HAPP & Incy Compatibility Notice */}
-          <div className="p-4 bg-paper border-2 border-ink rounded-2xl space-y-2 text-xs text-muted">
+          <div className="p-4 bg-paper border border-line rounded-2xl space-y-2 text-xs text-muted">
             <div className="flex items-center gap-2 text-ok font-semibold">
               <Smartphone className="w-4 h-4" />
               <span>Автоматическое обновление серверов (Auto-sync)</span>
@@ -179,10 +179,10 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3 border-t-2 border-ink bg-card flex justify-end">
+        <div className="px-6 py-3 border-t border-line bg-card flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-soft hover:bg-soft-2 text-ink rounded-xl text-xs font-medium transition border-2 border-ink"
+            className="px-4 py-2 bg-soft hover:bg-soft-2 text-ink rounded-xl text-xs font-medium transition border border-line"
           >
             Закрыть
           </button>

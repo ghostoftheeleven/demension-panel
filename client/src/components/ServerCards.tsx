@@ -163,16 +163,16 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
             <button
               key={s.id}
               onClick={() => onSelectServer(s.id)}
-              className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border-2 text-xs font-medium transition flex-shrink-0 ${
+              className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border text-xs font-medium transition flex-shrink-0 ${
                 isSelected
-                  ? 'bg-soft border-ink text-ink shadow-brutal '
-                  : 'bg-card border-ink text-muted hover:text-ink hover:bg-soft'
+                  ? 'bg-soft border-line text-ink shadow-pop '
+                  : 'bg-card border-line text-muted hover:text-ink hover:bg-soft'
               }`}
             >
               <span
                 className={`w-2 h-2 rounded-full ${
                   isOnline
-                    ? 'bg-mint shadow-brutal-sm '
+                    ? 'bg-mint  '
                     : s.status === 'installing'
                     ? 'bg-yellow animate-ping'
                     : s.status === 'error'
@@ -192,11 +192,11 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
 
       {/* Selected Server Detailed Card */}
       {selectedServer && (
-        <div className="bg-card border-2 border-ink rounded-2xl p-6 shadow-brutal space-y-6">
+        <div className="bg-card border border-line rounded-2xl p-6 shadow-pop space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             {/* Left Info */}
             <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-soft border-2 border-ink flex items-center justify-center flex-shrink-0">
+              <div className="w-12 h-12 rounded-2xl bg-soft border border-line flex items-center justify-center flex-shrink-0">
                 <ServerIcon className="w-6 h-6 text-ok" />
               </div>
               <div>
@@ -205,14 +205,14 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
                   <span
                     className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
                       selectedServer.status === 'online'
-                        ? 'bg-ok-soft text-ok border-2 border-ink'
+                        ? 'bg-ok-soft text-ok border border-line'
                         : selectedServer.status === 'installing'
-                        ? 'bg-warn-soft text-warn border-2 border-ink'
+                        ? 'bg-warn-soft text-warn border border-line'
                         : selectedServer.status === 'error'
-                        ? 'bg-bad-soft text-bad border-2 border-ink'
+                        ? 'bg-bad-soft text-bad border border-line'
                         : selectedServer.status === 'offline'
-                        ? 'bg-warn-soft text-warn border-2 border-ink'
-                        : 'bg-soft text-muted border-2 border-ink'
+                        ? 'bg-warn-soft text-warn border border-line'
+                        : 'bg-soft text-muted border border-line'
                     }`}
                   >
                     <span className="w-1.5 h-1.5 rounded-full bg-current" />
@@ -237,14 +237,14 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
             {/* Right Quick Actions */}
             <div className="flex flex-wrap items-center gap-2">
               {selectedServer.remote_panel_id ? (
-                <span className="text-xs text-warn bg-warn-soft border-2 border-ink px-3 py-2 rounded-xl">
+                <span className="text-xs text-warn bg-warn-soft border border-line px-3 py-2 rounded-xl">
                   Нода партнёра · {selectedServer.remote_panel_name}
                 </span>
               ) : (
               <>
               <button
                 onClick={() => onInstallServer(selectedServer)}
-                className="flex items-center gap-2 bg-mint text-ink font-bold text-xs px-4 py-2.5 rounded-xl transition shadow-brutal-sm border-2 border-ink btn-press"
+                className="flex items-center gap-2 bg-mint text-on-accent font-bold text-xs px-4 py-2.5 rounded-full transition btn-press"
               >
                 <Play className="w-3.5 h-3.5 fill-current" />
                 <span>
@@ -254,7 +254,7 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
 
               <button
                 onClick={() => onEditParams(selectedServer)}
-                className="flex items-center gap-1.5 bg-soft hover:bg-soft-2 text-ink text-xs font-medium px-3.5 py-2.5 rounded-xl border-2 border-ink transition"
+                className="flex items-center gap-1.5 bg-soft hover:bg-soft-2 text-ink text-xs font-medium px-3.5 py-2.5 rounded-xl border border-line transition"
                 title="Настроить заголовки и мусорные пакеты"
               >
                 <Settings2 className="w-3.5 h-3.5 text-ok" />
@@ -264,7 +264,7 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
               <button
                 onClick={() => handleTestSsh(selectedServer.id)}
                 disabled={testingSsh === selectedServer.id}
-                className="flex items-center gap-1.5 bg-soft hover:bg-soft-2 text-ink text-xs font-medium px-3.5 py-2.5 rounded-xl border-2 border-ink transition"
+                className="flex items-center gap-1.5 bg-soft hover:bg-soft-2 text-ink text-xs font-medium px-3.5 py-2.5 rounded-xl border border-line transition"
                 title="Проверить SSH-соединение"
               >
                 <KeyRound className="w-3.5 h-3.5 text-info" />
@@ -276,7 +276,7 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
                 <button
                   onClick={() => handleScan(selectedServer)}
                   disabled={scanning === selectedServer.id}
-                  className="flex items-center gap-1.5 bg-soft hover:bg-soft-2 text-ink text-xs font-medium px-3.5 py-2.5 rounded-xl border-2 border-ink transition"
+                  className="flex items-center gap-1.5 bg-soft hover:bg-soft-2 text-ink text-xs font-medium px-3.5 py-2.5 rounded-xl border border-line transition"
                   title="Найти уже установленный AmneziaWG и подключить без переустановки"
                 >
                   <ScanSearch className="w-3.5 h-3.5 text-info" />
@@ -286,7 +286,7 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
 
               <button
                 onClick={() => onEditServer(selectedServer)}
-                className="flex items-center gap-1.5 bg-soft hover:bg-soft-2 text-ink text-xs font-medium px-3.5 py-2.5 rounded-xl border-2 border-ink transition"
+                className="flex items-center gap-1.5 bg-soft hover:bg-soft-2 text-ink text-xs font-medium px-3.5 py-2.5 rounded-xl border border-line transition"
                 title="Хост, SSH-доступ, порт"
               >
                 <Pencil className="w-3.5 h-3.5 text-ink" />
@@ -299,7 +299,7 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
                 <button
                   onClick={() => handleSync(selectedServer.id)}
                   disabled={syncing === selectedServer.id}
-                  className="flex items-center gap-1.5 bg-soft hover:bg-soft-2 text-ink text-xs font-medium px-3.5 py-2.5 rounded-xl border-2 border-ink transition"
+                  className="flex items-center gap-1.5 bg-soft hover:bg-soft-2 text-ink text-xs font-medium px-3.5 py-2.5 rounded-xl border border-line transition"
                   title="Синхронизировать конфигурацию на сервере"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 text-ok ${syncing === selectedServer.id ? 'animate-spin' : ''}`} />
@@ -310,7 +310,7 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
               {!selectedServer.remote_panel_id && (
               <button
                 onClick={() => handleDelete(selectedServer)}
-                className="p-2.5 text-faint hover:text-bad hover:bg-soft rounded-xl transition border-2 border-ink"
+                className="p-2.5 text-faint hover:text-bad hover:bg-soft rounded-xl transition border border-line"
                 title="Удалить сервер"
               >
                 <Trash2 className="w-4 h-4" />
@@ -320,7 +320,7 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
           </div>
 
           {(selectedServer.needs_apply || selectedServer.needs_sync || selectedServer.last_error) && selectedServer.status !== 'uninstalled' && (
-            <div className="bg-warn-soft border-2 border-ink rounded-xl p-3.5 flex flex-wrap items-start justify-between gap-3 text-xs">
+            <div className="bg-warn-soft border border-line rounded-xl p-3.5 flex flex-wrap items-start justify-between gap-3 text-xs">
               <div className="flex items-start gap-2 text-warn">
                 <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                 <div className="space-y-1">
@@ -345,7 +345,7 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
           )}
 
           {selectedServer.remote_panel_id && (
-            <div className="bg-paper border-2 border-ink rounded-xl p-3.5 text-xs text-muted">
+            <div className="bg-paper border border-line rounded-xl p-3.5 text-xs text-muted">
               Нода предоставлена панелью партнёра «{selectedServer.remote_panel_name}». Параметры, установку и обновления выполняет владелец;
               вы можете создавать на ней клиентов и выдавать её своим пользователям. Владелец видит ваших клиентов и может их заблокировать.
               {selectedServer.status === 'uninstalled' && selectedServer.last_error && (
@@ -355,7 +355,7 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
           )}
 
           {!selectedServer.remote_panel_id && selectedServer.awg_version < selectedServer.latest_awg_version && (
-            <div className="bg-info-soft border-2 border-ink rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="bg-info-soft border border-line rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
               <span className="text-info">
                 Используются параметры обфускации устаревшего AmneziaWG 1.x. Актуальная версия — {selectedServer.latest_awg_version}.x
                 (S3/S4, диапазоны заголовков, защита заголовков).
@@ -372,7 +372,7 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
           )}
 
           {selectedServer.managed_by === 'amnezia' && (
-            <div className="bg-paper border-2 border-ink rounded-xl p-3.5 text-xs text-muted">
+            <div className="bg-paper border border-line rounded-xl p-3.5 text-xs text-muted">
               Подключён контейнер приложения Amnezia (<span className="font-mono">{selectedServer.container_name}</span>).
               Управляйте клиентами только из панели: изменения в приложении Amnezia будут перезаписаны при синхронизации.
               Смена порта или «Переустановить AWG» заменит его контейнером панели с теми же ключами и клиентами.
@@ -380,7 +380,7 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
           )}
 
           {!selectedServer.remote_panel_id && selectedServer.status !== 'uninstalled' && (
-            <div className="bg-paper border-2 border-ink rounded-xl p-3.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted">
+            <div className="bg-paper border border-line rounded-xl p-3.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-muted">
               <span className="font-medium text-ink">ПО ноды:</span>
               {selectedServer.node_info_at ? (
                 <>
@@ -407,32 +407,32 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
           )}
 
           {/* Obfuscation Badges Banner */}
-          <div className="bg-paper border-2 border-ink rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="bg-paper border border-line rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2 text-muted">
               <Shield className="w-4 h-4 text-ok" />
               <span className="font-medium text-ink">Активная маскировка (DPI Bypass):</span>
             </div>
             <div className="flex flex-wrap items-center gap-2 font-mono text-[11px]">
-              <span className="px-2 py-0.5 rounded bg-card border-2 border-ink text-ink">
+              <span className="px-2 py-0.5 rounded bg-card border border-line text-ink">
                 Jc: <strong className="text-ok">{selectedServer.jc}</strong>
               </span>
-              <span className="px-2 py-0.5 rounded bg-card border-2 border-ink text-ink">
+              <span className="px-2 py-0.5 rounded bg-card border border-line text-ink">
                 Junk: <strong className="text-ok">{selectedServer.jmin}-{selectedServer.jmax}B</strong>
               </span>
-              <span className="px-2 py-0.5 rounded bg-card border-2 border-ink text-ink">
+              <span className="px-2 py-0.5 rounded bg-card border border-line text-ink">
                 AWG: <strong className="text-ok">{selectedServer.awg_version >= 3 ? '3.x' : '1.x'}</strong>
               </span>
-              <span className="px-2 py-0.5 rounded bg-card border-2 border-ink text-ink">
+              <span className="px-2 py-0.5 rounded bg-card border border-line text-ink">
                 S1–S{selectedServer.s3 !== null ? 4 : 2}:{' '}
                 <strong className="text-info">
                   {[selectedServer.s1, selectedServer.s2, selectedServer.s3, selectedServer.s4].filter((v) => v !== null).join('/')}B
                 </strong>
               </span>
-              <span className="px-2 py-0.5 rounded bg-card border-2 border-ink text-ink">
+              <span className="px-2 py-0.5 rounded bg-card border border-line text-ink">
                 H1-H4: <strong className="text-accent">{selectedServer.h1.includes('-') ? 'диапазоны' : 'значения'}</strong>
               </span>
               {selectedServer.header_protection_key && (
-                <span className="px-2 py-0.5 rounded bg-card border-2 border-ink text-ink">
+                <span className="px-2 py-0.5 rounded bg-card border border-line text-ink">
                   <strong className="text-warn">Защита заголовков</strong>
                 </span>
               )}

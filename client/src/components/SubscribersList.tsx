@@ -70,13 +70,13 @@ export const SubscribersList: React.FC<SubscribersListProps> = ({
   );
 
   return (
-    <div className="bg-card border-2 border-ink rounded-2xl p-6 shadow-brutal space-y-5">
+    <div className="bg-card border border-line rounded-2xl p-6 shadow-pop space-y-5">
       {/* Table Header Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h3 className="text-base font-semibold text-ink flex items-center gap-2">
             <span>Пользователи и подписки (Incy)</span>
-            <span className="text-xs font-mono text-muted bg-soft px-2 py-0.5 rounded-full border-2 border-ink">
+            <span className="text-xs font-mono text-muted bg-soft px-2 py-0.5 rounded-full border border-line">
               {subscribers.length}
             </span>
           </h3>
@@ -93,14 +93,14 @@ export const SubscribersList: React.FC<SubscribersListProps> = ({
               placeholder="Поиск по имени..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="bg-paper border-2 border-ink rounded-xl pl-8 pr-3 py-1.5 text-xs text-ink placeholder-faint focus:outline-none focus:border-ink w-48 sm:w-60 transition"
+              className="bg-paper border border-line rounded-xl pl-8 pr-3 py-1.5 text-xs text-ink placeholder-faint focus:outline-none focus:border-mint w-48 sm:w-60 transition"
             />
             <Search className="w-3.5 h-3.5 text-faint absolute left-2.5 top-2" />
           </div>
 
           <button
             onClick={onAddSubscriber}
-            className="flex items-center gap-1.5 bg-mint text-ink font-bold text-xs px-3.5 py-1.5 rounded-xl transition shadow-brutal-sm border-2 border-ink btn-press"
+            className="flex items-center gap-1.5 bg-mint text-on-accent font-bold text-xs px-3.5 py-1.5 rounded-full transition btn-press"
           >
             <Plus className="w-4 h-4" />
             <span>Новый пользователь</span>
@@ -110,7 +110,7 @@ export const SubscribersList: React.FC<SubscribersListProps> = ({
 
       {/* Subscribers Table */}
       {filteredSubscribers.length === 0 ? (
-        <div className="text-center py-12 border-2 border-dashed border-ink rounded-xl">
+        <div className="text-center py-12 border border-dashed border-line rounded-xl">
           <Users className="w-10 h-10 text-faint mx-auto mb-2" />
           <p className="text-sm font-medium text-muted">Нет созданных пользователей</p>
           <p className="text-xs text-faint mt-1">
@@ -121,7 +121,7 @@ export const SubscribersList: React.FC<SubscribersListProps> = ({
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b-2 border-ink text-muted">
+              <tr className="border-b border-line text-muted">
                 <th className="pb-3 font-medium">Пользователь</th>
                 <th className="pb-3 font-medium">Доступные ноды (серверы)</th>
                 <th className="pb-3 font-medium">Статус</th>
@@ -129,7 +129,7 @@ export const SubscribersList: React.FC<SubscribersListProps> = ({
                 <th className="pb-3 font-medium text-right">Действия</th>
               </tr>
             </thead>
-            <tbody className="divide-y-2 divide-ink">
+            <tbody className="divide-y divide-line">
               {filteredSubscribers.map((sub) => {
                 const disabled = !sub.enabled;
 
@@ -148,7 +148,7 @@ export const SubscribersList: React.FC<SubscribersListProps> = ({
                           sub.servers.map((s) => (
                             <span
                               key={s.id}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] bg-paper border-2 border-ink text-ink"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] bg-paper border border-line text-ink"
                             >
                               <ServerIcon className="w-3 h-3 text-ok" />
                               <span>{s.name}</span>
@@ -163,15 +163,15 @@ export const SubscribersList: React.FC<SubscribersListProps> = ({
                     {/* Status Badge */}
                     <td className="py-3">
                       {disabled ? (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-soft text-muted border-2 border-ink">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-soft text-muted border border-line">
                           Отключен
                         </span>
                       ) : sub.suspended ? (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-warn-soft text-warn border-2 border-ink">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-warn-soft text-warn border border-line">
                           {sub.expired ? 'Срок истёк' : 'Лимит исчерпан'}
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-ok-soft text-ok border-2 border-ink">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-ok-soft text-ok border border-line">
                           <span className="w-1.5 h-1.5 rounded-full bg-mint animate-pulse" />
                           Активен
                         </span>
@@ -206,7 +206,7 @@ export const SubscribersList: React.FC<SubscribersListProps> = ({
                         {/* Subscription Link & QR Modal */}
                         <button
                           onClick={() => onShowSubscription(sub)}
-                          className="flex items-center gap-1 px-2.5 py-1 text-xs bg-ok-soft hover:bg-ok-soft text-ok border-2 border-ink rounded-lg transition font-medium"
+                          className="flex items-center gap-1 px-2.5 py-1 text-xs bg-ok-soft hover:bg-ok-soft text-ok border border-line rounded-lg transition font-medium"
                           title="Ссылка подписки и QR-код для Incy"
                         >
                           <Link2 className="w-3.5 h-3.5" />
@@ -217,7 +217,7 @@ export const SubscribersList: React.FC<SubscribersListProps> = ({
                         <button
                           onClick={() => onEditSubscriber(sub)}
                           title="Настроить доступ к серверам"
-                          className="p-1.5 text-muted hover:text-info hover:bg-soft rounded-lg transition border-2 border-ink"
+                          className="p-1.5 text-muted hover:text-info hover:bg-soft rounded-lg transition border border-line"
                         >
                           <Settings className="w-4 h-4" />
                         </button>
@@ -225,7 +225,7 @@ export const SubscribersList: React.FC<SubscribersListProps> = ({
                         <button
                           onClick={() => handleResetTraffic(sub)}
                           title="Обнулить трафик"
-                          className="p-1.5 text-muted hover:text-ok hover:bg-soft rounded-lg transition border-2 border-ink"
+                          className="p-1.5 text-muted hover:text-ok hover:bg-soft rounded-lg transition border border-line"
                         >
                           <RotateCcw className="w-4 h-4" />
                         </button>
@@ -247,7 +247,7 @@ export const SubscribersList: React.FC<SubscribersListProps> = ({
                         <button
                           onClick={() => handleDelete(sub)}
                           title="Удалить пользователя"
-                          className="p-1.5 text-muted hover:text-bad hover:bg-soft rounded-lg transition border-2 border-ink"
+                          className="p-1.5 text-muted hover:text-bad hover:bg-soft rounded-lg transition border border-line"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>

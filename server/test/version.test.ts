@@ -86,12 +86,12 @@ describe('номер версии и история изменений', () => {
 describe('проверка последнего релиза (VersionService)', () => {
   beforeEach(() => {
     VersionService.resetCache();
-    delete process.env.DEMENSION_UPDATE_CHECK;
+    delete process.env.DEMENTIA_UPDATE_CHECK;
   });
   afterEach(() => {
     vi.restoreAllMocks();
     vi.useRealTimers();
-    delete process.env.DEMENSION_UPDATE_CHECK;
+    delete process.env.DEMENTIA_UPDATE_CHECK;
   });
 
   it('новый релиз на GitHub — доступно обновление', async () => {
@@ -102,7 +102,7 @@ describe('проверка последнего релиза (VersionService)', 
 
     expect(info).toMatchObject({ current: PANEL_VERSION, latest: newer, update_available: true, error: null, check_enabled: true });
     expect(String(fetch.mock.calls[0][0])).toBe(`https://api.github.com/repos/${RELEASES_REPO}/releases/latest`);
-    expect((fetch.mock.calls[0][1] as RequestInit).headers).toMatchObject({ 'User-Agent': `demension-panel/${PANEL_VERSION}` });
+    expect((fetch.mock.calls[0][1] as RequestInit).headers).toMatchObject({ 'User-Agent': `dementia-panel/${PANEL_VERSION}` });
   });
 
   it('та же или более старая версия — обновления нет', async () => {
@@ -162,8 +162,8 @@ describe('проверка последнего релиза (VersionService)', 
     expect(info.error).toContain('vX.Y.Z');
   });
 
-  it('DEMENSION_UPDATE_CHECK=0 — панель не обращается к GitHub', async () => {
-    process.env.DEMENSION_UPDATE_CHECK = '0';
+  it('DEMENTIA_UPDATE_CHECK=0 — панель не обращается к GitHub', async () => {
+    process.env.DEMENTIA_UPDATE_CHECK = '0';
     const fetch = stubGithub({ status: 200, body: release('v99.0.0') });
     expect(await VersionService.getInfo(true)).toMatchObject({ current: PANEL_VERSION, latest: null, check_enabled: false, update_available: false });
     expect(fetch).not.toHaveBeenCalled();

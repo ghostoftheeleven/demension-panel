@@ -22,7 +22,7 @@ const CHANGE_WARNING =
   'а клиентам нужно будет обновить подписку или заново импортировать конфигурацию. Продолжить?';
 
 const inputBase =
-  'w-full bg-paper border-2 border-ink rounded-xl px-3 py-1.5 text-ink text-sm focus:outline-none font-mono';
+  'w-full bg-paper border border-line rounded-xl px-3 py-1.5 text-ink text-sm focus:outline-none font-mono';
 
 type FormState = {
   jc: string;
@@ -180,10 +180,10 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
   const extras = Object.entries(server.extra_params || {});
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/60 animate-in fade-in duration-200">
-      <div className="bg-card border-2 border-ink rounded-2xl w-full max-w-2xl shadow-brutal overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 animate-in fade-in duration-200">
+      <div className="bg-card border border-line rounded-2xl w-full max-w-2xl shadow-pop overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b-2 border-ink bg-card">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-line bg-card">
           <div className="flex items-center gap-2">
             <Dna className="w-5 h-5 text-ok" />
             <div>
@@ -193,7 +193,7 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
               <p className="text-xs text-muted">{server.name} ({server.host})</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-muted hover:text-ink transition p-1 rounded-lg hover:bg-soft border-2 border-ink">
+          <button onClick={onClose} className="text-muted hover:text-ink transition p-1 rounded-lg hover:bg-soft border border-line">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -201,7 +201,7 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
         {/* Form */}
         <form onSubmit={handleSave} className="p-6 space-y-5 overflow-y-auto">
           {outdated && (
-            <div className="p-3 bg-warn-soft border-2 border-ink rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs text-warn">
+            <div className="p-3 bg-warn-soft border border-line rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs text-warn">
               <span>
                 Сервер использует устаревший формат AmneziaWG 1.x (одиночные H, без S3/S4 и защиты заголовков).
               </span>
@@ -217,7 +217,7 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
             </div>
           )}
 
-          <div className="p-3 bg-paper border-2 border-ink rounded-xl flex items-start gap-3 text-xs text-muted">
+          <div className="p-3 bg-paper border border-line rounded-xl flex items-start gap-3 text-xs text-muted">
             <Info className="w-4 h-4 text-ok flex-shrink-0 mt-0.5" />
             <span>
               S1–S4, H1–H4 и ключ защиты заголовков должны совпадать на сервере и клиентах; Jc/Jmin/Jmax и I1–I5 — только у клиента.
@@ -228,19 +228,19 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
           <div className="space-y-3">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-ok">Мусорные пакеты</h3>
             <div className="grid grid-cols-3 gap-3">
-              <Field label="Jc (кол-во)" value={form.jc} onChange={set('jc')} accent="focus:border-ink" numeric />
-              <Field label="Jmin (байт)" value={form.jmin} onChange={set('jmin')} accent="focus:border-ink" numeric />
-              <Field label="Jmax (байт)" value={form.jmax} onChange={set('jmax')} accent="focus:border-ink" numeric />
+              <Field label="Jc (кол-во)" value={form.jc} onChange={set('jc')} accent="focus:border-mint" numeric />
+              <Field label="Jmin (байт)" value={form.jmin} onChange={set('jmin')} accent="focus:border-mint" numeric />
+              <Field label="Jmax (байт)" value={form.jmax} onChange={set('jmax')} accent="focus:border-mint" numeric />
             </div>
           </div>
 
           <div className="space-y-3">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-info">Дополнение пакетов (padding)</h3>
             <div className={`grid gap-3 ${modern ? 'grid-cols-4' : 'grid-cols-2'}`}>
-              <Field label="S1 (init)" value={form.s1} onChange={set('s1')} accent="focus:border-ink" numeric />
-              <Field label="S2 (response)" value={form.s2} onChange={set('s2')} accent="focus:border-ink" numeric />
-              {modern && <Field label="S3 (cookie)" value={form.s3} onChange={set('s3')} accent="focus:border-ink" numeric />}
-              {modern && <Field label="S4 (transport, ≤32)" value={form.s4} onChange={set('s4')} accent="focus:border-ink" numeric />}
+              <Field label="S1 (init)" value={form.s1} onChange={set('s1')} accent="focus:border-mint" numeric />
+              <Field label="S2 (response)" value={form.s2} onChange={set('s2')} accent="focus:border-mint" numeric />
+              {modern && <Field label="S3 (cookie)" value={form.s3} onChange={set('s3')} accent="focus:border-mint" numeric />}
+              {modern && <Field label="S4 (transport, ≤32)" value={form.s4} onChange={set('s4')} accent="focus:border-mint" numeric />}
             </div>
           </div>
 
@@ -249,10 +249,10 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
               Заголовки {modern ? '(диапазоны без пересечений, например 100000-200000)' : ''}
             </h3>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="H1 (initiation)" value={form.h1} onChange={set('h1')} accent="focus:border-ink" />
-              <Field label="H2 (response)" value={form.h2} onChange={set('h2')} accent="focus:border-ink" />
-              <Field label="H3 (cookie reply)" value={form.h3} onChange={set('h3')} accent="focus:border-ink" />
-              <Field label="H4 (transport)" value={form.h4} onChange={set('h4')} accent="focus:border-ink" />
+              <Field label="H1 (initiation)" value={form.h1} onChange={set('h1')} accent="focus:border-mint" />
+              <Field label="H2 (response)" value={form.h2} onChange={set('h2')} accent="focus:border-mint" />
+              <Field label="H3 (cookie reply)" value={form.h3} onChange={set('h3')} accent="focus:border-mint" />
+              <Field label="H4 (transport)" value={form.h4} onChange={set('h4')} accent="focus:border-mint" />
             </div>
           </div>
 
@@ -264,12 +264,12 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
                   value={form.header_protection_key}
                   onChange={(e) => set('header_protection_key')(e.target.value)}
                   placeholder="выключена"
-                  className={`${inputBase} focus:border-ink text-xs`}
+                  className={`${inputBase} focus:border-mint text-xs`}
                 />
                 <button
                   type="button"
                   onClick={() => set('header_protection_key')(generateKey())}
-                  className="flex items-center gap-1.5 flex-shrink-0 px-3 py-1.5 text-xs bg-soft hover:bg-soft-2 text-ink rounded-xl transition border-2 border-ink"
+                  className="flex items-center gap-1.5 flex-shrink-0 px-3 py-1.5 text-xs bg-soft hover:bg-soft-2 text-ink rounded-xl transition border border-line"
                   title="Сгенерировать новый ключ"
                 >
                   <KeyRound className="w-3.5 h-3.5 text-warn" />
@@ -292,7 +292,7 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
                 value={form[key]}
                 onChange={(e) => set(key)(e.target.value)}
                 placeholder={key.toUpperCase()}
-                className={`${inputBase} focus:border-ink text-xs`}
+                className={`${inputBase} focus:border-mint text-xs`}
               />
             ))}
           </div>
@@ -309,12 +309,12 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
           )}
 
           {/* Action Buttons */}
-          <div className="flex items-center justify-between pt-4 border-t-2 border-ink">
+          <div className="flex items-center justify-between pt-4 border-t border-line">
             <button
               type="button"
               onClick={handleRandomize}
               disabled={loading}
-              className="flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-ink hover:text-ink bg-soft hover:bg-soft-2 rounded-xl transition border-2 border-ink"
+              className="flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-ink hover:text-ink bg-soft hover:bg-soft-2 rounded-xl transition border border-line"
             >
               <Shuffle className="w-3.5 h-3.5 text-ok" />
               <span>Случайные параметры</span>
@@ -327,7 +327,7 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
               <button
                 type="submit"
                 disabled={loading}
-                className="flex items-center gap-2 bg-mint hover:bg-mint disabled:opacity-50 text-ink font-bold text-sm px-5 py-2 rounded-xl transition shadow-brutal-sm border-2 border-ink btn-press"
+                className="flex items-center gap-2 bg-mint hover:bg-mint disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2 rounded-full transition btn-press hover:text-on-accent"
               >
                 <Save className="w-4 h-4" />
                 <span>Сохранить</span>

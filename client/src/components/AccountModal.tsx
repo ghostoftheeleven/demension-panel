@@ -13,7 +13,7 @@ interface AccountModalProps {
 type AccountTab = 'password' | 'username';
 
 const inputClass =
-  'w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2 text-ink focus:outline-none focus:border-ink text-sm';
+  'w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink focus:outline-none focus:border-mint text-sm';
 const labelClass = 'block text-xs font-medium text-muted mb-1';
 
 export const AccountModal: React.FC<AccountModalProps> = ({ isOpen, user, onClose, onUsernameChanged }) => {
@@ -97,28 +97,28 @@ export const AccountModal: React.FC<AccountModalProps> = ({ isOpen, user, onClos
 
   const tabClass = (active: boolean) =>
     `flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition ${
-      active ? 'bg-soft text-ink shadow-brutal-sm' : 'text-muted hover:text-ink'
+      active ? 'bg-soft text-ink ' : 'text-muted hover:text-ink'
     }`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/60 animate-in fade-in duration-200">
-      <div className="bg-card border-2 border-ink rounded-2xl w-full max-w-md shadow-brutal overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 animate-in fade-in duration-200">
+      <div className="bg-card border border-line rounded-2xl w-full max-w-md shadow-pop overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b-2 border-ink bg-card">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-line bg-card">
           <div className="flex items-center gap-2">
             <Lock className="w-5 h-5 text-ok" />
             <h2 className="text-base font-semibold text-ink">Учётная запись администратора</h2>
           </div>
           <button
             onClick={onClose}
-            className="text-muted hover:text-ink transition p-1 rounded-lg hover:bg-soft border-2 border-ink"
+            className="text-muted hover:text-ink transition p-1 rounded-lg hover:bg-soft border border-line"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="px-6 pt-4">
-          <div className="flex gap-1 bg-paper p-1 rounded-xl border-2 border-ink">
+          <div className="flex gap-1 bg-paper p-1 rounded-xl border border-line">
             <button type="button" onClick={() => switchTab('password')} className={tabClass(tab === 'password')}>
               <Lock className="w-3.5 h-3.5 text-ok" />
               <span>Пароль</span>
@@ -133,10 +133,10 @@ export const AccountModal: React.FC<AccountModalProps> = ({ isOpen, user, onClos
         {/* Messages */}
         <div className="px-6 pt-4 space-y-3 empty:hidden">
           {error && (
-            <div className="p-3 bg-bad-soft border-2 border-ink rounded-xl text-bad text-xs">{error}</div>
+            <div className="p-3 bg-bad-soft border border-line rounded-xl text-bad text-xs">{error}</div>
           )}
           {success && (
-            <div className="p-3 bg-ok-soft border-2 border-ink rounded-xl text-ok text-xs flex items-center gap-2">
+            <div className="p-3 bg-ok-soft border border-line rounded-xl text-ok text-xs flex items-center gap-2">
               <Check className="w-4 h-4" />
               <span>{success}</span>
             </div>
@@ -188,7 +188,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({ isOpen, user, onClos
               <button
                 type="submit"
                 disabled={loading || !!success}
-                className="bg-mint hover:bg-mint disabled:opacity-50 text-ink font-bold text-sm px-5 py-2 rounded-xl transition shadow-brutal-sm border-2 border-ink btn-press"
+                className="bg-mint hover:bg-mint disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2 rounded-full transition btn-press hover:text-on-accent"
               >
                 {loading ? 'Сохранение...' : 'Обновить пароль'}
               </button>
@@ -237,7 +237,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({ isOpen, user, onClos
               <button
                 type="submit"
                 disabled={loading || !!success}
-                className="bg-mint hover:bg-mint disabled:opacity-50 text-ink font-bold text-sm px-5 py-2 rounded-xl transition shadow-brutal-sm border-2 border-ink btn-press"
+                className="bg-mint hover:bg-mint disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2 rounded-full transition btn-press hover:text-on-accent"
               >
                 {loading ? 'Сохранение...' : 'Сменить логин'}
               </button>

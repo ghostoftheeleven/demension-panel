@@ -291,10 +291,10 @@ export const SecurityView: React.FC<{
       {/* Notification banner */}
       {message && (
         <div
-          className={`p-4 rounded-2xl border-2 text-xs flex items-center justify-between ${
+          className={`p-4 rounded-2xl border text-xs flex items-center justify-between ${
             message.type === 'success'
-              ? 'bg-ok-soft border-ink text-ok'
-              : 'bg-bad-soft border-ink text-bad'
+              ? 'bg-ok-soft border-line text-ok'
+              : 'bg-bad-soft border-line text-bad'
           }`}
         >
           <span>{message.text}</span>
@@ -307,10 +307,10 @@ export const SecurityView: React.FC<{
       {/* ========================================================================= */}
       {/* SECTION 1: HTTPS & SSL Certificates */}
       {/* ========================================================================= */}
-      <div className="bg-card border-2 border-ink rounded-2xl p-6 sm:p-8 shadow-brutal space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b-2 border-ink">
+      <div className="bg-card border border-line rounded-2xl p-6 sm:p-8 shadow-pop space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-line">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-ok-soft border-2 border-ink flex items-center justify-center">
+            <div className="w-10 h-10 rounded-2xl bg-ok-soft border border-line flex items-center justify-center">
               <Lock className="w-5 h-5 text-ok" />
             </div>
             <div>
@@ -326,7 +326,7 @@ export const SecurityView: React.FC<{
             <div className="flex items-center gap-2">
               <span
                 className={`w-2.5 h-2.5 rounded-full ${
-                  sslStatus?.enabled ? 'bg-mint shadow-brutal-sm ' : 'bg-faint'
+                  sslStatus?.enabled ? 'bg-mint  ' : 'bg-faint'
                 }`}
               />
               <span className="text-xs font-semibold text-ink">
@@ -340,7 +340,7 @@ export const SecurityView: React.FC<{
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
                 sslStatus?.enabled
                   ? 'bg-soft text-ink hover:bg-soft-2'
-                  : 'bg-mint hover:bg-mint text-ink disabled:opacity-40'
+                  : 'bg-mint hover:bg-mint text-on-accent disabled:opacity-40'
               }`}
             >
               <Power className="w-3.5 h-3.5" />
@@ -351,7 +351,7 @@ export const SecurityView: React.FC<{
 
         {/* Current Certificate Details */}
         {sslStatus?.hasCert && (
-          <div className="p-4 bg-paper border-2 border-ink rounded-2xl flex flex-wrap items-center justify-between gap-4 text-xs">
+          <div className="p-4 bg-paper border border-line rounded-2xl flex flex-wrap items-center justify-between gap-4 text-xs">
             <div className="space-y-1">
               <span className="text-faint font-medium">Активный сертификат:</span>
               <div className="flex items-center gap-2 font-mono text-ink">
@@ -386,7 +386,7 @@ export const SecurityView: React.FC<{
 
         {/* SSL Method Tabs */}
         <div className="space-y-4">
-          <div className="flex items-center gap-2 border-b-2 border-ink pb-2 overflow-x-auto">
+          <div className="flex items-center gap-2 border-b border-line pb-2 overflow-x-auto">
             <button
               onClick={() => setSslTab('cf')}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-medium transition ${
@@ -430,7 +430,7 @@ export const SecurityView: React.FC<{
 
           {/* Tab 1: Cloudflare API */}
           {sslTab === 'cf' && (
-            <form onSubmit={handleIssueCf} className="space-y-4 bg-paper p-5 rounded-2xl border-2 border-ink">
+            <form onSubmit={handleIssueCf} className="space-y-4 bg-paper p-5 rounded-2xl border border-line">
               <div className="flex items-start gap-2 text-xs text-muted">
                 <Cloud className="w-4 h-4 text-warn flex-shrink-0 mt-0.5" />
                 <span>
@@ -453,13 +453,13 @@ export const SecurityView: React.FC<{
                       setCfToken(e.target.value);
                       setCfValid(null);
                     }}
-                    className="flex-1 min-w-0 bg-paper border-2 border-ink rounded-xl px-3.5 py-2 text-ink text-xs font-mono focus:outline-none focus:border-ink"
+                    className="flex-1 min-w-0 bg-paper border border-line rounded-xl px-3.5 py-2 text-ink text-xs font-mono focus:outline-none focus:border-mint"
                   />
                   <button
                     type="button"
                     onClick={handleVerifyCfToken}
                     disabled={cfVerifying || !cfToken.trim()}
-                    className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium bg-soft hover:bg-soft-2 text-ink rounded-xl transition disabled:opacity-50 border-2 border-ink"
+                    className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium bg-soft hover:bg-soft-2 text-ink rounded-xl transition disabled:opacity-50 border border-line"
                   >
                     {cfVerifying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5 text-ok" />}
                     <span>{cfValid ? 'Подтвержден' : 'Проверить'}</span>
@@ -484,7 +484,7 @@ export const SecurityView: React.FC<{
                     placeholder="например: panel.example.com"
                     value={cfDomain}
                     onChange={(e) => setCfDomain(e.target.value)}
-                    className="w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2 text-ink text-xs focus:outline-none focus:border-ink"
+                    className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink text-xs focus:outline-none focus:border-mint"
                   />
                 </div>
 
@@ -498,7 +498,7 @@ export const SecurityView: React.FC<{
                     placeholder="admin@example.com"
                     value={cfEmail}
                     onChange={(e) => setCfEmail(e.target.value)}
-                    className="w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2 text-ink text-xs focus:outline-none focus:border-ink"
+                    className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink text-xs focus:outline-none focus:border-mint"
                   />
                 </div>
               </div>
@@ -509,7 +509,7 @@ export const SecurityView: React.FC<{
                   id="cfARecord"
                   checked={cfCreateARecord}
                   onChange={(e) => setCfCreateARecord(e.target.checked)}
-                  className="rounded border-ink text-ok focus:ring-0"
+                  className="rounded border-line text-ok focus:ring-0"
                 />
                 <label htmlFor="cfARecord" className="text-xs text-ink cursor-pointer">
                   Автоматически добавить или обновить A-запись в Cloudflare на IP-адрес этого сервера
@@ -520,7 +520,7 @@ export const SecurityView: React.FC<{
                 <button
                   type="submit"
                   disabled={cfIssuing || !cfToken.trim()}
-                  className="flex items-center gap-2 bg-mint disabled:opacity-50 text-ink font-bold text-xs px-5 py-2.5 rounded-xl transition shadow-brutal-sm border-2 border-ink btn-press"
+                  className="flex items-center gap-2 bg-mint disabled:opacity-50 text-on-accent font-bold text-xs px-5 py-2.5 rounded-full transition btn-press"
                 >
                   {cfIssuing ? (
                     <>
@@ -540,7 +540,7 @@ export const SecurityView: React.FC<{
 
           {/* Tab 2: IP Certificate */}
           {sslTab === 'ip' && (
-            <form onSubmit={handleIssueIp} className="space-y-4 bg-paper p-5 rounded-2xl border-2 border-ink">
+            <form onSubmit={handleIssueIp} className="space-y-4 bg-paper p-5 rounded-2xl border border-line">
               <div className="flex items-start gap-2 text-xs text-muted">
                 <Server className="w-4 h-4 text-info flex-shrink-0 mt-0.5" />
                 <span>
@@ -548,7 +548,7 @@ export const SecurityView: React.FC<{
                 </span>
               </div>
 
-              <div className="p-3 bg-warn-soft border-2 border-ink rounded-xl text-warn text-xs flex items-start gap-2">
+              <div className="p-3 bg-warn-soft border border-line rounded-xl text-warn text-xs flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                 <span>
                   <b>Подписки с таким сертификатом работать не будут.</b> Сертификат самоподписанный, поэтому приложения (Incy, Clash и др.)
@@ -567,14 +567,14 @@ export const SecurityView: React.FC<{
                   placeholder="например: 194.87.12.34"
                   value={ipTarget}
                   onChange={(e) => setIpTarget(e.target.value)}
-                  className="w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2 text-ink text-xs font-mono focus:outline-none focus:border-ink"
+                  className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink text-xs font-mono focus:outline-none focus:border-mint"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={ipIssuing || !ipTarget.trim()}
-                className="flex items-center gap-2 bg-blue hover:bg-blue disabled:opacity-50 text-ink font-bold text-xs px-5 py-2.5 rounded-xl transition shadow-brutal-sm border-2 border-ink btn-press"
+                className="flex items-center gap-2 bg-blue hover:bg-blue disabled:opacity-50 text-on-accent font-bold text-xs px-5 py-2.5 rounded-full transition btn-press"
               >
                 {ipIssuing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
                 <span>Сгенерировать сертификат для IP</span>
@@ -584,8 +584,8 @@ export const SecurityView: React.FC<{
 
           {/* Tab 3: HTTP-01 */}
           {sslTab === 'http' && (
-            <form onSubmit={handleIssueHttp} className="space-y-4 bg-paper p-5 rounded-2xl border-2 border-ink">
-              <div className="p-3 bg-warn-soft border-2 border-ink rounded-xl text-warn text-xs flex items-center gap-2">
+            <form onSubmit={handleIssueHttp} className="space-y-4 bg-paper p-5 rounded-2xl border border-line">
+              <div className="p-3 bg-warn-soft border border-line rounded-xl text-warn text-xs flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 flex-shrink-0" />
                 <span>
                   Для HTTP-01 проверки ваш домен должен быть уже направлен на IP сервера, а порт 80 должен быть открыт в фаерволе.
@@ -601,7 +601,7 @@ export const SecurityView: React.FC<{
                     placeholder="panel.example.com"
                     value={httpDomain}
                     onChange={(e) => setHttpDomain(e.target.value)}
-                    className="w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2 text-ink text-xs focus:outline-none focus:border-ink"
+                    className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink text-xs focus:outline-none focus:border-mint"
                   />
                 </div>
                 <div>
@@ -612,7 +612,7 @@ export const SecurityView: React.FC<{
                     placeholder="admin@example.com"
                     value={httpEmail}
                     onChange={(e) => setHttpEmail(e.target.value)}
-                    className="w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2 text-ink text-xs focus:outline-none focus:border-ink"
+                    className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink text-xs focus:outline-none focus:border-mint"
                   />
                 </div>
               </div>
@@ -620,7 +620,7 @@ export const SecurityView: React.FC<{
               <button
                 type="submit"
                 disabled={httpIssuing || !httpDomain.trim()}
-                className="flex items-center gap-2 bg-mint hover:bg-mint disabled:opacity-50 text-ink font-bold text-xs px-5 py-2.5 rounded-xl transition shadow-brutal-sm border-2 border-ink btn-press"
+                className="flex items-center gap-2 bg-mint hover:bg-mint disabled:opacity-50 text-on-accent font-bold text-xs px-5 py-2.5 rounded-full transition btn-press hover:text-on-accent"
               >
                 {httpIssuing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
                 <span>Выпустить сертификат (HTTP-01)</span>
@@ -630,7 +630,7 @@ export const SecurityView: React.FC<{
 
           {/* Tab 4: Custom PEM */}
           {sslTab === 'custom' && (
-            <form onSubmit={handleSaveCustom} className="space-y-4 bg-paper p-5 rounded-2xl border-2 border-ink">
+            <form onSubmit={handleSaveCustom} className="space-y-4 bg-paper p-5 rounded-2xl border border-line">
               <div>
                 <label className="block text-xs font-medium text-muted mb-1">
                   Домен или IP (для идентификации)
@@ -640,7 +640,7 @@ export const SecurityView: React.FC<{
                   placeholder="например: mydomain.com или 194.87.1.1"
                   value={customDomain}
                   onChange={(e) => setCustomDomain(e.target.value)}
-                  className="w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2 text-ink text-xs focus:outline-none focus:border-ink"
+                  className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink text-xs focus:outline-none focus:border-mint"
                 />
               </div>
 
@@ -654,7 +654,7 @@ export const SecurityView: React.FC<{
                   placeholder="-----BEGIN CERTIFICATE----- ... -----END CERTIFICATE-----"
                   value={customCert}
                   onChange={(e) => setCustomCert(e.target.value)}
-                  className="w-full bg-paper border-2 border-ink rounded-xl p-3 text-ink text-[11px] font-mono focus:outline-none focus:border-ink"
+                  className="w-full bg-paper border border-line rounded-xl p-3 text-ink text-[11px] font-mono focus:outline-none focus:border-mint"
                 />
               </div>
 
@@ -668,14 +668,14 @@ export const SecurityView: React.FC<{
                   placeholder="-----BEGIN PRIVATE KEY----- ... -----END PRIVATE KEY-----"
                   value={customKey}
                   onChange={(e) => setCustomKey(e.target.value)}
-                  className="w-full bg-paper border-2 border-ink rounded-xl p-3 text-ink text-[11px] font-mono focus:outline-none focus:border-ink"
+                  className="w-full bg-paper border border-line rounded-xl p-3 text-ink text-[11px] font-mono focus:outline-none focus:border-mint"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={customSaving}
-                className="flex items-center gap-2 bg-violet hover:bg-violet disabled:opacity-50 text-ink font-bold text-xs px-5 py-2.5 rounded-xl transition shadow-brutal-sm border-2 border-ink btn-press"
+                className="flex items-center gap-2 bg-violet hover:bg-violet disabled:opacity-50 text-on-accent font-bold text-xs px-5 py-2.5 rounded-full transition btn-press"
               >
                 {customSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" />}
                 <span>Сохранить сертификаты</span>
@@ -688,10 +688,10 @@ export const SecurityView: React.FC<{
       {/* ========================================================================= */}
       {/* SECTION 2: Fail2ban SSH Protection */}
       {/* ========================================================================= */}
-      <div className="bg-card border-2 border-ink rounded-2xl p-6 sm:p-8 shadow-brutal space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b-2 border-ink">
+      <div className="bg-card border border-line rounded-2xl p-6 sm:p-8 shadow-pop space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-line">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-info-soft border-2 border-ink flex items-center justify-center">
+            <div className="w-10 h-10 rounded-2xl bg-info-soft border border-line flex items-center justify-center">
               <ShieldCheck className="w-5 h-5 text-info" />
             </div>
             <div>
@@ -706,8 +706,8 @@ export const SecurityView: React.FC<{
             <span
               className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
                 f2bStatus?.active
-                  ? 'bg-ok-soft text-ok border-2 border-ink'
-                  : 'bg-soft text-muted border-2 border-ink'
+                  ? 'bg-ok-soft text-ok border border-line'
+                  : 'bg-soft text-muted border border-line'
               }`}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-current" />
@@ -718,7 +718,7 @@ export const SecurityView: React.FC<{
               <button
                 onClick={handleSetupFail2ban}
                 disabled={f2bSettingUp}
-                className="flex items-center gap-1.5 bg-mint hover:bg-mint text-ink font-bold text-xs px-3.5 py-1.5 rounded-xl transition shadow-brutal-sm border-2 border-ink btn-press"
+                className="flex items-center gap-1.5 bg-mint hover:bg-mint text-on-accent font-bold text-xs px-3.5 py-1.5 rounded-full transition btn-press hover:text-on-accent"
               >
                 {f2bSettingUp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                 <span>Установить Fail2ban</span>
@@ -729,21 +729,21 @@ export const SecurityView: React.FC<{
 
         {/* Fail2ban Metrics */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="p-4 bg-paper border-2 border-ink rounded-2xl">
+          <div className="p-4 bg-paper border border-line rounded-2xl">
             <span className="text-xs text-faint">Неудачных попыток входа</span>
             <div className="text-2xl font-bold text-ink mt-1 font-mono">
               {f2bStatus?.totalFailed ?? 0}
             </div>
           </div>
 
-          <div className="p-4 bg-paper border-2 border-ink rounded-2xl">
+          <div className="p-4 bg-paper border border-line rounded-2xl">
             <span className="text-xs text-faint">Всего заблокировано ботов</span>
             <div className="text-2xl font-bold text-info mt-1 font-mono">
               {f2bStatus?.totalBanned ?? 0}
             </div>
           </div>
 
-          <div className="p-4 bg-paper border-2 border-ink rounded-2xl">
+          <div className="p-4 bg-paper border border-line rounded-2xl">
             <span className="text-xs text-faint">Активных банов (сейчас)</span>
             <div className="text-2xl font-bold text-ok mt-1 font-mono">
               {f2bStatus?.currentlyBanned?.length ?? 0}
@@ -767,7 +767,7 @@ export const SecurityView: React.FC<{
           </div>
 
           {f2bStatus?.currentlyBanned && f2bStatus.currentlyBanned.length > 0 ? (
-            <div className="border-2 border-ink rounded-2xl overflow-hidden">
+            <div className="border border-line rounded-2xl overflow-hidden">
               <table className="w-full text-left text-xs">
                 <thead className="bg-paper text-muted">
                   <tr>
@@ -776,7 +776,7 @@ export const SecurityView: React.FC<{
                     <th className="p-3 font-medium text-right">Действие</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y-2 divide-ink bg-paper">
+                <tbody className="divide-y divide-line bg-paper">
                   {f2bStatus.currentlyBanned.map((ip) => (
                     <tr key={ip} className="hover:bg-soft">
                       <td className="p-3 font-mono font-medium text-bad flex items-center gap-2">
@@ -789,7 +789,7 @@ export const SecurityView: React.FC<{
                       <td className="p-3 text-right">
                         <button
                           onClick={() => handleUnban(ip)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs bg-soft hover:bg-soft-2 text-ink rounded-lg transition border-2 border-ink"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs bg-soft hover:bg-soft-2 text-ink rounded-lg transition border border-line"
                         >
                           <Unlock className="w-3 h-3 text-ok" />
                           <span>Разблокировать</span>
@@ -801,7 +801,7 @@ export const SecurityView: React.FC<{
               </table>
             </div>
           ) : (
-            <div className="p-6 bg-paper border-2 border-dashed border-ink rounded-2xl text-center text-xs text-faint">
+            <div className="p-6 bg-paper border border-dashed border-line rounded-2xl text-center text-xs text-faint">
               В настоящее время нет заблокированных IP-адресов. Защита работает в штатном режиме.
             </div>
           )}
@@ -814,12 +814,12 @@ export const SecurityView: React.FC<{
             placeholder="Заблокировать IP вручную (например: 1.2.3.4)..."
             value={manualBanIp}
             onChange={(e) => setManualBanIp(e.target.value)}
-            className="flex-1 min-w-0 bg-paper border-2 border-ink rounded-xl px-3.5 py-2 text-xs text-ink font-mono focus:outline-none focus:border-ink"
+            className="flex-1 min-w-0 bg-paper border border-line rounded-xl px-3.5 py-2 text-xs text-ink font-mono focus:outline-none focus:border-mint"
           />
           <button
             type="submit"
             disabled={banning || !manualBanIp.trim()}
-            className="flex items-center gap-1.5 bg-danger hover:bg-danger text-ink font-bold text-xs px-4 py-2 rounded-xl transition disabled:opacity-50 border-2 border-ink shadow-brutal-sm btn-press"
+            className="flex items-center gap-1.5 bg-danger hover:bg-danger text-on-accent font-bold text-xs px-4 py-2 rounded-full transition disabled:opacity-50 btn-press hover:text-on-accent"
           >
             {banning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Ban className="w-3.5 h-3.5" />}
             <span>Заблокировать</span>

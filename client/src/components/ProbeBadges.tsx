@@ -21,7 +21,7 @@ export const ProbeBadges: React.FC<{ probes?: ProbeResult[]; showRtt?: boolean }
           <span
             key={p.country}
             title={`${countryName(p.country)}: ${mark.label} (${p.ok_nodes} из ${p.total_nodes} узлов${p.rtt_ms !== null ? `, ${p.rtt_ms} мс` : ''}); проверено ${new Date(p.checked_at).toLocaleString()}`}
-            className="inline-flex items-center gap-0.5 text-[11px] bg-paper border-2 border-ink rounded-md px-1.5 py-0.5"
+            className="inline-flex items-center gap-0.5 text-[11px] bg-paper border border-line rounded-md px-1.5 py-0.5"
           >
             <span>{countryFlag(p.country)}</span>
             <span className={`font-bold ${mark.className}`}>{mark.symbol}</span>

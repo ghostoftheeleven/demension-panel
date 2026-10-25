@@ -19,7 +19,7 @@
 |---|---|---|
 | Incy (по умолчанию) | `?format=awg`/`incy` или любой UA | base64 списка строк `awg://<base64url(.conf)>#<имя>` ([спецификация](https://docs.incy.cc/en/subscription-format/)) |
 | JSON Incy | `?format=json` | `{"type":"amneziawg","version":1,"servers":[{"name","config":"<base64url .conf>"}]}` |
-| mihomo | `?format=clash`/`mihomo` или UA `mihomo`, `clash-meta`, `clash-verge`, `flclash`, `clashmi`, `clash.party` | JSON (валидный YAML): `proxies` (`type: wireguard` + `amnezia-wg-option`), группа `Demension`, `rules: MATCH,Demension` |
+| mihomo | `?format=clash`/`mihomo` или UA `mihomo`, `clash-meta`, `clash-verge`, `flclash`, `clashmi`, `clash.party` | JSON (валидный YAML): `proxies` (`type: wireguard` + `amnezia-wg-option`), группа `Dementia`, `rules: MATCH,Dementia` |
 
 В `[Peer]` строка `PresharedKey` (в mihomo — `pre-shared-key`) пишется только если у клиента или сервера есть PSK.
 `AllowedIPs = 0.0.0.0/0, ::/0` — намеренно: у нод нет IPv6, и маршрут `::/0` в туннель не даёт IPv6-трафику клиента идти

@@ -88,7 +88,7 @@ function describeFailure(res: RawResponse): string {
   } catch {
     // не JSON
   }
-  if (res.status === 404) return 'Это не панель Demension нужной версии (метод переноса не найден): обновите прежнюю панель до v0.1.1 или новее';
+  if (res.status === 404) return 'Это не панель Dementia нужной версии (метод переноса не найден): обновите прежнюю панель до v0.1.1 или новее';
   return message || `HTTP ${res.status}`;
 }
 

@@ -109,10 +109,10 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/60 animate-in fade-in duration-200">
-      <div className="bg-card border-2 border-ink rounded-2xl w-full max-w-lg shadow-brutal overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 animate-in fade-in duration-200">
+      <div className="bg-card border border-line rounded-2xl w-full max-w-lg shadow-pop overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b-2 border-ink bg-card">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-line bg-card">
           <div className="flex items-center gap-2.5">
             <UserPlus className="w-5 h-5 text-ok" />
             <div>
@@ -126,7 +126,7 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="text-muted hover:text-ink transition p-1 rounded-lg hover:bg-soft border-2 border-ink"
+            className="text-muted hover:text-ink transition p-1 rounded-lg hover:bg-soft border border-line"
           >
             <X className="w-5 h-5" />
           </button>
@@ -135,7 +135,7 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto">
           {error && (
-            <div className="p-3 bg-bad-soft border-2 border-ink rounded-xl text-bad text-xs">
+            <div className="p-3 bg-bad-soft border border-line rounded-xl text-bad text-xs">
               {error}
             </div>
           )}
@@ -151,7 +151,7 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
               placeholder="например: Иван, Alex-iOS, Client-01"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2.5 text-ink placeholder-faint focus:outline-none focus:border-ink transition text-sm"
+              className="w-full bg-paper border border-line rounded-xl px-3.5 py-2.5 text-ink placeholder-faint focus:outline-none focus:border-mint transition text-sm"
             />
           </div>
 
@@ -165,7 +165,7 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
                 placeholder="без лимита"
                 value={limitGb}
                 onChange={(e) => setLimitGb(e.target.value)}
-                className="w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2.5 text-ink placeholder-faint focus:outline-none focus:border-ink transition text-sm"
+                className="w-full bg-paper border border-line rounded-xl px-3.5 py-2.5 text-ink placeholder-faint focus:outline-none focus:border-mint transition text-sm"
               />
             </div>
             <div>
@@ -174,7 +174,7 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
                 type="date"
                 value={expireDate}
                 onChange={(e) => setExpireDate(e.target.value)}
-                className="w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2.5 text-ink focus:outline-none focus:border-ink transition text-sm"
+                className="w-full bg-paper border border-line rounded-xl px-3.5 py-2.5 text-ink focus:outline-none focus:border-mint transition text-sm"
               />
             </div>
           </div>
@@ -207,7 +207,7 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
             </div>
 
             {servers.length === 0 ? (
-              <div className="p-4 bg-paper border-2 border-dashed border-ink rounded-2xl text-center text-xs text-faint">
+              <div className="p-4 bg-paper border border-dashed border-line rounded-2xl text-center text-xs text-faint">
                 Нет добавленных серверов. Сначала добавьте хотя бы один сервер AmneziaWG.
               </div>
             ) : (
@@ -220,10 +220,10 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
                     <div
                       key={s.id}
                       onClick={() => toggleServer(s.id)}
-                      className={`flex items-center justify-between p-3 rounded-2xl border-2 cursor-pointer transition select-none ${
+                      className={`flex items-center justify-between p-3 rounded-2xl border cursor-pointer transition select-none ${
                         isChecked
-                          ? 'bg-soft border-ink text-ink'
-                          : 'bg-paper border-ink text-muted hover:bg-card'
+                          ? 'bg-soft border-line text-ink'
+                          : 'bg-paper border-line text-muted hover:bg-card'
                       }`}
                     >
                       <div className="flex items-center gap-3">
@@ -263,7 +263,7 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
           </div>
 
           {/* Submit */}
-          <div className="flex items-center justify-end gap-3 pt-3 border-t-2 border-ink">
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-line">
             <button
               type="button"
               onClick={onClose}
@@ -274,7 +274,7 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
             <button
               type="submit"
               disabled={loading}
-              className="bg-mint hover:bg-mint disabled:opacity-50 text-ink font-bold text-sm px-5 py-2.5 rounded-xl transition shadow-brutal-sm border-2 border-ink btn-press"
+              className="bg-mint hover:bg-mint disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2.5 rounded-full transition btn-press hover:text-on-accent"
             >
               {loading ? 'Сохранение...' : editingSubscriber ? 'Обновить доступ' : 'Создать подписку'}
             </button>

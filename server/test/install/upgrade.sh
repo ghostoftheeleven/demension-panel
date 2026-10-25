@@ -26,7 +26,7 @@ cd /old-src && PANEL_USER=upgrade.admin PANEL_PASSWORD="$PASSWORD" bash install.
   exit 1
 }
 echo "установлена версия $OLD_VERSION"
-printf 'TRUST_PROXY=loopback\n# добавлено администратором\n' >> /opt/demension-panel/server/.env
+printf 'TRUST_PROXY=loopback\n# добавлено администратором\nDEMENSION_SELF_UPDATE=1\n' >> /opt/demension-panel/server/.env
 
 section "U2. Данные, HTTPS и сессия на старой версии"
 curl -s -X POST http://127.0.0.1:3001/api/auth/login -H 'Content-Type: application/json' -d "{\"username\":\"upgrade.admin\",\"password\":\"$PASSWORD\"}" > /tmp/login.json
@@ -65,7 +65,7 @@ STRIP < /tmp/update.out | grep -q "не менялись" || fail "устано�
 NEW_VERSION=$(node -p "require('/work/package.json').version")
 
 section "U4. Данные после обновления"
-node /harness/dump-db.mjs /opt/demension-panel/data/demension.db > /tmp/after.json
+node /harness/dump-db.mjs /opt/dementia-panel/data/dementia.db > /tmp/after.json
 node /harness/compare-dumps.mjs /tmp/before.json /tmp/after.json || fail "данные изменились при обновлении"
 node -e "
 const after = JSON.parse(require('fs').readFileSync('/tmp/after.json','utf8'));
@@ -74,10 +74,18 @@ if (after.__user_version <= before.__user_version) { console.error('версия
 if (!after.probe_results) { console.error('нет таблицы probe_results'); process.exit(1); }
 if (!after.servers[0] || after.servers[0].probe_port !== null) { console.error('probe_port не добавлен'); process.exit(1); }
 " || fail "схема БД не обновлена"
-[ "$(sha256sum /opt/demension-panel/data/ssl/privkey.pem | cut -d' ' -f1)" = "$CERT_BEFORE" ] || fail "сертификат TLS изменился"
-[ "$(cat /opt/demension-panel/data/secret.key)" = "$KEY_BEFORE" ] || fail "ключ шифрования изменился"
-ls /opt/demension-panel/data/backups/demension.db.* > /dev/null 2>&1 || fail "резервная копия БД перед обновлением не создана"
-ENVF=/opt/demension-panel/server/.env
+[ "$(sha256sum /opt/dementia-panel/data/ssl/privkey.pem | cut -d' ' -f1)" = "$CERT_BEFORE" ] || fail "сертификат TLS изменился"
+[ "$(cat /opt/dementia-panel/data/secret.key)" = "$KEY_BEFORE" ] || fail "ключ шифрования изменился"
+ls /opt/dementia-panel/data/backups/demension.db.* > /dev/null 2>&1 || fail "резервная копия БД перед обновлением не создана"
+# Переименование проекта: каталог, служба, файл БД и переменные .env переехали, старые имена остались ссылками
+[ -d /opt/dementia-panel ] && [ ! -L /opt/dementia-panel ] || fail "панель не перенесена в /opt/dementia-panel"
+[ "$(readlink /opt/demension-panel)" = /opt/dementia-panel ] || fail "/opt/demension-panel не стал ссылкой на новый каталог"
+[ -f /etc/systemd/system/dementia.service ] || fail "нет службы dementia.service"
+grep -qx 'Alias=demension.service' /etc/systemd/system/dementia.service || fail "у службы нет псевдонима demension.service"
+[ ! -f /etc/systemd/system/demension.service ] || fail "осталась служба прежнего имени"
+[ -f /opt/dementia-panel/data/dementia.db ] && [ ! -e /opt/dementia-panel/data/demension.db ] || fail "файл БД не переименован в dementia.db"
+grep -qx 'DEMENTIA_SELF_UPDATE=1' /opt/dementia-panel/server/.env || fail "переменная DEMENSION_* не переименована в .env"
+ENVF=/opt/dementia-panel/server/.env
 grep -qx 'TRUST_PROXY=loopback' "$ENVF" || fail "переменная .env потеряна при обновлении"
 [ "$(stat -c '%a' "$ENVF")" = 600 ] || fail "права .env не 600"
 
@@ -105,7 +113,7 @@ echo "подписка без нод пуста: [$SUBLINK]"
 section "U6. Обновление из панели (update-panel.sh + настоящий install.sh) до тега релиза и откат неудачного релиза"
 # Установка из /work — без .git; для обновления из панели нужен клон: локальный «GitHub» (/origin.git) с релизами новее текущего
 G() { git -c safe.directory='*' -c user.email=test@example.com -c user.name=test "$@"; }
-PANEL=/opt/demension-panel
+PANEL=/opt/dementia-panel
 CUR="v$NEW_VERSION"
 NEXT="v$(node -p "const v=require('$PANEL/package.json').version.split('.'); v[2]=+v[2]+1; v.join('.')")"
 BROKEN="v$(node -p "const v=require('$PANEL/package.json').version.split('.'); v[2]=+v[2]+2; v.join('.')")"
@@ -120,7 +128,7 @@ echo "const broken: number = 'не число';" >> /next/server/src/index.ts   
 G -C /next commit -qam "release $BROKEN" && G -C /next tag "$BROKEN"
 G -C /next push -q origin main --tags
 
-node /harness/dump-db.mjs "$PANEL/data/demension.db" > /tmp/before6.json
+node /harness/dump-db.mjs "$PANEL/data/dementia.db" > /tmp/before6.json
 bash "$PANEL/server/dist/scripts/update-panel.sh" "$PANEL" "$PANEL/data/update" "$NEXT" "$CUR"
 CODE=$?
 STRIP < "$PANEL/data/update/update.log" | tail -12
@@ -131,7 +139,7 @@ VERSION=$(api GET /api/version | node -p "JSON.parse(require('fs').readFileSync(
 [ "$VERSION" = "$NEXT" ] || fail "после обновления из панели версия $VERSION, ожидалась $NEXT"
 [ "$(curl -sk -o /dev/null -w '%{http_code}' "$LOCAL/api/auth/me" -H "Authorization: Bearer $TOKEN")" = 200 ] || fail "сессия не пережила обновление из панели"
 [ "$(api GET /api/version/update | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).state")" = success ] || fail "API не показывает результат обновления"
-node /harness/dump-db.mjs "$PANEL/data/demension.db" > /tmp/after6.json
+node /harness/dump-db.mjs "$PANEL/data/dementia.db" > /tmp/after6.json
 node /harness/compare-dumps.mjs /tmp/before6.json /tmp/after6.json sessions || fail "данные изменились при обновлении из панели"
 grep -qx 'TRUST_PROXY=loopback' "$PANEL/server/.env" || fail "переменная .env потеряна при обновлении из панели"
 
@@ -144,7 +152,7 @@ grep -q '"state":"rolled_back"' "$PANEL/data/update/status.json" || fail "пос
 VERSION=$(api GET /api/version | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).current")
 [ "$VERSION" = "$NEXT" ] || fail "после отката версия $VERSION, ожидалась $NEXT"
 [ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:3001/sub/$SUB_TOKEN")" = 200 ] || fail "подписка не работает после отката"
-node /harness/dump-db.mjs "$PANEL/data/demension.db" > /tmp/after6b.json
+node /harness/dump-db.mjs "$PANEL/data/dementia.db" > /tmp/after6b.json
 node /harness/compare-dumps.mjs /tmp/before6.json /tmp/after6b.json sessions || fail "данные изменились после отката"
 
 echo

@@ -80,7 +80,7 @@ describe('содержимое БД после переноса', () => {
     const result = await runCli(['file', '--path', file], dataDir, { MIGRATION_CODE: code });
     expect(result.status, result.stderr).toBe(0);
 
-    const target = new DatabaseSync(path.join(dataDir, 'demension.db'), { readOnly: true });
+    const target = new DatabaseSync(path.join(dataDir, 'dementia.db'), { readOnly: true });
     try {
       const imported = dumpTables(target);
       expect(Object.keys(imported)).toEqual(Object.keys(source));
@@ -149,12 +149,12 @@ describe('архив со старой схемой БД', () => {
     `;
     const prepared = spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', script], {
       cwd: SERVER_DIR,
-      env: { ...process.env, DEMENSION_DATA_DIR: legacyDir },
+      env: { ...process.env, DEMENTIA_DATA_DIR: legacyDir },
       encoding: 'utf-8',
       timeout: 60000,
     });
     expect(prepared.status, prepared.stderr).toBe(0);
-    const legacyDb = fs.readFileSync(path.join(legacyDir, 'demension.db'));
+    const legacyDb = fs.readFileSync(path.join(legacyDir, 'dementia.db'));
     expect(legacyDb.readUInt32BE(60)).toBe(7); // user_version в заголовке файла SQLite
 
     // Манифест берём у настоящего архива; БД подменяем на старую

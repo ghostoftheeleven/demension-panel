@@ -1,11 +1,10 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
-import { dataDir } from '../config.js';
+import { dbFile } from '../config.js';
 import { allocateIp } from '../utils/net.js';
 import { encryptSecret } from '../services/secrets.service.js';
 
-const dbPath = path.join(dataDir, 'demension.db');
-export const db = new DatabaseSync(dbPath);
+export const db = new DatabaseSync(dbFile);
 
 // Enable WAL mode for better concurrency and performance
 db.exec('PRAGMA journal_mode = WAL;');
@@ -209,7 +208,7 @@ const migrations: Array<() => void> = [
     addColumn('servers', "iface TEXT NOT NULL DEFAULT 'awg0'");
     addColumn('servers', "conf_path TEXT NOT NULL DEFAULT '/opt/amnezia/awg/awg0.conf'");
     addColumn('servers', "awg_tool TEXT NOT NULL DEFAULT 'awg'");
-    // demension — контейнер, развёрнутый панелью; amnezia — найденный контейнер приложения Amnezia
+    // dementia — контейнер, развёрнутый панелью; amnezia — найденный контейнер приложения Amnezia
     addColumn('servers', "managed_by TEXT NOT NULL DEFAULT 'demension'");
     // Пиры, импортированные из существующей установки: приватный ключ клиента панели неизвестен
     addColumn('clients', 'external INTEGER NOT NULL DEFAULT 0');

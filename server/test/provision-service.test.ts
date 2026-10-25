@@ -133,7 +133,7 @@ describe('применение параметров (doApply)', () => {
 
   it('при смене порта вместо перезапуска выполняется переустановка контейнера', async () => {
     const serverId = insertServer({ awgPort: 51840, deployedPort: 51820 });
-    const ssh = stubSsh(() => ({ stdout: '---DEMENSION_OK---\n' }));
+    const ssh = stubSsh(() => ({ stdout: '---DEMENTIA_OK---\n' }));
 
     const result = await ProvisionService.requestApply(serverId);
 
@@ -173,7 +173,7 @@ describe('установка (doInstall)', () => {
     const serverId = insertServer({ status: 'uninstalled', deployedPort: null, awgPort: 51850, subnet: '10.7.0.1/24' });
     const client = insertClient(serverId, { ip: '10.7.0.2' });
     const logs: string[] = [];
-    const ssh = stubSsh(() => ({ stdout: 'установка...\n---DEMENSION_OK---\n' }));
+    const ssh = stubSsh(() => ({ stdout: 'установка...\n---DEMENTIA_OK---\n' }));
 
     const result = await ProvisionService.installServer(serverId, (chunk) => logs.push(chunk));
 
@@ -199,7 +199,7 @@ describe('установка (doInstall)', () => {
     const ssh = stubSsh((call) =>
       isScan(call.command)
         ? { stdout: '---CONTAINER amnezia-awg2|amneziavpn/amnezia-awg:latest|true\n---CONF /opt/amnezia/awg/wg0.conf\n[Interface]\nListenPort = 51820\n---ENDCONF\n---TOOL wg' }
-        : { stdout: '---DEMENSION_OK---' }
+        : { stdout: '---DEMENTIA_OK---' }
     );
 
     expect((await ProvisionService.requestReinstall(serverId)).success).toBe(true);
@@ -231,7 +231,7 @@ describe('установка (doInstall)', () => {
 
   it('вторая одновременная установка отклоняется', async () => {
     const serverId = insertServer({ status: 'uninstalled' });
-    stubSsh(() => new Promise((resolve) => setTimeout(() => resolve({ stdout: '---DEMENSION_OK---' }), 30)));
+    stubSsh(() => new Promise((resolve) => setTimeout(() => resolve({ stdout: '---DEMENTIA_OK---' }), 30)));
 
     const first = ProvisionService.installServer(serverId);
     expect(ProvisionService.isInstalling(serverId)).toBe(true);
@@ -440,8 +440,8 @@ describe('разбор вывода сканирования (parseScanOutput)',
     expect(stopped).toMatchObject({ name: 'amnezia-awg', running: false, config: null });
   });
 
-  it('помечает контейнер панели маркером DEMENSION и переживает мусор в clientsTable', () => {
-    const [own] = parseScanOutput('---CONTAINER amnezia-awg|img|true\n---DEMENSION\n---CLIENTS\nне json\n---ENDCLIENTS');
+  it('помечает контейнер панели маркером DEMENTIA и переживает мусор в clientsTable', () => {
+    const [own] = parseScanOutput('---CONTAINER amnezia-awg|img|true\n---DEMENTIA\n---CLIENTS\nне json\n---ENDCLIENTS');
     expect(own.managedBy).toBe('demension');
     expect(own.clientNames).toEqual({});
   });
@@ -551,7 +551,7 @@ describe('защита чужого контейнера при установк
       ...(running ? ['---CONF /opt/amnezia/awg/wg0.conf', '[Interface]', 'PrivateKey = KEY', 'Address = 10.8.1.0/24', `ListenPort = ${port}`, '---ENDCONF', '---TOOL awg'] : []),
     ].join('\n');
   /** Заглушка узла: сканирование отдаёт `scan`, развёртывание успешно */
-  const node = (scan: string) => stubSsh((call) => (isScan(call.command) ? { stdout: scan } : { stdout: '---DEMENSION_OK---' }));
+  const node = (scan: string) => stubSsh((call) => (isScan(call.command) ? { stdout: scan } : { stdout: '---DEMENTIA_OK---' }));
 
   it('контейнер приложения Amnezia с именем контейнера панели не удаляется: установка отказывается до любых изменений', async () => {
     const serverId = insertServer({ status: 'uninstalled', deployedPort: null });
@@ -600,7 +600,7 @@ describe('защита чужого контейнера при установк
 
   it('собственный контейнер панели переустанавливается без препятствий', async () => {
     const serverId = insertServer();
-    const ssh = node('---CONTAINER amnezia-awg|amneziavpn/amneziawg-go:latest|true\n---DEMENSION');
+    const ssh = node('---CONTAINER amnezia-awg|amneziavpn/amneziawg-go:latest|true\n---DEMENTIA');
     expect((await ProvisionService.requestReinstall(serverId)).success).toBe(true);
     expect(deployed(ssh.calls)).toHaveLength(1);
   });
@@ -609,7 +609,7 @@ describe('защита чужого контейнера при установк
     const serverId = insertServer({ status: 'uninstalled', deployedPort: null });
     const ssh = stubSsh((call) => {
       if (isScan(call.command)) return { code: 1, stderr: 'sudo: a password is required' };
-      return { stdout: '---DEMENSION_OK---' };
+      return { stdout: '---DEMENTIA_OK---' };
     });
 
     const result = await ProvisionService.installServer(serverId);

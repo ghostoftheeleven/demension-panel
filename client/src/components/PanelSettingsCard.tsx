@@ -4,7 +4,7 @@ import type { PanelSettings } from '../types';
 import { api } from '../api';
 
 const inputClass =
-  'w-full bg-paper border-2 border-ink rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-ink transition text-sm';
+  'w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-mint transition text-sm';
 
 export const PanelSettingsCard: React.FC<{ onSaved?: (settings: PanelSettings) => void }> = ({ onSaved }) => {
   const [form, setForm] = useState<PanelSettings | null>(null);
@@ -39,7 +39,7 @@ export const PanelSettingsCard: React.FC<{ onSaved?: (settings: PanelSettings) =
   };
 
   return (
-    <form onSubmit={handleSave} className="bg-card border-2 border-ink rounded-2xl p-6 shadow-brutal space-y-4">
+    <form onSubmit={handleSave} className="bg-card border border-line rounded-2xl p-6 shadow-pop space-y-4">
       <div className="flex items-center gap-2">
         <Settings2 className="w-5 h-5 text-ok" />
         <h3 className="text-base font-semibold text-ink">Настройки панели</h3>
@@ -47,10 +47,10 @@ export const PanelSettingsCard: React.FC<{ onSaved?: (settings: PanelSettings) =
 
       {message && (
         <div
-          className={`p-3 rounded-xl border-2 text-xs ${
+          className={`p-3 rounded-xl border text-xs ${
             message.type === 'success'
-              ? 'bg-ok-soft border-ink text-ok'
-              : 'bg-bad-soft border-ink text-bad'
+              ? 'bg-ok-soft border-line text-ok'
+              : 'bg-bad-soft border-line text-bad'
           }`}
         >
           {message.text}
@@ -95,7 +95,7 @@ export const PanelSettingsCard: React.FC<{ onSaved?: (settings: PanelSettings) =
         <button
           type="submit"
           disabled={saving}
-          className="flex items-center gap-2 bg-mint hover:bg-mint disabled:opacity-50 text-ink font-bold text-sm px-5 py-2 rounded-xl transition border-2 border-ink shadow-brutal-sm btn-press"
+          className="flex items-center gap-2 bg-mint hover:bg-mint disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2 rounded-full transition btn-press hover:text-on-accent"
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           <span>Сохранить</span>

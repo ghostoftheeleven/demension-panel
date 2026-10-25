@@ -23,12 +23,14 @@ set -e
 [ -f "$STUB_DIR/early-fail" ] && { echo "нет сети"; exit 1; }
 git -c safe.directory="$PWD" fetch --no-tags origin "+refs/tags/$PANEL_UPDATE_REF:refs/tags/$PANEL_UPDATE_REF"
 git -c safe.directory="$PWD" merge --ff-only "refs/tags/$PANEL_UPDATE_REF"
-systemctl stop demension.service
+systemctl stop dementia.service
 mkdir -p data/backups
-for f in data/demension.db*; do cp -a "$f" "data/backups/$(basename "$f").$(date +%Y%m%d-%H%M%S)"; done
-echo "migrated by $PANEL_UPDATE_REF" > data/demension.db
+for f in data/dementia.db* data/demension.db*; do [ -f "$f" ] || continue; cp -a "$f" "data/backups/$(basename "$f").$(date +%Y%m%d-%H%M%S)"; done
+# Новая версия при запуске переименовывает файл БД версий до v0.1.4
+if [ -f data/demension.db ]; then mv data/demension.db data/dementia.db; fi
+echo "migrated by $PANEL_UPDATE_REF" > data/dementia.db
 if [ -f "$STUB_DIR/install-fail" ]; then printf '\\033[0;31mсборка не удалась\\033[0m\\n'; exit 1; fi
-systemctl restart demension.service
+systemctl restart dementia.service
 `;
 
 const STUBS: Record<string, string> = {
@@ -62,7 +64,7 @@ describe.skipIf(!BASH)('скрипт обновления панели (update-p
   const rev: Record<string, string> = {};
 
   beforeAll(() => {
-    root = fs.mkdtempSync(path.join(os.tmpdir(), 'demension-update-'));
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'dementia-update-'));
     origin = path.join(root, 'origin.git');
     const seed = path.join(root, 'seed');
     git(root, 'init', '-q', '--bare', '-b', 'main', origin);
@@ -70,7 +72,7 @@ describe.skipIf(!BASH)('скрипт обновления панели (update-p
     fs.writeFileSync(path.join(seed, '.gitignore'), 'data/\nserver/.env\n');
     fs.writeFileSync(path.join(seed, 'install.sh'), FAKE_INSTALL);
     for (const version of ['1.0.0', '1.1.0']) {
-      fs.writeFileSync(path.join(seed, 'package.json'), JSON.stringify({ name: 'demension-panel', version }) + '\n');
+      fs.writeFileSync(path.join(seed, 'package.json'), JSON.stringify({ name: 'dementia-panel', version }) + '\n');
       git(seed, 'add', '-A');
       git(seed, 'commit', '-q', '-m', `release ${version}`);
       git(seed, 'tag', `v${version}`);
@@ -88,7 +90,7 @@ describe.skipIf(!BASH)('скрипт обновления панели (update-p
     git(installDir, 'reset', '-q', '--hard', 'v1.0.0'); // установлена прежняя версия
     fs.mkdirSync(path.join(installDir, 'data'), { recursive: true });
     fs.mkdirSync(path.join(installDir, 'server'), { recursive: true });
-    fs.writeFileSync(path.join(installDir, 'data', 'demension.db'), 'ORIGINAL\n');
+    fs.writeFileSync(path.join(installDir, 'data', 'dementia.db'), 'ORIGINAL\n');
     fs.writeFileSync(path.join(installDir, 'server', '.env'), 'PORT=3999\nNODE_ENV=production\n');
     fs.mkdirSync(stubDir);
     for (const [name, body] of Object.entries(STUBS)) fs.writeFileSync(path.join(stubDir, name), body, { mode: 0o755 });
@@ -110,7 +112,8 @@ describe.skipIf(!BASH)('скрипт обновления панели (update-p
       log: read(path.join(stateDir, 'update.log')),
       calls: read(path.join(stubDir, 'calls.log')),
       head: git(installDir, 'rev-parse', 'HEAD'),
-      db: read(path.join(installDir, 'data', 'demension.db')),
+      db: read(path.join(installDir, 'data', 'dementia.db')),
+      legacyDb: read(path.join(installDir, 'data', 'demension.db')),
       up: fs.existsSync(path.join(stubDir, 'up')),
     };
   }
@@ -153,7 +156,7 @@ describe.skipIf(!BASH)('скрипт обновления панели (update-p
     expect(r.status.state).toBe('failed');
     expect(r.status.message).toContain('откат не удались');
     expect(r.head).toBe(rev['v1.0.0']);
-    expect(r.calls).toContain('systemctl start demension.service');
+    expect(r.calls).toContain('systemctl start dementia.service');
     expect(r.up).toBe(true);
   });
 
@@ -177,6 +180,25 @@ describe.skipIf(!BASH)('скрипт обновления панели (update-p
     expect(r.head).toBe(rev['v1.0.0']);
     expect(r.db).toBe('ORIGINAL\n');
     expect(r.calls).not.toContain('systemctl stop');
+  });
+
+  it('откат с версии, где БД ещё называлась demension.db: восстанавливается файл с прежним именем', () => {
+    // Установлена версия до переименования проекта (Demension): её БД — demension.db
+    fs.renameSync(path.join(installDir, 'data', 'dementia.db'), path.join(installDir, 'data', 'demension.db'));
+    fs.writeFileSync(path.join(stubDir, 'install-fail'), '');
+    const r = update('v1.1.0');
+    expect(r.status.state).toBe('rolled_back');
+    expect(r.legacyDb).toBe('ORIGINAL\n');
+    expect(fs.existsSync(path.join(installDir, 'data', 'dementia.db'))).toBe(false);
+    expect(r.log).toContain('БД восстановлена из резервной копии demension.db.');
+  });
+
+  it('успешное обновление с версии, где БД называлась demension.db', () => {
+    fs.renameSync(path.join(installDir, 'data', 'dementia.db'), path.join(installDir, 'data', 'demension.db'));
+    const r = update('v1.1.0');
+    expect(r.status.state).toBe('success');
+    expect(r.db).toBe('migrated by v1.1.0\n');
+    expect(r.legacyDb).toBe('');
   });
 
   it('версия не формата vX.Y.Z не принимается', () => {

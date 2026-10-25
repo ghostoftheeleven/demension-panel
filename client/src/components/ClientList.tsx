@@ -96,13 +96,13 @@ export const ClientList: React.FC<ClientListProps> = ({
   );
 
   return (
-    <div className="bg-card border-2 border-ink rounded-2xl p-6 shadow-brutal space-y-5">
+    <div className="bg-card border border-line rounded-2xl p-6 shadow-pop space-y-5">
       {/* Table Header Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h3 className="text-base font-semibold text-ink flex items-center gap-2">
             <span>Клиенты AmneziaWG</span>
-            <span className="text-xs font-mono text-muted bg-soft px-2 py-0.5 rounded-full border-2 border-ink">
+            <span className="text-xs font-mono text-muted bg-soft px-2 py-0.5 rounded-full border border-line">
               {clients.length}
             </span>
           </h3>
@@ -117,14 +117,14 @@ export const ClientList: React.FC<ClientListProps> = ({
               placeholder="Поиск по имени или IP..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="bg-paper border-2 border-ink rounded-xl pl-8 pr-3 py-1.5 text-xs text-ink placeholder-faint focus:outline-none focus:border-ink w-48 sm:w-60 transition"
+              className="bg-paper border border-line rounded-xl pl-8 pr-3 py-1.5 text-xs text-ink placeholder-faint focus:outline-none focus:border-mint w-48 sm:w-60 transition"
             />
             <Search className="w-3.5 h-3.5 text-faint absolute left-2.5 top-2" />
           </div>
 
           <button
             onClick={onAddClient}
-            className="flex items-center gap-1.5 bg-mint hover:bg-mint text-ink font-bold text-xs px-3.5 py-1.5 rounded-xl transition shadow-brutal-sm border-2 border-ink btn-press"
+            className="flex items-center gap-1.5 bg-mint hover:bg-mint text-on-accent font-bold text-xs px-3.5 py-1.5 rounded-full transition btn-press hover:text-on-accent"
           >
             <Plus className="w-4 h-4" />
             <span>Добавить клиента</span>
@@ -134,7 +134,7 @@ export const ClientList: React.FC<ClientListProps> = ({
 
       {/* Clients Table */}
       {filteredClients.length === 0 ? (
-        <div className="text-center py-12 border-2 border-dashed border-ink rounded-xl">
+        <div className="text-center py-12 border border-dashed border-line rounded-xl">
           <Laptop className="w-10 h-10 text-faint mx-auto mb-2" />
           <p className="text-sm font-medium text-muted">Нет добавленных клиентов</p>
           <p className="text-xs text-faint mt-1">
@@ -145,7 +145,7 @@ export const ClientList: React.FC<ClientListProps> = ({
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b-2 border-ink text-muted">
+              <tr className="border-b border-line text-muted">
                 <th className="pb-3 font-medium">Клиент / Устройство</th>
                 <th className="pb-3 font-medium">IP адрес</th>
                 <th className="pb-3 font-medium">Статус</th>
@@ -154,7 +154,7 @@ export const ClientList: React.FC<ClientListProps> = ({
                 <th className="pb-3 font-medium text-right">Действия</th>
               </tr>
             </thead>
-            <tbody className="divide-y-2 divide-ink">
+            <tbody className="divide-y divide-line">
               {filteredClients.map((client) => {
                 const online = isOnline(client.last_handshake);
                 const disabled = !client.enabled || client.owner_blocked;
@@ -168,7 +168,7 @@ export const ClientList: React.FC<ClientListProps> = ({
                       <span>{client.name}</span>
                       {client.partner_name && (
                         <span
-                          className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-warn-soft text-warn border-2 border-ink"
+                          className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-warn-soft text-warn border border-line"
                           title="Клиент создан панелью партнёра. Его можно заблокировать, но не удалить."
                         >
                           партнёр: {client.partner_name}
@@ -176,20 +176,20 @@ export const ClientList: React.FC<ClientListProps> = ({
                       )}
                       {client.pending && (
                         <span
-                          className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-soft text-muted border-2 border-ink"
+                          className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-soft text-muted border border-line"
                           title={client.remote_state?.startsWith('error') ? client.remote_state.slice(7) : 'Ожидает создания на ноде партнёра'}
                         >
                           {client.remote_state?.startsWith('error') ? 'ошибка у владельца' : 'создаётся'}
                         </span>
                       )}
                       {client.remote_state === 'blocked' && (
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-bad-soft text-bad border-2 border-ink">
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-bad-soft text-bad border border-line">
                           заблокирован владельцем
                         </span>
                       )}
                       {client.external && (
                         <span
-                          className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-soft text-muted border-2 border-ink"
+                          className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-soft text-muted border border-line"
                           title="Импортирован из существующей установки: конфигурация и QR-код недоступны"
                         >
                           импорт
@@ -205,16 +205,16 @@ export const ClientList: React.FC<ClientListProps> = ({
                     {/* Status Badge */}
                     <td className="py-3">
                       {disabled ? (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-soft text-muted border-2 border-ink">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-soft text-muted border border-line">
                           Отключен
                         </span>
                       ) : online ? (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-ok-soft text-ok border-2 border-ink">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-ok-soft text-ok border border-line">
                           <span className="w-1.5 h-1.5 rounded-full bg-mint animate-pulse" />
                           Онлайн
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-soft text-muted border-2 border-ink">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-soft text-muted border border-line">
                           Неактивен
                         </span>
                       )}
@@ -249,7 +249,7 @@ export const ClientList: React.FC<ClientListProps> = ({
                           onClick={() => onShowQr(client.id)}
                           disabled={keyless}
                           title={keyless ? 'Конфигурация недоступна для этого клиента' : 'Показать QR-код'}
-                          className="p-1.5 text-muted hover:text-ok hover:bg-soft rounded-lg transition border-2 border-ink"
+                          className="p-1.5 text-muted hover:text-ok hover:bg-soft rounded-lg transition border border-line"
                         >
                           <QrCode className="w-4 h-4" />
                         </button>
@@ -258,7 +258,7 @@ export const ClientList: React.FC<ClientListProps> = ({
                           onClick={() => handleDownload(client)}
                           disabled={keyless}
                           title={keyless ? 'Конфигурация недоступна для этого клиента' : 'Скачать .conf'}
-                          className="p-1.5 text-muted hover:text-info hover:bg-soft rounded-lg transition border-2 border-ink"
+                          className="p-1.5 text-muted hover:text-info hover:bg-soft rounded-lg transition border border-line"
                         >
                           <Download className="w-4 h-4" />
                         </button>
@@ -279,7 +279,7 @@ export const ClientList: React.FC<ClientListProps> = ({
                         <button
                           onClick={() => handleDelete(client)}
                           title="Удалить пира"
-                          className="p-1.5 text-muted hover:text-bad hover:bg-soft rounded-lg transition border-2 border-ink"
+                          className="p-1.5 text-muted hover:text-bad hover:bg-soft rounded-lg transition border border-line"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>

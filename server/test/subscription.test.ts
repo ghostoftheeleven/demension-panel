@@ -80,6 +80,6 @@ describe('форматы подписки', () => {
     expect(config.proxies[0]['amnezia-wg-option']).toMatchObject({ jc: 4, s2: 100, h1: '111111111' });
     expect(config.proxies[0]['pre-shared-key']).toBe('CPSK');
     expect(config['proxy-groups'][0].proxies).toEqual(['🇩🇪 Германия', '🇩🇪 Германия 2']);
-    expect(config.rules).toEqual(['MATCH,Demension']);
+    expect(config.rules).toEqual(['MATCH,Dementia']);
   });
 });

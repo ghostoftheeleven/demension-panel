@@ -17,7 +17,7 @@ describe.skipIf(!isPosix)('Fail2banService', () => {
   const originalPath = process.env.PATH;
 
   beforeAll(() => {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'demension-f2b-'));
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dementia-f2b-'));
     logFile = path.join(dir, 'calls.log');
     const script = `#!/bin/sh
 echo "$*" >> "${logFile}"

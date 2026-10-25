@@ -12,7 +12,7 @@ const SERVER_DIR = path.resolve(__dirname, '..', '..');
 const dirs: string[] = [];
 
 export function newDataDir(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'demension-migr-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dementia-migr-'));
   dirs.push(dir);
   return dir;
 }
@@ -34,7 +34,7 @@ export function runCli(args: string[], dataDir: string, env: Record<string, stri
   return new Promise((resolve) => {
     const child = spawn(process.execPath, ['--import', 'tsx', 'src/cli/migration.ts', ...args], {
       cwd: SERVER_DIR,
-      env: { ...process.env, DEMENSION_DATA_DIR: dataDir, DEMENSION_SECRET_KEY: '', MIGRATION_CODE: '', CF_API_TOKEN: '', ...env },
+      env: { ...process.env, DEMENTIA_DATA_DIR: dataDir, DEMENTIA_SECRET_KEY: '', MIGRATION_CODE: '', CF_API_TOKEN: '', ...env },
     });
     let stdout = '';
     let stderr = '';
@@ -50,7 +50,7 @@ export function runCli(args: string[], dataDir: string, env: Record<string, stri
 
 /** Чтение БД каталога данных напрямую (только чтение) */
 export function readDb<T>(dataDir: string, sql: string): T[] {
-  const target = new DatabaseSync(path.join(dataDir, 'demension.db'), { readOnly: true });
+  const target = new DatabaseSync(path.join(dataDir, 'dementia.db'), { readOnly: true });
   try {
     return target.prepare(sql).all() as T[];
   } finally {

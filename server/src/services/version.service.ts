@@ -1,9 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { panelEnv } from '../utils/env.js';
 
 /** Репозиторий, в котором публикуются релизы панели */
-export const RELEASES_REPO = 'ghostoftheeleven/demension-panel';
+export const RELEASES_REPO = 'ghostoftheeleven/dementia-panel';
 const RELEASES_URL = `https://github.com/${RELEASES_REPO}/releases`;
 const LATEST_RELEASE_API = `https://api.github.com/repos/${RELEASES_REPO}/releases/latest`;
 
@@ -32,7 +33,7 @@ function readPanelVersion(): string {
   for (const candidate of candidates) {
     try {
       const pkg = JSON.parse(fs.readFileSync(candidate, 'utf-8'));
-      if (pkg?.name === 'demension-panel' && typeof pkg.version === 'string' && VERSION_RE.test(pkg.version)) {
+      if ((pkg?.name === 'dementia-panel' || pkg?.name === 'demension-panel') && typeof pkg.version === 'string' && VERSION_RE.test(pkg.version)) {
         return `v${pkg.version.replace(/^v/, '')}`;
       }
     } catch {
@@ -105,15 +106,15 @@ interface CheckState {
 let state: CheckState | null = null;
 let inflight: Promise<void> | null = null;
 
-/** Проверку обновлений можно отключить: DEMENSION_UPDATE_CHECK=0 (панель тогда не обращается к GitHub) */
+/** Проверку обновлений можно отключить: DEMENTIA_UPDATE_CHECK=0 (панель тогда не обращается к GitHub) */
 function checkEnabled(): boolean {
-  return process.env.DEMENSION_UPDATE_CHECK !== '0';
+  return panelEnv('UPDATE_CHECK') !== '0';
 }
 
 async function checkLatest(): Promise<void> {
   try {
     const res = await fetch(LATEST_RELEASE_API, {
-      headers: { Accept: 'application/vnd.github+json', 'User-Agent': `demension-panel/${PANEL_VERSION}` },
+      headers: { Accept: 'application/vnd.github+json', 'User-Agent': `dementia-panel/${PANEL_VERSION}` },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     if (res.status === 404) {
