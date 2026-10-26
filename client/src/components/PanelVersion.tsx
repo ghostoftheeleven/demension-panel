@@ -23,15 +23,29 @@ export const PanelVersion: React.FC = () => {
   const [info, setInfo] = useState<VersionInfo | null>(null);
   const [checking, setChecking] = useState(false);
   const [updateOpen, setUpdateOpen] = useState(false);
+  /** Итог проверки по кнопке: показывается рядом несколько секунд (иначе нажатие выглядит так, будто ничего не произошло) */
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const load = useCallback((refresh: boolean) => {
+  const check = useCallback(() => {
     setChecking(true);
+    setResult(null);
     api
-      .getVersion(refresh)
-      .then(setInfo)
-      .catch(() => {})
+      .getVersion(true)
+      .then((data) => {
+        setInfo(data);
+        if (data.error) setResult({ ok: false, text: data.error.replace(/^Не удалось проверить обновления: /, 'ошибка: ') });
+        else if (data.update_available) setResult(null);
+        else setResult({ ok: true, text: 'обновлений нет' });
+      })
+      .catch((err) => setResult({ ok: false, text: `ошибка: ${err.message}` }))
       .finally(() => setChecking(false));
   }, []);
+
+  useEffect(() => {
+    if (!result) return;
+    const timer = setTimeout(() => setResult(null), result.ok ? 4000 : 10000);
+    return () => clearTimeout(timer);
+  }, [result]);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,21 +66,19 @@ export const PanelVersion: React.FC = () => {
     <div className="flex items-center gap-1.5 text-[10px] leading-4 whitespace-nowrap">
       <button
         type="button"
-        onClick={() => load(true)}
+        onClick={check}
+        disabled={checking || !info.check_enabled}
         title={describe(info)}
-        className="flex items-center gap-1 font-mono text-faint hover:text-ink transition"
+        className="group flex items-center gap-1.5 text-faint hover:text-ink disabled:cursor-default transition"
       >
-        <span>{info.current}</span>
-        {checking && <RefreshCw className="w-3 h-3 animate-spin" />}
+        <span className="font-mono">{info.current}</span>
+        {info.latest && !info.update_available && <span className="text-ok">актуальная (GitHub: {info.latest})</span>}
+        {!info.latest && info.check_enabled && <span className={info.error ? 'text-bad' : ''}>GitHub: {info.error ? 'нет ответа' : '—'}</span>}
+        {info.check_enabled && <RefreshCw className={`w-3 h-3 ${checking ? 'animate-spin' : 'opacity-0 group-hover:opacity-100'}`} />}
       </button>
-      {info.latest && !info.update_available && (
-        <span title={describe(info)} className="text-ok">
-          актуальная (GitHub: {info.latest})
-        </span>
-      )}
-      {!info.latest && info.check_enabled && (
-        <span title={describe(info)} className="text-faint">
-          GitHub: —
+      {result && (
+        <span className={`max-w-[260px] truncate ${result.ok ? 'text-ok' : 'text-bad'}`} title={result.text}>
+          {result.text}
         </span>
       )}
       {info.update_available && info.latest && (

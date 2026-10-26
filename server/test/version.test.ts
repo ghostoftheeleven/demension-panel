@@ -5,6 +5,7 @@ import { initDatabase } from '../src/db/index.js';
 import {
   compareVersions,
   PANEL_VERSION,
+  parseLatestRedirect,
   parseLatestRelease,
   parseVersion,
   RELEASES_REPO,
@@ -28,14 +29,24 @@ const release = (tag: string, extra: Record<string, unknown> = {}) => ({
   ...extra,
 });
 
-function stubGithub(...responses: Array<{ status: number; body?: unknown } | Error>) {
+/** Ответ страницы /releases/latest (запасной путь); по умолчанию недоступна */
+let page: { status: number; location?: string } | Error = new Error('page unavailable');
+
+/** Подмена GitHub: ответы API по очереди (последний повторяется), страница релизов — по `page` */
+function stubGithub(...responses: Array<{ status: number; body?: unknown; headers?: Record<string, string> } | Error>) {
   const queue = [...responses];
-  return vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+  return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    if (String(input) === `https://github.com/${RELEASES_REPO}/releases/latest`) {
+      if (page instanceof Error) throw page;
+      return new Response(null, { status: page.status, headers: page.location ? { location: page.location } : {} });
+    }
     const next = queue.length > 1 ? queue.shift()! : queue[0];
     if (next instanceof Error) throw next;
-    return new Response(JSON.stringify(next.body ?? {}), { status: next.status, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify(next.body ?? {}), { status: next.status, headers: { 'Content-Type': 'application/json', ...next.headers } });
   });
 }
+
+const apiCalls = (fetch: ReturnType<typeof stubGithub>) => fetch.mock.calls.filter(([input]) => String(input).startsWith('https://api.github.com/')).length;
 
 const bump = (version: string, part: 0 | 1 | 2) => {
   const p = parseVersion(version)!;
@@ -87,6 +98,7 @@ describe('проверка последнего релиза (VersionService)', 
   beforeEach(() => {
     VersionService.resetCache();
     delete process.env.DEMENTIA_UPDATE_CHECK;
+    page = new Error('page unavailable');
   });
   afterEach(() => {
     vi.restoreAllMocks();
@@ -117,15 +129,41 @@ describe('проверка последнего релиза (VersionService)', 
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
-  it('принудительная проверка — не чаще раза в минуту', async () => {
+  it('принудительная проверка (кнопка в интерфейсе) — не чаще раза в 15 секунд', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     const fetch = stubGithub({ status: 200, body: release(PANEL_VERSION) });
     await VersionService.getInfo();
     await VersionService.getInfo(true);
     expect(fetch).toHaveBeenCalledTimes(1);
-    vi.setSystemTime(Date.now() + 61 * 1000);
+    vi.setSystemTime(Date.now() + 16 * 1000);
     await VersionService.getInfo(true);
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('API отказал (исчерпан лимит 60 запросов в час) — версия берётся по перенаправлению страницы релизов', async () => {
+    const newer = bump(PANEL_VERSION, 2);
+    page = { status: 302, location: `https://github.com/${RELEASES_REPO}/releases/tag/${newer}` };
+    const fetch = stubGithub({ status: 403, body: { message: 'API rate limit exceeded' }, headers: { 'x-ratelimit-remaining': '0' } });
+    const info = await VersionService.getInfo();
+    expect(info).toMatchObject({ latest: newer, update_available: true, error: null, latest_url: `https://github.com/${RELEASES_REPO}/releases/tag/${newer}` });
+    const pageCall = fetch.mock.calls.find(([input]) => String(input).endsWith('/releases/latest') && !String(input).includes('api.github.com'))!;
+    expect(pageCall[1]).toMatchObject({ method: 'HEAD', redirect: 'manual' });
+  });
+
+  it('недоступны и API, и страница — понятная ошибка; чужое перенаправление не принимается', async () => {
+    stubGithub({ status: 403, body: {}, headers: { 'x-ratelimit-remaining': '0' } });
+    expect((await VersionService.getInfo()).error).toBe('Не удалось проверить обновления: GitHub ограничил число запросов с адреса сервера (60 в час)');
+
+    vi.restoreAllMocks();
+    VersionService.resetCache();
+    page = { status: 302, location: 'https://evil.example/releases/tag/v99.0.0' };
+    stubGithub({ status: 500 });
+    expect(await VersionService.getInfo()).toMatchObject({ latest: null, error: 'Не удалось проверить обновления: GitHub ответил HTTP 500' });
+
+    expect(parseLatestRedirect(`https://github.com/${RELEASES_REPO}/releases/tag/v1.2.3`)).toMatchObject({ version: 'v1.2.3', published_at: null });
+    expect(parseLatestRedirect(`https://github.com/${RELEASES_REPO}/releases/tag/v1.2.3"><script>`)).toBeNull();
+    expect(parseLatestRedirect(`https://github.com/other/repo/releases/tag/v1.2.3`)).toBeNull();
+    expect(parseLatestRedirect(null)).toBeNull();
   });
 
   it('ошибка сети: сообщение, последняя известная версия сохраняется, повтор через 30 минут', async () => {
@@ -144,10 +182,10 @@ describe('проверка последнего релиза (VersionService)', 
 
     vi.setSystemTime(Date.now() + 10 * 60 * 1000);
     await VersionService.getInfo();
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(apiCalls(fetch)).toBe(2);
     vi.setSystemTime(Date.now() + 21 * 60 * 1000);
     expect((await VersionService.getInfo()).error).toBeNull();
-    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(apiCalls(fetch)).toBe(3);
   });
 
   it('релизов ещё нет (404) и некорректный тег', async () => {

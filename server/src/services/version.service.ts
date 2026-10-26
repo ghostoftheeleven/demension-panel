@@ -7,13 +7,16 @@ import { panelEnv } from '../utils/env.js';
 export const RELEASES_REPO = 'ghostoftheeleven/dementia-panel';
 const RELEASES_URL = `https://github.com/${RELEASES_REPO}/releases`;
 const LATEST_RELEASE_API = `https://api.github.com/repos/${RELEASES_REPO}/releases/latest`;
+/** Запасной путь, если API отказал (лимит 60 запросов в час на адрес, сбой): страница перенаправляет на тег последнего релиза */
+const LATEST_RELEASE_PAGE = `${RELEASES_URL}/latest`;
+const LATEST_TAG_LOCATION = /^https:\/\/github\.com\/ghostoftheeleven\/dementia-panel\/releases\/tag\/(v\d{1,4}\.\d{1,4}\.\d{1,6})$/;
 
 /** Как долго помнится ответ GitHub (без токена API разрешает 60 запросов в час с одного адреса) */
 const CHECK_TTL_MS = 6 * 60 * 60 * 1000;
 /** Повтор после ошибки (нет сети, лимит GitHub) */
 const ERROR_TTL_MS = 30 * 60 * 1000;
-/** Принудительная проверка из интерфейса — не чаще раза в минуту */
-const FORCE_MIN_INTERVAL_MS = 60 * 1000;
+/** Принудительная проверка из интерфейса — не чаще раза в 15 секунд */
+const FORCE_MIN_INTERVAL_MS = 15 * 1000;
 const REQUEST_TIMEOUT_MS = 10000;
 
 const VERSION_RE = /^v?(\d{1,4})\.(\d{1,4})\.(\d{1,6})$/;
@@ -111,7 +114,31 @@ function checkEnabled(): boolean {
   return panelEnv('UPDATE_CHECK') !== '0';
 }
 
+/**
+ * Тег последнего релиза из перенаправления страницы /releases/latest. Принимается только адрес тега этого репозитория.
+ */
+export function parseLatestRedirect(location: string | null): LatestRelease | null {
+  const match = location ? LATEST_TAG_LOCATION.exec(location.trim()) : null;
+  return match ? { version: match[1], url: `${RELEASES_URL}/tag/${match[1]}`, published_at: null } : null;
+}
+
+/** Последний релиз без API (и его лимита): страница релизов отвечает перенаправлением на тег */
+async function latestFromPage(): Promise<LatestRelease> {
+  const res = await fetch(LATEST_RELEASE_PAGE, {
+    method: 'HEAD',
+    redirect: 'manual',
+    headers: { 'User-Agent': `dementia-panel/${PANEL_VERSION}` },
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+  const latest = res.status >= 300 && res.status < 400 ? parseLatestRedirect(res.headers.get('location')) : null;
+  if (!latest) throw new Error(`страница релизов ответила HTTP ${res.status}`);
+  return latest;
+}
+
+const describeError = (err: any): string => (err?.name === 'TimeoutError' ? 'GitHub не ответил вовремя' : err?.message || 'ошибка запроса');
+
 async function checkLatest(): Promise<void> {
+  let apiError: string;
   try {
     const res = await fetch(LATEST_RELEASE_API, {
       headers: { Accept: 'application/vnd.github+json', 'User-Agent': `dementia-panel/${PANEL_VERSION}` },
@@ -121,14 +148,23 @@ async function checkLatest(): Promise<void> {
       state = { latest: null, checkedAt: Date.now(), error: 'Релизы на GitHub ещё не опубликованы' };
       return;
     }
+    if ((res.status === 403 || res.status === 429) && res.headers.get('x-ratelimit-remaining') === '0') {
+      throw new Error('GitHub ограничил число запросов с адреса сервера (60 в час)');
+    }
     if (!res.ok) throw new Error(`GitHub ответил HTTP ${res.status}`);
     const latest = parseLatestRelease(await res.json());
     if (!latest) throw new Error('GitHub вернул релиз без версии формата vX.Y.Z');
     state = { latest, checkedAt: Date.now(), error: null };
+    return;
   } catch (err: any) {
-    const message = err?.name === 'TimeoutError' ? 'GitHub не ответил вовремя' : err?.message || 'ошибка запроса';
+    apiError = describeError(err);
+  }
+  try {
+    // API недоступен или исчерпан его лимит — версию можно узнать по перенаправлению страницы последнего релиза
+    state = { latest: await latestFromPage(), checkedAt: Date.now(), error: null };
+  } catch {
     // Последняя известная версия не теряется из-за временной ошибки
-    state = { latest: state?.latest ?? null, checkedAt: Date.now(), error: `Не удалось проверить обновления: ${message}` };
+    state = { latest: state?.latest ?? null, checkedAt: Date.now(), error: `Не удалось проверить обновления: ${apiError}` };
   }
 }
 
