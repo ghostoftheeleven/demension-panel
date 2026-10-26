@@ -1,7 +1,7 @@
 {
   "name": "dementia-panel",
-  "version": "0.2.0",
-  "description": "AmneziaWG Multi-Server Management Panel",
+  "version": "0.2.1",
+  "description": "Agentless server management software for AmneziaWG nodes",
   "private": true,
   "scripts": {
     "dev:server": "npm run dev --prefix server",
@@ -14,9 +14,11 @@
   "keywords": [
     "amneziawg",
     "wireguard",
-    "vpn",
-    "panel",
-    "dpi-bypass"
+    "server-management",
+    "agentless",
+    "ssh",
+    "docker",
+    "self-hosted"
   ],
   "author": "ghostoftheeleven",
   "license": "MIT"

@@ -204,7 +204,7 @@ export class ProbeService {
   static pollDelayMs: number | null = null;
   /** Сколько всего ждать ответы узлов; тесты уменьшают */
   static pollTotalMs = POLL_TOTAL_MS;
-  /** Вызывается после каждого обхода (мосты пересчитывают, кому нужен обход блокировки); задаёт index.ts */
+  /** Вызывается после каждого обхода (мосты пересчитывают, кому нужен мост); задаёт index.ts */
   static afterRun: (() => Promise<void>) | null = null;
   private static countriesCache: { at: number; list: ProbeCountry[]; ips: Map<string, string> } | null = null;
 

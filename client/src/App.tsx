@@ -319,8 +319,8 @@ export const App: React.FC = () => {
 
               <div className="p-4 bg-paper border border-line rounded-2xl">
                 <Sparkles className="w-5 h-5 text-info mb-2" />
-                <h4 className="text-xs font-semibold text-ink">DPI Bypass</h4>
-                <p className="text-[11px] text-muted mt-1">Автоматическая рандомизация H1..H4, Jc, S1, S2.</p>
+                <h4 className="text-xs font-semibold text-ink">Параметры протокола</h4>
+                <p className="text-[11px] text-muted mt-1">Случайные параметры AmneziaWG (Jc, S1–S4, H1–H4) для каждого сервера.</p>
               </div>
 
               <div className="p-4 bg-paper border border-line rounded-2xl">

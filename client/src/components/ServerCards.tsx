@@ -410,7 +410,7 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
           <div className="bg-paper border border-line rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2 text-muted">
               <Shield className="w-4 h-4 text-ok" />
-              <span className="font-medium text-ink">Активная маскировка (DPI Bypass):</span>
+              <span className="font-medium text-ink">Параметры AmneziaWG:</span>
             </div>
             <div className="flex flex-wrap items-center gap-2 font-mono text-[11px]">
               <span className="px-2 py-0.5 rounded bg-card border border-line text-ink">
