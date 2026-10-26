@@ -12,7 +12,7 @@ export const probesRouter = Router();
 probesRouter.use(requireAuth);
 
 function overview() {
-  const servers = db.prepare("SELECT id, name, host, status, probe_port FROM servers WHERE status != 'uninstalled' ORDER BY id").all();
+  const servers = db.prepare("SELECT id, name, host, status, probe_port, stub_port, remote_panel_id FROM servers WHERE status != 'uninstalled' ORDER BY id").all();
   return {
     settings: ProbeService.readSettings(),
     status: ProbeService.getStatus(),

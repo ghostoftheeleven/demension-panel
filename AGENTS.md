@@ -19,7 +19,8 @@ Dementia Panel — агентлесс-панель управления нода
 | [docs/api.md](docs/api.md) | Справочник HTTP API панели |
 | [docs/testing.md](docs/testing.md) | Как устроены тесты, хелперы, реальные ноды в Docker, правила для новых тестов |
 | [docs/migration.md](docs/migration.md) | Перенос панели на другой сервер: архив, код, сертификат, заморозка прежней панели, CLI |
-| [docs/probes.md](docs/probes.md) | Проверка доступности нод из выбранных стран (check-host.net) и её показ в подписке |
+| [docs/probes.md](docs/probes.md) | Проверка доступности нод из выбранных стран: заглушка на ноде, check-host.net, подтверждение по журналу, показ в подписке |
+| [docs/bridges.md](docs/bridges.md) | Мосты в странах пользователей: пересылка на ноды, режимы, решение «нужен мост», подмена адреса в подписке |
 | [docs/releases.md](docs/releases.md) | Номер версии `vX.Y.Z`, `CHANGELOG.md`, автоматические релизы GitHub, проверка обновлений и обновление панели из интерфейса |
 
 ## Структура репозитория
@@ -32,6 +33,7 @@ server/            Node.js 22.13+ / Express 4 / TypeScript, SQLite через no
   src/services/      бизнес-логика (SSH, провижининг, подписки, партнёры, HTTPS…)
   src/utils/         чистые функции (сети, параметры AWG, ключи Amnezia, HTTP-утилиты)
   src/scripts/deploy-awg.sh  скрипт развёртывания ноды (передаётся по SSH через stdin)
+  src/scripts/deploy-bridge.sh  установка моста (iptables DNAT, без Docker; тоже через stdin)
   src/scripts/update-panel.sh  обновление панели из интерфейса (systemd-run → install.sh релиза, откат при сбое)
   src/cli/reset-admin.ts     сброс логина/пароля администратора
   src/cli/migration.ts       перенос панели на другой сервер (его вызывает install.sh)
@@ -51,7 +53,7 @@ npm run dev:server            # бэкенд :3001 (tsx watch)
 npm run dev:client            # фронтенд :3000, прокси /api, /sub, /ws на :3001
 cd server && npx tsc --noEmit && npm test     # проверка типов и тесты сервера (≈ 1–2 мин)
 cd client && npx tsc -b && npm run lint && npx vite build
-npx shellcheck -S error install.sh server/src/scripts/deploy-awg.sh server/src/scripts/update-panel.sh server/test/docker/nodes.sh server/test/docker/entrypoint.sh
+npx shellcheck -S error install.sh server/src/scripts/deploy-awg.sh server/src/scripts/deploy-bridge.sh server/src/scripts/update-panel.sh server/test/docker/nodes.sh server/test/docker/entrypoint.sh
 server/test/docker/nodes.sh up                # реальные ноды в Docker для real-*.test.ts (без них эти тесты пропускаются)
 server/test/install/run.sh                    # install.sh целиком в чистом Ubuntu + перенос панели между двумя контейнерами + обновление с предыдущего релиза (Docker, ≈ 20 мин) — гонять при любой правке install.sh
 ```
@@ -189,6 +191,20 @@ CI на `main`. Подробно — [docs/releases.md](docs/releases.md).
     `config.ts` подхватывает `data/demension.db` (`adoptLegacyDatabase`), клиент — прежний ключ токена. **Не переименовывать:**
     имя БД и соль KDF в архиве переноса (`ARCHIVE_DB_ENTRY`, migration-archive.ts — архивы старых панелей), `managed_by = 'demension'`
     (значение в БД, задано старой миграцией), метку `/opt/amnezia/awg/demension.env` на нодах (её читает start.sh работающих контейнеров).
+
+### Проверка доступности и мосты
+37. **Доступность ноды засчитывается по журналу заглушки на самой ноде, а не по ответу.** Ответ ICMP/TCP подделывается по дороге, поэтому
+    ping не используется, а у заглушки `dementia-probe` результат подтверждается `matchStubHits` (одноразовая метка HTTP, адрес отправителя
+    UDP). Заглушка — отдельный контейнер в `/opt/dementia-probe`: она не должна трогать контейнер AmneziaWG и `/opt/amnezia`, ставится только
+    при включённой проверке (инвариант 32), удаляется вместе с нодой (`teardown`). Строки журнала разбираются только строгого формата (`parseStubHits`).
+38. **Правила моста генерируются целиком из БД** (`buildBridgeRules`, как конфиг ноды) и применяются через очередь `runExclusive` по ключу
+    `bridge:<id>`; изменения нод доходят до мостов через сравнение `rules_hash` в `BridgeService.checkAll`. Адрес ноды — только после
+    `isValidHost` и в `shellQuote`; IPv6-ноды мост не пересылает. **`listen_port` привязанной ноды не меняется** — по нему подключаются
+    пользователи, получившие мост в подписке.
+39. **Мост выдаётся в подписке только через `BridgeService.routesFor`**: мост `online`, `check_ok` не `0`, режим `always` или `auto` с
+    `bridge_state.active`. Меняется только адрес `Endpoint` (ключи и параметры обфускации — ноды). Решение «нужен мост» — только в
+    `BridgeService.evaluate` с гистерезисом (2 проблемные проверки для включения, 3 удачные и 12 часов для выключения): адрес у
+    пользователей не должен меняться при каждом обновлении подписки.
 
 ## Чек-лист перед коммитом
 

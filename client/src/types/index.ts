@@ -29,6 +29,8 @@ export interface Subscriber {
     client_ip: string;
     enabled: number;
   }[];
+  /** Страна пользователя (код ISO в нижнем регистре): по ней подписка выбирает мост; null — не задана */
+  country: string | null;
 }
 
 export type ServerStatus = 'uninstalled' | 'installing' | 'online' | 'offline' | 'error';
@@ -92,6 +94,8 @@ export interface Server {
   node_info_at: string | null;
   /** Доступность из выбранных стран (пусто, пока проверка выключена) */
   probes?: ProbeResult[];
+  /** Порт заглушки проверки доступности на ноде (null — не установлена) */
+  stub_port: number | null;
 }
 
 /** Версия панели и последний релиз на GitHub (GET /api/version) */
@@ -320,8 +324,16 @@ export type ProbeStatus = 'ok' | 'partial' | 'fail';
 export interface ProbeResult {
   server_id: number;
   country: string;
+  /** stub — заглушка с подтверждением по журналу ноды, tcp — подключение к порту (без подтверждения) */
+  method: 'stub' | 'tcp' | string;
   ok_nodes: number;
   total_nodes: number;
+  /** Сколько узлов дошло до ноды по TCP и по UDP (по журналу заглушки); null — неизвестно */
+  tcp_ok: number | null;
+  udp_ok: number | null;
+  /** Узлы, получившие ответ, хотя до ноды запрос не дошёл (подмена ответа) */
+  spoofed: number;
+  verified: boolean;
   rtt_ms: number | null;
   checked_at: string;
   status: ProbeStatus;
@@ -346,7 +358,7 @@ export interface ProbesOverview {
   settings: ProbeSettings;
   status: { running: boolean; last_run: string | null; error: string | null; next_run: string | null };
   max_countries: number;
-  servers: { id: number; name: string; host: string; status: ServerStatus; probe_port: number | null }[];
+  servers: { id: number; name: string; host: string; status: ServerStatus; probe_port: number | null; stub_port: number | null; remote_panel_id: number | null }[];
   results: ProbeResult[];
 }
 
@@ -367,4 +379,63 @@ export interface AmneziaImportResult {
   status: 'adopted' | 'needs_install' | 'ssh_error' | 'exists' | 'invalid';
   message: string;
   importedPeers?: number;
+}
+
+/** Мост в стране пользователей (docs/bridges.md) */
+export type BridgeStatus = 'uninstalled' | 'installing' | 'online' | 'offline' | 'error';
+export type BridgeLinkMode = 'auto' | 'always' | 'off';
+
+export interface BridgeLink {
+  server_id: number;
+  server_name: string;
+  server_host: string;
+  awg_port: number;
+  /** Порт на мосту: UDP — на AmneziaWG ноды, TCP — на заглушку ноды */
+  listen_port: number;
+  mode: BridgeLinkMode;
+  /** Сквозная проверка пересылки до заглушки ноды; null — ещё не проверялось */
+  check_ok: boolean | null;
+  checked_at: string | null;
+  /** Мост сейчас выдаётся пользователям страны моста (режим auto) */
+  active: boolean;
+  /** probe — по проверке из страны, clients — по обрыву рукопожатий клиентов */
+  reason: 'probe' | 'clients' | null;
+  changed_at: string | null;
+}
+
+export interface Bridge {
+  id: number;
+  name: string;
+  host: string;
+  ssh_port: number;
+  ssh_user: string;
+  host_key: string | null;
+  has_ssh_password: boolean;
+  has_ssh_key: boolean;
+  country: string;
+  status: BridgeStatus;
+  installing: boolean;
+  needs_apply: boolean;
+  last_error: string | null;
+  last_seen: string | null;
+  created_at: string;
+  links: BridgeLink[];
+}
+
+export interface BridgeInput {
+  name?: string;
+  host?: string;
+  ssh_port?: number;
+  ssh_user?: string;
+  ssh_password?: string;
+  ssh_key?: string;
+  country?: string;
+  links?: { server_id: number; mode: BridgeLinkMode }[];
+}
+
+export interface BridgeOperationResult {
+  success: boolean;
+  error?: string;
+  log?: string;
+  bridge: Bridge;
 }

@@ -2,102 +2,31 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { db, getSetting, initDatabase, setSetting } from '../src/db/index.js';
 import {
   countryFlag,
-  parsePingResult,
+  matchStubHits,
+  parseHttpResult,
   parseTcpResult,
+  parseUdpResult,
   probeStatus,
   ProbeService,
 } from '../src/services/probe.service.js';
+import { parseStubHits, parseStubPort, stubInstallScript, stubPortCandidates } from '../src/services/stub.service.js';
 import { createAdminApi } from './helpers/api.js';
 import { insertClient, insertServer, insertSubscriber } from './helpers/db.js';
+import { stubSsh } from './helpers/ssh-stub.js';
+import { installProviderStub, provider, resetProvider, stubNodeResponder, stubNodeState, type StubNodeState } from './helpers/check-host.js';
 import { startTestServer, type TestEnv } from './test-app.js';
 
 /**
- * Проверка доступности нод из выбранных стран через check-host.net. Сеть не используется: fetch подменён,
- * ответы провайдера задаёт сценарий `provider`.
+ * Проверка доступности нод из выбранных стран: заглушка на ноде + check-host.net с подтверждением по журналу ноды.
+ * Сеть не используется: fetch к check-host.net подменён (helpers/check-host.ts), SSH — stubSsh.
  */
-
-const REAL_FETCH = globalThis.fetch;
-
-const PING_OK = [[['OK', 0.045, '203.0.113.9'], ['OK', 0.05], ['OK', 0.04], ['OK', 0.05]]];
-const PING_TIMEOUT = [[['TIMEOUT', 3.0], ['TIMEOUT', 3.0], ['TIMEOUT', 3.0], ['TIMEOUT', 3.0]]];
-
-const provider = {
-  nodes: {} as Record<string, [string, string, string]>,
-  /** Ответы узлов по идентификатору; ключ отсутствует — узел «ещё считает» */
-  ping: {} as Record<string, unknown>,
-  tcp: {} as Record<string, unknown>,
-  calls: [] as { path: string; host?: string; nodes?: string[] }[],
-  failNodesList: false,
-  startReply: null as unknown,
-  /** Сколько первых опросов результата узлы отвечают null (ещё считают) */
-  pendingPolls: 0,
-};
-
-function resetProvider() {
-  provider.nodes = {
-    'ru1.node.check-host.net': ['ru', 'Russia', 'Moscow'],
-    'ru2.node.check-host.net': ['ru', 'Russia', 'Saint Petersburg'],
-    'ru3.node.check-host.net': ['ru', 'Russia', 'Novosibirsk'],
-    'kz1.node.check-host.net': ['kz', 'Kazakhstan', 'Karaganda'],
-    'de1.node.check-host.net': ['de', 'Germany', 'Nuremberg'],
-  };
-  provider.ping = {
-    'ru1.node.check-host.net': PING_OK,
-    'ru2.node.check-host.net': PING_TIMEOUT,
-    'kz1.node.check-host.net': PING_TIMEOUT,
-    'de1.node.check-host.net': PING_OK,
-  };
-  provider.tcp = {
-    'ru1.node.check-host.net': [{ time: 0.031, address: '203.0.113.9' }],
-    'ru2.node.check-host.net': [{ time: 0.044, address: '203.0.113.9' }],
-    'kz1.node.check-host.net': [{ error: 'Connection timed out' }],
-    'de1.node.check-host.net': [{ time: 0.02, address: '203.0.113.9' }],
-  };
-  provider.calls = [];
-  provider.failNodesList = false;
-  provider.startReply = null;
-  provider.pendingPolls = 0;
-}
 
 let env: TestEnv;
 let api: ReturnType<typeof createAdminApi>['api'];
 let serverId: number;
 let subToken: string;
-let polls = 0;
-
-function installProviderStub() {
-  vi.stubGlobal('fetch', async (input: any, init?: any) => {
-    const url = new URL(typeof input === 'string' ? input : input.url);
-    if (url.origin !== 'https://check-host.net') return REAL_FETCH(input, init);
-
-    const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
-    if (url.pathname === '/nodes/hosts') {
-      provider.calls.push({ path: url.pathname });
-      if (provider.failNodesList) return new Response('upstream down', { status: 503 });
-      return json({ nodes: Object.fromEntries(Object.entries(provider.nodes).map(([id, location]) => [id, { asn: 'AS1', ip: '192.0.2.1', location }])) });
-    }
-    const start = /^\/check-(ping|tcp)$/.exec(url.pathname);
-    if (start) {
-      const nodes = url.searchParams.getAll('node');
-      provider.calls.push({ path: url.pathname, host: url.searchParams.get('host') ?? undefined, nodes });
-      polls = 0;
-      if (provider.startReply) return json(provider.startReply);
-      return json({
-        ok: 1,
-        request_id: start[1] === 'ping' ? 'pingreq1' : 'tcpreq1',
-        nodes: Object.fromEntries(nodes.map((id) => [id, [...(provider.nodes[id] ?? ['xx']), '198.51.100.1', 'AS2']])),
-      });
-    }
-    const result = /^\/check-result\/(pingreq1|tcpreq1)$/.exec(url.pathname);
-    if (result) {
-      polls++;
-      const source = result[1] === 'pingreq1' ? provider.ping : provider.tcp;
-      const pending = polls <= provider.pendingPolls;
-      return json(Object.fromEntries(Object.keys(provider.nodes).map((id) => [id, pending ? null : source[id] ?? null])));
-    }
-    return new Response('not found', { status: 404 });
-  });
-}
+let node: StubNodeState;
+let ssh: ReturnType<typeof stubSsh>;
 
 beforeAll(async () => {
   initDatabase();
@@ -115,10 +44,13 @@ beforeEach(() => {
   resetProvider();
   installProviderStub();
   ProbeService.resetCountriesCache();
+  node = stubNodeState();
+  ssh = stubSsh(stubNodeResponder(node));
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 afterAll(async () => {
@@ -134,18 +66,13 @@ const decodeLinks = (body: string) =>
 
 const decodeHeader = (value: string | null) => Buffer.from((value ?? '').replace(/^base64:/, ''), 'base64').toString();
 
-describe('разбор ответов check-host.net', () => {
-  it('ping: успех, если хотя бы один пакет дошёл; задержка — среднее по успешным в мс', () => {
-    expect(parsePingResult(PING_OK)).toEqual({ ok: true, rtt: 46 });
-    expect(parsePingResult(PING_TIMEOUT)).toEqual({ ok: false, rtt: null });
-    expect(parsePingResult([[['TIMEOUT', 3], ['OK', 0.1, '1.1.1.1'], ['MALFORMED', 0.2]]])).toEqual({ ok: true, rtt: 100 });
-  });
-
-  it('ping: пока узел считает (null) или не разрешил имя ([[null]]) — результата нет', () => {
-    expect(parsePingResult(null)).toBeNull();
-    expect(parsePingResult([[null]])).toBeNull();
-    expect(parsePingResult('garbage')).toBeNull();
-    expect(parsePingResult([[['OK', 'не число']]])).toEqual({ ok: false, rtt: null });
+describe('разбор ответов check-host.net и журнала заглушки', () => {
+  it('http: [[1, …]] — успех с задержкой в мс, [[0, …]] — отказ, прочее — нет результата', () => {
+    expect(parseHttpResult([[1, 0.13, 'OK', '200', '1.2.3.4']])).toEqual({ ok: true, rtt: 130 });
+    expect(parseHttpResult([[0, 0.07, 'No such device or address', null, null]])).toEqual({ ok: false, rtt: null });
+    expect(parseHttpResult(null)).toBeNull();
+    expect(parseHttpResult([[null]])).toBeNull();
+    expect(parseHttpResult('garbage')).toBeNull();
   });
 
   it('tcp: объект со временем — успех, с error — отказ, прочее — нет результата', () => {
@@ -155,13 +82,63 @@ describe('разбор ответов check-host.net', () => {
     expect(parseTcpResult([{}])).toBeNull();
   });
 
+  it('udp: {timeout} — ответа нет (реальный формат check-host.net), {time} — ответ пришёл', () => {
+    expect(parseUdpResult([{ address: '1.1.1.1', timeout: 1 }])).toEqual({ ok: false, rtt: null });
+    expect(parseUdpResult([{ address: '1.1.1.1', time: 0.05 }])).toEqual({ ok: true, rtt: 50 });
+    expect(parseUdpResult(null)).toBeNull();
+  });
+
   it('статус страны и флаг', () => {
     expect(probeStatus(2, 2)).toBe('ok');
     expect(probeStatus(1, 2)).toBe('partial');
     expect(probeStatus(0, 2)).toBe('fail');
-    expect(probeStatus(1, 1)).toBe('ok');
     expect(countryFlag('ru')).toBe('🇷🇺');
     expect(countryFlag('KZ')).toBe('🇰🇿');
+  });
+
+  it('журнал: берутся только строки строгого формата, IPv4 из IPv6-сокета приводится к обычному виду', () => {
+    const parsed = parseStubHits(
+      ['RUNNING true', '1761400000 tcp ::ffff:198.51.100.1 /abc123', '1761400001 udp 198.51.100.2 -', '1761400002 tcp 1.2.3.4 /$(reboot)', 'x'].join('\n')
+    );
+    expect(parsed.running).toBe(true);
+    expect(parsed.hits).toEqual([
+      { at: 1761400000, proto: 'tcp', ip: '198.51.100.1', path: '/abc123' },
+      { at: 1761400001, proto: 'udp', ip: '198.51.100.2', path: '' },
+    ]);
+    expect(parseStubHits('RUNNING false').running).toBe(false);
+    expect(parseStubPort('...\n---STUB_PORT 34567\n')).toBe(34567);
+    expect(parseStubPort('---STUB_PORT 99999')).toBeNull();
+  });
+
+  it('сопоставление: метка проверки обязательна, незнакомый адрес с меткой засчитывается узлу, сообщившему об успехе', () => {
+    const nodes = new Map([
+      ['a', { ip: '198.51.100.1' }],
+      ['b', { ip: '198.51.100.2' }],
+    ]);
+    const hits = [
+      { at: 100, proto: 'tcp' as const, ip: '198.51.100.1', path: '/other' },
+      { at: 100, proto: 'tcp' as const, ip: '203.0.113.50', path: '/nonce1' },
+      { at: 100, proto: 'udp' as const, ip: '203.0.113.50', path: '' },
+      { at: 10, proto: 'udp' as const, ip: '198.51.100.1', path: '' },
+    ];
+    const matched = matchStubHits(hits, 'nonce1', 50, nodes, (id) => id === 'b');
+    expect([...matched.tcp]).toEqual(['b']);
+    expect([...matched.udp]).toEqual(['b']);
+  });
+
+  it('порт заглушки: не из распространённых, не порт AmneziaWG/SSH; текущий порт — первым кандидатом', () => {
+    const candidates = stubPortCandidates([51820, 22], 31111, 50);
+    expect(candidates[0]).toBe(31111);
+    expect(new Set(candidates).size).toBe(50);
+    for (const p of candidates) {
+      expect(p).toBeGreaterThanOrEqual(20000);
+      expect(p).toBeLessThanOrEqual(60999);
+      expect([51820, 22, 25565, 32400, 51821]).not.toContain(p);
+    }
+    const script = stubInstallScript([31111, 42222], 'deadbeef');
+    expect(script).toContain('for p in 31111 42222; do');
+    expect(script).toContain('--network host');
+    expect(script).not.toContain('amnezia-awg');
   });
 });
 
@@ -171,8 +148,10 @@ describe('настройки и страны', () => {
     expect(res.status).toBe(200);
     expect(res.body.settings).toEqual({ enabled: false, countries: [], interval_minutes: 30, show_in_name: true, show_in_description: true });
     expect(res.body.results).toEqual([]);
-    expect(res.body.servers).toEqual([expect.objectContaining({ id: serverId, host: '203.0.113.9', probe_port: null })]);
+    expect(res.body.servers).toEqual([expect.objectContaining({ id: serverId, host: '203.0.113.9', probe_port: null, stub_port: null })]);
     expect(provider.calls).toEqual([]);
+    // Пока проверка выключена, заглушка на ноды не ставится
+    expect(ssh.calls).toEqual([]);
 
     expect((await api('/api/servers')).body[0].probes).toEqual([]);
     expect((await env.request('/api/probes')).status).toBe(401);
@@ -226,70 +205,131 @@ describe('настройки и страны', () => {
   });
 });
 
-describe('проверка нод', () => {
+describe('проверка нод заглушкой', () => {
   beforeAll(async () => {
     await api('/api/probes', 'PUT', { settings: { enabled: true, countries: ['ru', 'kz'], interval_minutes: 30, show_in_description: true } });
   });
 
-  it('ping из каждой страны: результаты по странам (все/часть/ни одного узла), в порядке выбора', async () => {
+  it('первый обход ставит заглушку на ноду; узлы обращаются к ней по HTTP с меткой и по UDP', async () => {
     const result = await ProbeService.runAll();
     expect(result).toEqual({ checked: 1, errors: [] });
+    expect(node.installs).toBe(1);
+    expect(db.prepare('SELECT stub_port, stub_token FROM servers WHERE id = ?').get(serverId)).toEqual({ stub_port: 34567, stub_token: expect.stringMatching(/^[0-9a-f]{24}$/) });
 
-    // Запрос к провайдеру: адрес ноды и по два узла от каждой страны (ru3 не берётся)
-    const start = provider.calls.find((c) => c.path === '/check-ping')!;
-    expect(start.host).toBe('203.0.113.9');
-    expect(start.nodes).toEqual(['ru1.node.check-host.net', 'ru2.node.check-host.net', 'kz1.node.check-host.net']);
+    const http = provider.calls.find((c) => c.path === '/check-http')!;
+    expect(http.host).toMatch(/^http:\/\/203\.0\.113\.9:34567\/[0-9a-f]{16}$/);
+    // по два узла от каждой страны (ru3 не берётся)
+    expect(http.nodes).toEqual(['ru1.node.check-host.net', 'ru2.node.check-host.net', 'kz1.node.check-host.net']);
+    expect(provider.calls.find((c) => c.path === '/check-udp')!.host).toBe('203.0.113.9:34567');
+    expect(provider.calls.some((c) => c.path === '/check-ping')).toBe(false);
+    // контейнер AmneziaWG заглушка не трогает
+    const install = ssh.calls.find((c) => c.command.includes('---STUB_PORT'))!;
+    expect(install.command).toContain('dementia-probe');
+    expect(install.command).not.toContain('amnezia-awg');
+  });
+
+  it('доступность считается по журналу ноды: подменённый ответ не засчитывается, UDP решает за AmneziaWG', async () => {
+    db.prepare('UPDATE servers SET stub_port = 34567 WHERE id = ?').run(serverId);
+    await ProbeService.runAll();
+    // повторной установки нет: заглушка уже стоит
+    expect(node.installs).toBe(0);
 
     const probes = (await api('/api/servers')).body[0].probes;
     expect(probes).toEqual([
-      expect.objectContaining({ country: 'ru', ok_nodes: 1, total_nodes: 2, status: 'partial', rtt_ms: 46 }),
-      expect.objectContaining({ country: 'kz', ok_nodes: 0, total_nodes: 1, status: 'fail', rtt_ms: null }),
+      // ru1 дошёл по TCP и UDP; ru2 «ответил», но в журнале его нет — подмена
+      expect.objectContaining({ country: 'ru', method: 'stub', ok_nodes: 1, total_nodes: 2, tcp_ok: 1, udp_ok: 1, spoofed: 1, verified: true, status: 'partial', rtt_ms: 40 }),
+      // kz1 дошёл по TCP, но UDP до ноды не доходит — AmneziaWG работать не будет
+      expect.objectContaining({ country: 'kz', ok_nodes: 0, total_nodes: 1, tcp_ok: 1, udp_ok: 0, spoofed: 0, verified: true, status: 'fail' }),
     ]);
-    expect(getSetting('probe_last_run')).toBeTruthy();
     expect(getSetting('probe_error')).toBeNull();
     expect((await api('/api/probes')).body.status.running).toBe(false);
   });
 
+  it('узел вышел в сеть с другого адреса: обращение с меткой засчитывается ему, UDP с того же адреса — тоже', async () => {
+    provider.egress['ru2.node.check-host.net'] = '203.0.113.77';
+    provider.reach.tcp.add('ru2.node.check-host.net');
+    provider.reach.udp.add('ru2.node.check-host.net');
+    await ProbeService.runAll();
+    const ru = (await api('/api/servers')).body[0].probes.find((p: any) => p.country === 'ru');
+    expect(ru).toMatchObject({ ok_nodes: 2, total_nodes: 2, spoofed: 0, status: 'ok' });
+  });
+
   it('узлы, ещё не закончившие проверку, опрашиваются повторно', async () => {
     provider.pendingPolls = 2;
-    provider.ping['kz1.node.check-host.net'] = PING_OK;
+    provider.reach.udp.add('kz1.node.check-host.net');
     expect(await ProbeService.runAll()).toEqual({ checked: 1, errors: [] });
-    expect(polls).toBe(3);
-    const probes = (await api('/api/servers')).body[0].probes;
-    expect(probes.find((p: any) => p.country === 'kz')).toMatchObject({ ok_nodes: 1, total_nodes: 1, status: 'ok' });
+    expect(provider.polls.httpreq1).toBe(3);
+    const kz = (await api('/api/servers')).body[0].probes.find((p: any) => p.country === 'kz');
+    expect(kz).toMatchObject({ ok_nodes: 1, total_nodes: 1, status: 'ok' });
   });
 
-  it('узел без ответа в итог не входит; если не ответил никто — прежний результат остаётся', async () => {
-    delete provider.ping['ru2.node.check-host.net'];
-    delete provider.ping['kz1.node.check-host.net'];
+  it('UDP-проверку запустить не удалось — решает TCP по журналу', async () => {
+    provider.failUdpStart = true;
     await ProbeService.runAll();
     const probes = (await api('/api/servers')).body[0].probes;
-    expect(probes.find((p: any) => p.country === 'ru')).toMatchObject({ ok_nodes: 1, total_nodes: 1, status: 'ok' });
-    // kz не ответил совсем — осталась запись предыдущей проверки
-    expect(probes.find((p: any) => p.country === 'kz')).toMatchObject({ status: 'ok' });
+    expect(probes.find((p: any) => p.country === 'kz')).toMatchObject({ ok_nodes: 1, total_nodes: 1, udp_ok: null, tcp_ok: 1 });
   });
 
-  it('TCP-режим: для сервера с портом проверяется подключение host:port (IPv6 — в скобках)', async () => {
-    expect((await api('/api/probes', 'PUT', { servers: [{ id: serverId, probe_port: 443 }] })).status).toBe(200);
-    // смена способа проверки сбрасывает прежние результаты: ping и TCP не сравнимы
-    expect((await api('/api/servers')).body[0].probes).toEqual([]);
+  it('журнал не прочитан — засчитываются ответы узлов без подтверждения, это отмечается в ошибке', async () => {
+    node.readFails = true;
+    const result = await ProbeService.runAll();
+    expect(result.checked).toBe(1);
+    expect(result.errors[0]).toContain('не подтверждён');
+    const ru = (await api('/api/servers')).body[0].probes.find((p: any) => p.country === 'ru');
+    expect(ru).toMatchObject({ ok_nodes: 2, total_nodes: 2, verified: false, spoofed: 0 });
+  });
 
+  it('контейнер заглушки пропал — порт сбрасывается, следующий обход ставит её заново', async () => {
+    const token = (db.prepare('SELECT stub_token FROM servers WHERE id = ?').get(serverId) as any).stub_token;
+    node.running = false;
+    const first = await ProbeService.runAll();
+    expect(first.errors.join(' ')).toContain('будет установлена заново');
+    expect(db.prepare('SELECT stub_port FROM servers WHERE id = ?').get(serverId)).toEqual({ stub_port: null });
+
+    node.port = 45678;
     await ProbeService.runAll();
-    const start = provider.calls.filter((c) => c.path === '/check-tcp').pop()!;
-    expect(start.host).toBe('203.0.113.9:443');
+    expect(node.installs).toBe(1);
+    expect(db.prepare('SELECT stub_port FROM servers WHERE id = ?').get(serverId)).toEqual({ stub_port: 45678 });
+    // метка страницы сохраняется: по ней проверяется пересылка через мосты
+    expect(db.prepare('SELECT stub_token FROM servers WHERE id = ?').get(serverId)).toEqual({ stub_token: token });
+  });
+
+  it('заглушку поставить не удалось: нода с TCP-портом проверяется по TCP, без него — ошибка с причиной', async () => {
+    db.prepare('UPDATE servers SET stub_port = NULL WHERE id = ?').run(serverId);
+    node.installFails = true;
+    const failed = await ProbeService.runAll();
+    expect(failed.checked).toBe(0);
+    expect(failed.errors.join(' ')).toContain('Не удалось запустить заглушку');
+
+    await api('/api/probes', 'PUT', { servers: [{ id: serverId, probe_port: 443 }] });
+    const tcp = await ProbeService.runAll();
+    expect(tcp.checked).toBe(1);
+    expect(provider.calls.filter((c) => c.path === '/check-tcp').pop()!.host).toBe('203.0.113.9:443');
     const probes = (await api('/api/servers')).body[0].probes;
     expect(probes).toEqual([
-      expect.objectContaining({ country: 'ru', ok_nodes: 2, total_nodes: 2, status: 'ok', rtt_ms: 38 }),
-      expect.objectContaining({ country: 'kz', ok_nodes: 0, total_nodes: 1, status: 'fail' }),
+      expect.objectContaining({ country: 'ru', method: 'tcp', ok_nodes: 2, total_nodes: 2, verified: false, status: 'ok', rtt_ms: 38 }),
+      expect.objectContaining({ country: 'kz', method: 'tcp', ok_nodes: 0, total_nodes: 1, status: 'fail' }),
     ]);
-
-    db.prepare('UPDATE servers SET host = ? WHERE id = ?').run('2001:db8::1', serverId);
-    await ProbeService.runAll();
-    expect(provider.calls.filter((c) => c.path === '/check-tcp').pop()!.host).toBe('[2001:db8::1]:443');
-    db.prepare('UPDATE servers SET host = ? WHERE id = ?').run('203.0.113.9', serverId);
-
     await api('/api/probes', 'PUT', { servers: [{ id: serverId, probe_port: null }] });
-    expect(db.prepare('SELECT probe_port FROM servers WHERE id = ?').get(serverId)).toEqual({ probe_port: null });
+    db.prepare('UPDATE servers SET stub_port = 34567 WHERE id = ?').run(serverId);
+  });
+
+  it('нода партнёра (без SSH): заглушка не ставится, проверка по TCP-порту (IPv6 — в скобках) или ошибка', async () => {
+    const panel = db.prepare("INSERT INTO remote_panels (name, base_url, token, status) VALUES ('P', 'https://p.example', 'x', 'online')").run();
+    const partnerNode = insertServer({ name: 'Partner', host: '2001:db8::1' });
+    db.prepare('UPDATE servers SET remote_panel_id = ?, remote_node_id = 1 WHERE id = ?').run(panel.lastInsertRowid, partnerNode);
+    try {
+      const noPort = await ProbeService.runAll();
+      expect(noPort.errors).toContain('Partner: нода партнёра — укажите TCP-порт для проверки');
+      expect(ssh.calls.every((c) => !c.command.includes('---STUB_PORT'))).toBe(true);
+
+      await api('/api/probes', 'PUT', { servers: [{ id: partnerNode, probe_port: 443 }] });
+      await ProbeService.runAll();
+      expect(provider.calls.filter((c) => c.path === '/check-tcp').pop()!.host).toBe('[2001:db8::1]:443');
+    } finally {
+      db.prepare('DELETE FROM servers WHERE id = ?').run(partnerNode);
+      db.prepare('DELETE FROM remote_panels WHERE id = ?').run(panel.lastInsertRowid);
+    }
   });
 
   it('ответ провайдера с чужим request_id или без ok отклоняется, ошибка сохраняется, результаты не портятся', async () => {
@@ -319,19 +359,33 @@ describe('проверка нод', () => {
 
   it('страна без проверяющих узлов отмечается в ошибке, остальные проверяются', async () => {
     await api('/api/probes', 'PUT', { settings: { countries: ['ru', 'zz'] } });
-    ProbeService.resetCountriesCache();
     const result = await ProbeService.runAll();
     expect(result.checked).toBe(1);
     expect(result.errors).toEqual(['нет проверяющих узлов в странах: ZZ']);
     await api('/api/probes', 'PUT', { settings: { countries: ['ru', 'kz'] } });
   });
 
+  it('после обхода вызывается обработчик мостов; его ошибка не ломает проверку', async () => {
+    const calls: number[] = [];
+    ProbeService.afterRun = async () => {
+      calls.push(1);
+      throw new Error('boom');
+    };
+    try {
+      expect((await ProbeService.runAll()).checked).toBe(1);
+      expect(calls).toEqual([1]);
+    } finally {
+      ProbeService.afterRun = null;
+    }
+  });
+
   it('ручной запуск: 202 и фоновая проверка; повторный в течение минуты — 429; без включения — 400', async () => {
+    setSetting('probe_last_run', new Date().toISOString());
     expect((await api('/api/probes/run', 'POST')).status).toBe(429);
     setSetting('probe_last_run', new Date(Date.now() - 5 * 60000).toISOString());
     const started = await api('/api/probes/run', 'POST');
     expect(started.status).toBe(202);
-    await vi.waitFor(() => expect((ProbeService.getStatus().running)).toBe(false));
+    await vi.waitFor(() => expect(ProbeService.getStatus().running).toBe(false));
     await vi.waitFor(() => expect(Date.now() - new Date(getSetting('probe_last_run')!).getTime()).toBeLessThan(5000));
 
     await api('/api/probes', 'PUT', { settings: { enabled: false } });
@@ -351,10 +405,15 @@ describe('проверка нод', () => {
 
 describe('доступность в подписке', () => {
   beforeAll(async () => {
+    resetProvider();
+    installProviderStub();
     await api('/api/probes', 'PUT', { settings: { enabled: true, countries: ['ru', 'kz'], show_in_name: true, show_in_description: true } });
     await api('/api/subscription-settings', 'PUT', { settings: { description: 'Быстрые серверы' } });
     setSetting('probe_last_run', null);
+    db.prepare('UPDATE servers SET stub_port = 34567 WHERE id = ?').run(serverId);
+    const s = stubSsh(stubNodeResponder(stubNodeState()));
     await ProbeService.runAll();
+    s.spy.mockRestore();
   });
 
   it('к названию ноды дописываются флаги стран и статусы, к описанию — пояснение', async () => {
@@ -432,3 +491,5 @@ describe('доступность в подписке', () => {
     expect(db.prepare('SELECT COUNT(*) AS c FROM probe_results WHERE server_id = ?').get(tempId)).toEqual({ c: 0 });
   });
 });
+
+

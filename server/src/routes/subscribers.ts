@@ -39,6 +39,14 @@ function validateTrafficLimit(value: unknown): number {
   return limit;
 }
 
+/** Страна пользователя: по ней подписка выбирает мост (docs/bridges.md); пусто — не задана */
+function validateCountry(value: unknown): string | null {
+  if (value === null || value === '') return null;
+  const code = String(value).trim().toLowerCase();
+  if (!/^[a-z]{2}$/.test(code)) throw new HttpError(400, 'Страна пользователя задаётся двухбуквенным кодом (например, ru)');
+  return code;
+}
+
 function validateExpireAt(value: unknown): string | null {
   if (value === null || value === '') return null;
   const date = new Date(String(value));
@@ -125,13 +133,14 @@ subscribersRouter.post('/', asyncHandler(async (req, res) => {
   const serverIds = validateServerIds(body.server_ids ?? []);
   const trafficLimit = body.traffic_limit === undefined ? 0 : validateTrafficLimit(body.traffic_limit);
   const expireAt = body.expire_at === undefined ? null : validateExpireAt(body.expire_at);
+  const country = body.country === undefined ? null : validateCountry(body.country);
   const servers = loadServers(serverIds);
 
   const subscriberId = transaction(() => {
     const result = db.prepare(`
-      INSERT INTO subscribers (name, token, enabled, traffic_limit, expire_at)
-      VALUES (?, ?, 1, ?, ?)
-    `).run(name, newToken(), trafficLimit, expireAt);
+      INSERT INTO subscribers (name, token, enabled, traffic_limit, expire_at, country)
+      VALUES (?, ?, 1, ?, ?, ?)
+    `).run(name, newToken(), trafficLimit, expireAt, country);
     const id = Number(result.lastInsertRowid);
     for (const server of servers) addPeer(id, name, 1, server);
     return id;
@@ -155,14 +164,15 @@ subscribersRouter.put('/:id', asyncHandler(async (req, res) => {
   const enabled = body.enabled === undefined ? subscriber.enabled : body.enabled ? 1 : 0;
   const trafficLimit = body.traffic_limit === undefined ? subscriber.traffic_limit : validateTrafficLimit(body.traffic_limit);
   const expireAt = body.expire_at === undefined ? subscriber.expire_at : validateExpireAt(body.expire_at);
+  const country = body.country === undefined ? subscriber.country : validateCountry(body.country);
   const targetIds = body.server_ids === undefined ? null : validateServerIds(body.server_ids);
   const targetServers = targetIds ? loadServers(targetIds) : [];
 
   const affectedServers = new Set<number>();
 
   transaction(() => {
-    db.prepare('UPDATE subscribers SET name = ?, enabled = ?, traffic_limit = ?, expire_at = ? WHERE id = ?').run(
-      name, enabled, trafficLimit, expireAt, subscriberId
+    db.prepare('UPDATE subscribers SET name = ?, enabled = ?, traffic_limit = ?, expire_at = ?, country = ? WHERE id = ?').run(
+      name, enabled, trafficLimit, expireAt, country, subscriberId
     );
 
     const existingPeers = db.prepare('SELECT server_id FROM clients WHERE subscriber_id = ?').all(subscriberId) as any[];

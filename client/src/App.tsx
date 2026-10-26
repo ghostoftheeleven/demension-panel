@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Navbar, type AppTab } from './components/Navbar';
 import { SubscriptionSettingsView } from './components/SubscriptionSettingsView';
 import { PartnersView } from './components/PartnersView';
+import { BridgesView } from './components/BridgesView';
 import { ServerCards } from './components/ServerCards';
 import { ProbesCard } from './components/ProbesCard';
 import { ServersOverview } from './components/ServersOverview';
@@ -260,6 +261,8 @@ export const App: React.FC = () => {
           <div className="flex items-center justify-center py-24 text-faint text-sm">
             Загрузка данных...
           </div>
+        ) : activeTab === 'bridges' ? (
+          <BridgesView servers={servers} />
         ) : activeTab === 'partners' ? (
           <PartnersView servers={servers} publicUrl={publicUrl} onChanged={loadData} />
         ) : activeTab === 'subscription' ? (

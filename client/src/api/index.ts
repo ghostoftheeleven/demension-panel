@@ -23,6 +23,10 @@ import type {
   ProbeCountry,
   ProbeSettings,
   ProbesOverview,
+  Bridge,
+  BridgeInput,
+  BridgeLinkMode,
+  BridgeOperationResult,
 } from '../types';
 
 const API_BASE = '/api';
@@ -253,13 +257,13 @@ export const api = {
     return request(`${API_BASE}/subscribers`, {}, 'Ошибка загрузки подписчиков');
   },
 
-  createSubscriber(data: { name: string; server_ids: number[]; traffic_limit?: number; expire_at?: string | null }): Promise<Subscriber> {
+  createSubscriber(data: { name: string; server_ids: number[]; traffic_limit?: number; expire_at?: string | null; country?: string | null }): Promise<Subscriber> {
     return request(`${API_BASE}/subscribers`, { method: 'POST', ...json(data) }, 'Ошибка создания пользователя');
   },
 
   updateSubscriber(
     id: number,
-    data: { name?: string; enabled?: number; server_ids?: number[]; traffic_limit?: number; expire_at?: string | null }
+    data: { name?: string; enabled?: number; server_ids?: number[]; traffic_limit?: number; expire_at?: string | null; country?: string | null }
   ): Promise<Subscriber> {
     return request(`${API_BASE}/subscribers/${id}`, { method: 'PUT', ...json(data) }, 'Ошибка обновления пользователя');
   },
@@ -391,6 +395,40 @@ export const api = {
 
   async runProbes(): Promise<void> {
     await request(`${API_BASE}/probes/run`, { method: 'POST' }, 'Ошибка запуска проверки');
+  },
+
+  // Мосты в странах пользователей
+  getBridges(): Promise<Bridge[]> {
+    return request(`${API_BASE}/bridges`, {}, 'Ошибка загрузки мостов');
+  },
+
+  /** Добавление сразу устанавливает мост: ответ приходит после установки (с журналом) */
+  createBridge(data: BridgeInput): Promise<BridgeOperationResult> {
+    return request(`${API_BASE}/bridges`, { method: 'POST', ...json(data) }, 'Ошибка добавления моста');
+  },
+
+  updateBridge(id: number, data: BridgeInput): Promise<Bridge> {
+    return request(`${API_BASE}/bridges/${id}`, { method: 'PUT', ...json(data) }, 'Ошибка сохранения моста');
+  },
+
+  setBridgeLinks(id: number, links: { server_id: number; mode: BridgeLinkMode }[]): Promise<BridgeOperationResult> {
+    return request(`${API_BASE}/bridges/${id}/links`, { method: 'PUT', ...json({ links }) }, 'Ошибка привязки нод к мосту');
+  },
+
+  installBridge(id: number): Promise<BridgeOperationResult> {
+    return request(`${API_BASE}/bridges/${id}/install`, { method: 'POST' }, 'Ошибка установки моста');
+  },
+
+  testBridgeSsh(id: number): Promise<{ success: boolean; message?: string }> {
+    return request(`${API_BASE}/bridges/${id}/test-ssh`, { method: 'POST' }, 'Ошибка проверки SSH');
+  },
+
+  deleteBridge(id: number, opts: { teardown?: boolean; force?: boolean } = {}): Promise<{ success: boolean }> {
+    const query = new URLSearchParams();
+    if (opts.teardown) query.set('teardown', '1');
+    if (opts.force) query.set('force', '1');
+    const qs = query.toString();
+    return request(`${API_BASE}/bridges/${id}${qs ? `?${qs}` : ''}`, { method: 'DELETE' }, 'Ошибка удаления моста');
   },
 
   // Перенос панели на другой сервер

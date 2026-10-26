@@ -320,6 +320,67 @@ const migrations: Array<() => void> = [
       );
     `);
   },
+
+  // v9: заглушка для проверки доступности на ноде, мосты в странах клиентов, страна пользователя
+  () => {
+    // Порт заглушки dementia-probe на ноде (NULL — не установлена) и метка, которую она отдаёт в ответе
+    addColumn('servers', 'stub_port INTEGER');
+    addColumn('servers', 'stub_token TEXT');
+    // Результат проверки: дошли ли запросы проверяющих узлов до ноды по журналу заглушки
+    addColumn('probe_results', "method TEXT NOT NULL DEFAULT 'ping'");
+    addColumn('probe_results', 'tcp_ok INTEGER');
+    addColumn('probe_results', 'udp_ok INTEGER');
+    addColumn('probe_results', 'spoofed INTEGER NOT NULL DEFAULT 0');
+    addColumn('probe_results', 'verified INTEGER NOT NULL DEFAULT 0');
+    // Страна пользователя (ISO 3166-1 alpha-2, нижний регистр): по ней выбирается мост
+    addColumn('subscribers', 'country TEXT');
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS bridges (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        host TEXT NOT NULL,
+        ssh_port INTEGER NOT NULL DEFAULT 22,
+        ssh_user TEXT NOT NULL DEFAULT 'root',
+        ssh_password TEXT,
+        ssh_key TEXT,
+        host_key TEXT,
+        country TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'uninstalled',
+        -- SHA-256 применённых на мосту правил: расхождение с правилами из БД — повод применить заново
+        rules_hash TEXT,
+        needs_apply INTEGER NOT NULL DEFAULT 0,
+        fail_count INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT,
+        last_seen TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      -- Мост пересылает UDP listen_port на порт AmneziaWG ноды (и TCP listen_port на её заглушку)
+      CREATE TABLE IF NOT EXISTS bridge_links (
+        bridge_id INTEGER NOT NULL REFERENCES bridges(id) ON DELETE CASCADE,
+        server_id INTEGER NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+        listen_port INTEGER NOT NULL,
+        -- auto — по проверкам, always — всегда через мост, off — не использовать
+        mode TEXT NOT NULL DEFAULT 'auto',
+        check_ok INTEGER,
+        checked_at TEXT,
+        PRIMARY KEY (bridge_id, server_id),
+        UNIQUE (bridge_id, listen_port)
+      );
+
+      -- Нужен ли мост пользователям страны для ноды (решение по проверкам с гистерезисом)
+      CREATE TABLE IF NOT EXISTS bridge_state (
+        server_id INTEGER NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+        country TEXT NOT NULL,
+        active INTEGER NOT NULL DEFAULT 0,
+        fail_streak INTEGER NOT NULL DEFAULT 0,
+        ok_streak INTEGER NOT NULL DEFAULT 0,
+        reason TEXT,
+        changed_at TEXT,
+        PRIMARY KEY (server_id, country)
+      );
+    `);
+  },
 ];
 
 /** Версия схемы, которую умеет эта сборка панели (число миграций) */

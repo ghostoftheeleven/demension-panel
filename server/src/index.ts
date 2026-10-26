@@ -25,6 +25,8 @@ import { versionRouter } from './routes/version.js';
 import { migrationRouter } from './routes/migration.js';
 import { probesRouter } from './routes/probes.js';
 import { ProbeService } from './services/probe.service.js';
+import { bridgesRouter } from './routes/bridges.js';
+import { BridgeService } from './services/bridge.service.js';
 import { migrationGuard, subscriptionFreeze } from './middleware/migration-guard.js';
 import { MigrationService } from './services/migration.service.js';
 import { PANEL_VERSION } from './services/version.service.js';
@@ -117,6 +119,7 @@ app.use('/api/subscription-settings', subscriptionSettingsRouter);
 app.use('/api/partners', partnersRouter);
 app.use('/api/remote-panels', remotePanelsRouter);
 app.use('/api/probes', probesRouter);
+app.use('/api/bridges', bridgesRouter);
 app.use('/api/version', versionRouter);
 app.use('/api', requireAuth, clientsRouter);
 
@@ -270,6 +273,8 @@ async function statsLoop() {
     if (MigrationService.isBackgroundPaused()) return;
     const servers = db.prepare("SELECT id FROM servers WHERE status IN ('online', 'offline', 'error')").all() as { id: number }[];
     await mapLimit(servers, 5, (s) => ProvisionService.fetchServerStats(s.id));
+    // Мосты: правила из БД применены и на месте
+    await BridgeService.checkAll();
     SubscriptionService.refreshSuspension();
     PartnerService.refreshSuspension();
   } catch (err) {
@@ -293,10 +298,16 @@ async function federationLoop() {
 }
 setTimeout(federationLoop, 10000);
 
+// После проверки из стран — сквозная проверка мостов и пересчёт, кому из пользователей нужен мост
+ProbeService.afterRun = () => BridgeService.afterProbeRun();
+
 // Проверка доступности нод из выбранных стран (если включена): раз в минуту смотрим, не пора ли
 async function probeLoop() {
   try {
-    if (!MigrationService.isBackgroundPaused() && ProbeService.isDue()) await ProbeService.runAll();
+    if (MigrationService.isBackgroundPaused()) return;
+    if (ProbeService.isDue()) await ProbeService.runAll();
+    // Сигнал от клиентов (обрыв рукопожатий) учитывается чаще, чем идут проверки из стран
+    BridgeService.evaluate(false);
   } catch (err) {
     console.error('[PROBE] Ошибка проверки:', err);
   } finally {

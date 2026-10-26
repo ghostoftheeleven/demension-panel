@@ -8,6 +8,16 @@ import { decryptSecret } from './secrets.service.js';
 import { shellQuote, parseSubnet } from '../utils/net.js';
 import { parseServerConfig, paramsToColumns, ParsedServerConfig } from '../utils/awg-params.js';
 import { FederationClient } from './federation-client.service.js';
+import {
+  newStubToken,
+  parseStubHits,
+  parseStubPort,
+  stubInstallScript,
+  stubPortCandidates,
+  stubReadScript,
+  stubRemoveScript,
+  StubHit,
+} from './stub.service.js';
 
 const REMOTE_NODE_ERROR = 'Это нода партнёра: ею управляет панель владельца';
 
@@ -57,15 +67,15 @@ export interface ScanResult {
   };
 }
 
-// Все операции с одной нодой выполняются последовательно
-const chains = new Map<number, Promise<unknown>>();
+// Все операции с одной нодой выполняются последовательно (с мостом — по ключу `bridge:<id>`)
+const chains = new Map<number | string, Promise<unknown>>();
 // Запрошенная, но ещё не начатая синхронизация (повторные запросы объединяются)
 const pendingSync = new Map<number, Promise<OperationResult>>();
 // То же для применения параметров: каждое применение перезапускает контейнер и рвёт туннели всех клиентов
 const pendingApply = new Map<number, Promise<OperationResult>>();
 const installing = new Set<number>();
 
-function runExclusive<T>(serverId: number, fn: () => Promise<T>): Promise<T> {
+export function runExclusive<T>(serverId: number | string, fn: () => Promise<T>): Promise<T> {
   const previous = chains.get(serverId) || Promise.resolve();
   const next = previous.catch(() => {}).then(fn);
   const tail = next.catch(() => {});
@@ -694,9 +704,10 @@ export class ProvisionService {
         const credentials = this.getCredentials(server);
         const c = this.container(server);
         const cleanup = server.managed_by === 'demension' ? `; rm -rf ${AWG_DIR}` : '';
+        // Заглушка проверки доступности удаляется вместе с AmneziaWG
         const result = await SshService.executeCommand(
           credentials,
-          `${SshService.sudo(credentials)}sh -c ${shellQuote(`docker rm -f ${c.name} >/dev/null 2>&1${cleanup}; echo done`)}`,
+          `${SshService.sudo(credentials)}sh -c ${shellQuote(`docker rm -f ${c.name} >/dev/null 2>&1${cleanup}; ${stubRemoveScript()}; echo done`)}`,
           { timeoutMs: 120000 }
         );
         if (result.code !== 0) throw new Error(result.stderr.trim() || `код ${result.code}`);
@@ -704,6 +715,58 @@ export class ProvisionService {
       } catch (err: any) {
         return { success: false, error: err.message };
       }
+    });
+  }
+
+  // ==============================================================================
+  // Заглушка проверки доступности (docs/probes.md)
+  // ==============================================================================
+
+  /**
+   * Ставит (или переставляет) заглушку dementia-probe на ноду и запоминает её порт. Порт меняется, только если прежний
+   * занят. Контейнер AmneziaWG не затрагивается. Возвращает порт.
+   */
+  static ensureProbeStub(serverId: number): Promise<number> {
+    return runExclusive(serverId, async () => {
+      const server = loadLocalServer(serverId);
+      if (server.status === 'uninstalled' || server.status === 'installing' || installing.has(serverId)) {
+        throw new Error('Сервер не установлен');
+      }
+      const token = server.stub_token || newStubToken();
+      const exclude = [server.awg_port, server.ssh_port, server.deployed_port].map(Number).filter(Number.isInteger);
+      const script = stubInstallScript(stubPortCandidates(exclude, server.stub_port ?? null), token);
+      const credentials = this.getCredentials(server);
+      const result = await SshService.executeCommand(credentials, `${SshService.sudo(credentials)}sh -c ${shellQuote(script)}`, {
+        timeoutMs: 180000,
+      });
+      const port = result.code === 0 ? parseStubPort(result.stdout) : null;
+      if (!port) {
+        const detail = result.stderr.trim().split('\n').slice(-3).join(' ').slice(0, 300);
+        throw new Error(`Не удалось запустить заглушку проверки: ${detail || `код ${result.code}`}`);
+      }
+      db.prepare('UPDATE servers SET stub_port = ?, stub_token = ? WHERE id = ?').run(port, token, serverId);
+      return port;
+    });
+  }
+
+  /**
+   * Журнал обращений к заглушке. Если её контейнер пропал (переустановка системы, ручное удаление), порт сбрасывается —
+   * при следующей проверке заглушка поставится заново.
+   */
+  static readProbeHits(serverId: number): Promise<StubHit[]> {
+    return runExclusive(serverId, async () => {
+      const server = loadLocalServer(serverId);
+      const credentials = this.getCredentials(server);
+      const result = await SshService.executeCommand(credentials, `${SshService.sudo(credentials)}sh -c ${shellQuote(stubReadScript())}`, {
+        timeoutMs: 30000,
+      });
+      if (result.code !== 0) throw new Error(result.stderr.trim() || `код ${result.code}`);
+      const parsed = parseStubHits(result.stdout);
+      if (!parsed.running) {
+        db.prepare('UPDATE servers SET stub_port = NULL WHERE id = ?').run(serverId);
+        throw new Error('заглушка проверки на ноде не запущена и будет установлена заново');
+      }
+      return parsed.hits;
     });
   }
 

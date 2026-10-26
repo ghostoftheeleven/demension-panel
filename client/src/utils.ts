@@ -52,3 +52,11 @@ export function countryName(code: string): string {
     return code.toUpperCase();
   }
 }
+
+/**
+ * Страны для выбора страны пользователя и моста: где чаще всего ограничивают доступ и где нужны мосты.
+ * Любой другой код ISO можно ввести вручную.
+ */
+export const COMMON_COUNTRIES = [
+  'ru', 'by', 'kz', 'uz', 'kg', 'tj', 'tm', 'az', 'am', 'ge', 'ua', 'md', 'tr', 'ir', 'cn', 'in', 'pk', 'ae', 'sa', 'eg', 'vn', 'id', 'mm',
+];

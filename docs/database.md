@@ -23,6 +23,7 @@ SQLite (`node:sqlite`, Node ≥ 22.13), файл `data/dementia.db`, режим 
 | v6 | Уникальный индекс `idx_clients_server_pubkey` (ключ клиента на ноде; не создаётся, если дубли уже есть — предупреждение в логе), таблица `trusted_login_ips` |
 | v7 | Версии ПО AmneziaWG на ноде: `node_awg_go`, `node_awg_tools`, `node_image`, `node_image_created`, `node_info_at` |
 | v8 | Проверка доступности из стран: `servers.probe_port`, таблица `probe_results` |
+| v9 | Заглушка проверки (`servers.stub_port`, `stub_token`; `probe_results.method`, `tcp_ok`, `udp_ok`, `spoofed`, `verified`), мосты (`bridges`, `bridge_links`, `bridge_state`), `subscribers.country` |
 
 ## Таблицы
 
@@ -44,7 +45,8 @@ SQLite (`node:sqlite`, Node ≥ 22.13), файл `data/dementia.db`, режим 
 | `managed_by` | `dementia` — контейнер панели, `amnezia` — контейнер приложения Amnezia, `partner` — нода партнёра |
 | `sub_name`, `sub_order` | Отображаемое имя и порядок в подписке |
 | `remote_panel_id`, `remote_node_id` | Нода партнёрской панели (без SSH); каскадное удаление с `remote_panels` |
-| `probe_port` | Порт TCP-проверки доступности из стран; NULL — ICMP-ping ([probes.md](probes.md)) |
+| `probe_port` | Порт TCP-проверки доступности из стран для нод без заглушки (ноды партнёров) и запасной для своих; NULL — не задан ([probes.md](probes.md)) |
+| `stub_port`, `stub_token` | Порт заглушки проверки доступности на ноде (NULL — не установлена) и метка её страницы (не секрет: по ней проверяется пересылка через мост) |
 | `node_awg_go`, `node_awg_tools`, `node_image`, `node_image_created`, `node_info_at` | Версии ПО AmneziaWG на ноде (amneziawg-go, утилиты, образ и дата его сборки) и время их чтения; `node_info_at = NULL` — перечитать при следующем опросе |
 
 ### `clients` — пиры
@@ -63,7 +65,8 @@ SQLite (`node:sqlite`, Node ≥ 22.13), файл `data/dementia.db`, режим 
 
 ### `subscribers` — пользователи подписок
 `token` (секрет ссылки `/sub/<token>`), `enabled`, `traffic_limit` (байты, 0 — без лимита), `expire_at`,
-`suspended` (вычисляется фоновой задачей: истёк срок или исчерпан лимит).
+`suspended` (вычисляется фоновой задачей: истёк срок или исчерпан лимит), `country` (страна пользователя, двухбуквенный код; по ней
+подписка выбирает мост, NULL — не задана).
 
 ### `partners`, `partner_nodes`, `partner_audit` — выданные доступы (сторона владельца)
 `token_hash` (SHA-256), `token_hint` (для отображения), `enabled`, `suspended`, `max_clients`, `traffic_limit`,
@@ -74,8 +77,17 @@ SQLite (`node:sqlite`, Node ≥ 22.13), файл `data/dementia.db`, режим 
 (`pending`/`online`/`error`/`revoked`), `limits` (JSON), `last_sync_at`, `last_error`.
 
 ### `probe_results` — доступность нод из стран
-`(server_id, country)` — ключ; `ok_nodes` / `total_nodes` — сколько проверяющих узлов страны достучалось до ноды, `rtt_ms`, `checked_at`.
+`(server_id, country)` — ключ; `method` (`stub` — заглушка с подтверждением, `tcp` — порт по ответу check-host.net, `ping` — записи до v0.2.0);
+`ok_nodes` / `total_nodes` — сколько проверяющих узлов страны достучалось до ноды, `tcp_ok`/`udp_ok` — сколько дошло по TCP и UDP по журналу
+заглушки, `spoofed` — узлы с подменённым ответом, `verified` — результат подтверждён журналом, `rtt_ms`, `checked_at`.
 Каскадно удаляется с сервером. Устаревшие (старше трёх интервалов, но не менее двух часов) результаты не показываются.
+
+### `bridges`, `bridge_links`, `bridge_state` — мосты ([bridges.md](bridges.md))
+`bridges`: SSH-доступ как у `servers` (`ssh_password`, `ssh_key` — **зашифрованы**, `host_key` — TOFU), `country`, `status`, `rules_hash`
+(SHA-256 применённых правил), `needs_apply`, `fail_count`, `last_error`, `last_seen`. `bridge_links`: нода моста, `listen_port` (уникален на
+мосту, не меняется после привязки), `mode` (`auto`/`always`/`off`), `check_ok`/`checked_at` — сквозная проверка пересылки. `bridge_state`:
+по паре нода × страна — `active` (мост выдаётся), серии проверок `fail_streak`/`ok_streak`, `reason` (`probe`/`clients`), `changed_at`.
+Связи удаляются каскадно вместе с мостом и нодой.
 
 ### Прочее
 - `admins` — администратор (scrypt), `sessions` — SHA-256 токенов с `expires_at`, `trusted_login_ips` — IP успешных входов

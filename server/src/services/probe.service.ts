@@ -1,12 +1,19 @@
+import crypto from 'node:crypto';
 import net from 'node:net';
 import { db, getSetting, setSetting, transaction } from '../db/index.js';
 import { HttpError } from '../utils/http.js';
 import { PANEL_VERSION } from './version.service.js';
+import { ProvisionService } from './provision.service.js';
+import type { StubHit } from './stub.service.js';
 
 /**
  * Проверка доступности нод из выбранных стран. Сама панель стоит в одной стране, поэтому проверку выполняют узлы публичного
- * сервиса check-host.net (бесплатный API без ключа): ICMP-ping или TCP-подключение к ноде с их стороны. Это показывает
- * блокировку адреса ноды (IP-уровень); блокировку самого протокола WireGuard на UDP-порту так проверить нельзя.
+ * сервиса check-host.net (бесплатный API без ключа).
+ *
+ * Основной способ — заглушка на ноде (stub.service.ts): узлы обращаются к ней по HTTP и UDP, а панель по журналу заглушки
+ * на самой ноде проверяет, что обращения действительно дошли. Ответ ICMP или TCP провайдер может подделать, а запись в
+ * журнале на сервере — нет. Для нод без SSH (ноды партнёров) остаётся TCP-подключение к заданному порту по ответу
+ * check-host.net. Ping не используется: его ответы подделываются.
  *
  * Функция отключена, пока администратор её не включит: адреса нод уходят на сторонний сервис.
  * Результаты — таблица probe_results, настройки — settings с префиксом probe_ (docs/probes.md).
@@ -48,12 +55,23 @@ export interface ProbeCountry {
 }
 
 export type ProbeStatus = 'ok' | 'partial' | 'fail';
+/** stub — заглушка с подтверждением по журналу ноды, tcp — подключение к порту по ответу check-host.net */
+export type ProbeMethod = 'stub' | 'tcp';
 
 export interface ProbeResult {
   server_id: number;
   country: string;
+  method: string;
+  /** Узлы страны, с которых нода доступна (для заглушки — по UDP, как у AmneziaWG; без данных UDP — по TCP) */
   ok_nodes: number;
   total_nodes: number;
+  /** Заглушка: сколько узлов дошло по TCP и по UDP (по журналу ноды); null — неизвестно */
+  tcp_ok: number | null;
+  udp_ok: number | null;
+  /** Узлы, получившие ответ, хотя до ноды запрос не дошёл: ответ подделан по дороге */
+  spoofed: number;
+  /** Результат подтверждён журналом заглушки на ноде */
+  verified: boolean;
   rtt_ms: number | null;
   checked_at: string;
   status: ProbeStatus;
@@ -63,9 +81,25 @@ interface CountryAggregate {
   ok: number;
   total: number;
   rtts: number[];
+  tcpOk: number | null;
+  udpOk: number | null;
+  spoofed: number;
+}
+
+interface CheckOutcome {
+  method: ProbeMethod;
+  verified: boolean;
+  countries: Map<string, CountryAggregate>;
+}
+
+interface StartedCheck {
+  requestId: string;
+  /** Узел → страна и адрес, с которого он проверяет */
+  nodes: Map<string, { country: string; ip: string | null }>;
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const IP = /^[0-9a-fA-F.:]{2,45}$/;
 
 async function providerFetch(path: string): Promise<any> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -76,16 +110,13 @@ async function providerFetch(path: string): Promise<any> {
   return res.json();
 }
 
-/** Результат одного ping-узла: null — ответа нет (ещё считается или имя не разрешилось) */
-export function parsePingResult(value: unknown): { ok: boolean; rtt: number | null } | null {
-  if (!Array.isArray(value) || !Array.isArray(value[0])) return null;
-  const attempts = value[0] as unknown[];
-  if (attempts.length === 0 || (attempts.length === 1 && attempts[0] === null)) return null;
-  const rtts: number[] = [];
-  for (const attempt of attempts) {
-    if (Array.isArray(attempt) && attempt[0] === 'OK' && typeof attempt[1] === 'number' && Number.isFinite(attempt[1])) rtts.push(attempt[1] * 1000);
-  }
-  return { ok: rtts.length > 0, rtt: rtts.length ? Math.round(rtts.reduce((a, b) => a + b, 0) / rtts.length) : null };
+/** Результат одного HTTP-узла: [[1, время, "OK", "200", ip]] — успех, [[0, …]] — отказ, прочее — нет результата */
+export function parseHttpResult(value: unknown): { ok: boolean; rtt: number | null } | null {
+  const entry = Array.isArray(value) && Array.isArray(value[0]) ? (value[0] as unknown[]) : null;
+  if (!entry) return null;
+  if (entry[0] === 1) return { ok: true, rtt: typeof entry[1] === 'number' && Number.isFinite(entry[1]) ? Math.round(entry[1] * 1000) : null };
+  if (entry[0] === 0) return { ok: false, rtt: null };
+  return null;
 }
 
 /** Результат одного TCP-узла: объект с time — успех, с error — отказ */
@@ -94,6 +125,16 @@ export function parseTcpResult(value: unknown): { ok: boolean; rtt: number | nul
   if (!entry || typeof entry !== 'object') return null;
   if (typeof (entry as any).time === 'number' && Number.isFinite((entry as any).time)) return { ok: true, rtt: Math.round((entry as any).time * 1000) };
   if ('error' in entry) return { ok: false, rtt: null };
+  return null;
+}
+
+/** Результат одного UDP-узла: {time} — пришёл ответ, {timeout}/{error} — ответа нет (что не значит, что пакет не дошёл) */
+export function parseUdpResult(value: unknown): { ok: boolean; rtt: number | null } | null {
+  const entry = Array.isArray(value) ? value[0] : null;
+  if (!entry || typeof entry !== 'object') return null;
+  const e = entry as any;
+  if (typeof e.time === 'number' && Number.isFinite(e.time) && !e.timeout) return { ok: true, rtt: Math.round(e.time * 1000) };
+  if ('timeout' in e || 'error' in e) return { ok: false, rtt: null };
   return null;
 }
 
@@ -109,12 +150,52 @@ export function countryFlag(code: string): string {
 
 const STATUS_MARK: Record<ProbeStatus, string> = { ok: '✅', partial: '⚠️', fail: '❌' };
 
-function countryNameRu(code: string): string {
+export function countryNameRu(code: string): string {
   try {
     return new Intl.DisplayNames(['ru'], { type: 'region' }).of(code.toUpperCase()) ?? code.toUpperCase();
   } catch {
     return code.toUpperCase();
   }
+}
+
+/**
+ * Сопоставление обращений из журнала заглушки с проверяющими узлами. HTTP-запрос несёт одноразовую метку проверки, поэтому
+ * обращение с меткой с незнакомого адреса (узел вышел в сеть не с того адреса, что сообщил check-host.net) засчитывается
+ * узлу, который сообщил об успехе, но ещё не сопоставлен; этот адрес затем используется и для UDP.
+ */
+export function matchStubHits(
+  hits: StubHit[],
+  nonce: string,
+  sinceEpoch: number,
+  nodes: Map<string, { ip: string | null }>,
+  claimedOk: (id: string) => boolean
+): { tcp: Set<string>; udp: Set<string> } {
+  const owner = new Map<string, string>();
+  for (const [id, info] of nodes) if (info.ip) owner.set(info.ip, id);
+
+  const tcp = new Set<string>();
+  const unknown: string[] = [];
+  for (const hit of hits) {
+    if (hit.proto !== 'tcp' || !hit.path.includes(nonce)) continue;
+    const id = owner.get(hit.ip);
+    if (id) tcp.add(id);
+    else if (!unknown.includes(hit.ip)) unknown.push(hit.ip);
+  }
+  const waiting = [...nodes.keys()].filter((id) => !tcp.has(id) && claimedOk(id));
+  for (const ip of unknown) {
+    const id = waiting.shift();
+    if (!id) break;
+    tcp.add(id);
+    owner.set(ip, id);
+  }
+
+  const udp = new Set<string>();
+  for (const hit of hits) {
+    if (hit.proto !== 'udp' || hit.at < sinceEpoch) continue;
+    const id = owner.get(hit.ip);
+    if (id) udp.add(id);
+  }
+  return { tcp, udp };
 }
 
 export class ProbeService {
@@ -123,7 +204,9 @@ export class ProbeService {
   static pollDelayMs: number | null = null;
   /** Сколько всего ждать ответы узлов; тесты уменьшают */
   static pollTotalMs = POLL_TOTAL_MS;
-  private static countriesCache: { at: number; list: ProbeCountry[] } | null = null;
+  /** Вызывается после каждого обхода (мосты пересчитывают, кому нужен обход блокировки); задаёт index.ts */
+  static afterRun: (() => Promise<void>) | null = null;
+  private static countriesCache: { at: number; list: ProbeCountry[]; ips: Map<string, string> } | null = null;
 
   // ---- Настройки ----
 
@@ -185,15 +268,17 @@ export class ProbeService {
     return next;
   }
 
-  /** Порт TCP-проверки сервера: null — ICMP-ping */
+  /** Порт TCP-проверки сервера (для нод без заглушки, например нод партнёров): null — не задан */
   static setServerProbePort(serverId: number, port: unknown): void {
     let value: number | null = null;
     if (port !== null && port !== undefined && port !== '') {
       value = Number(port);
       if (!Number.isInteger(value) || value < 1 || value > 65535) throw new HttpError(400, 'Порт TCP-проверки: число от 1 до 65535');
     }
-    const result = db.prepare('UPDATE servers SET probe_port = ? WHERE id = ?').run(value, serverId);
-    if (result.changes === 0) throw new HttpError(404, 'Сервер не найден');
+    const current = db.prepare('SELECT probe_port FROM servers WHERE id = ?').get(serverId) as { probe_port: number | null } | undefined;
+    if (!current) throw new HttpError(404, 'Сервер не найден');
+    if (current.probe_port === value) return;
+    db.prepare('UPDATE servers SET probe_port = ? WHERE id = ?').run(value, serverId);
     db.prepare('DELETE FROM probe_results WHERE server_id = ?').run(serverId);
   }
 
@@ -210,14 +295,14 @@ export class ProbeService {
 
   // ---- Список стран провайдера ----
 
-  /** Страны, в которых у check-host.net есть проверяющие узлы (кэш на сутки) */
-  static async listCountries(): Promise<ProbeCountry[]> {
+  private static async loadNodes(): Promise<{ list: ProbeCountry[]; ips: Map<string, string> }> {
     const cached = this.countriesCache;
-    if (cached && Date.now() - cached.at < COUNTRIES_TTL_MS) return cached.list;
+    if (cached && Date.now() - cached.at < COUNTRIES_TTL_MS) return cached;
 
     try {
       const data = await providerFetch('/nodes/hosts');
       const byCode = new Map<string, ProbeCountry>();
+      const ips = new Map<string, string>();
       for (const [id, info] of Object.entries<any>(data?.nodes ?? {})) {
         const location = info?.location;
         if (!NODE_ID.test(id) || !Array.isArray(location) || typeof location[0] !== 'string' || !COUNTRY_CODE.test(location[0])) continue;
@@ -226,15 +311,21 @@ export class ProbeService {
         const city = typeof location[2] === 'string' ? location[2].slice(0, 60) : '';
         if (city && !country.cities.includes(city)) country.cities.push(city);
         byCode.set(location[0], country);
+        if (typeof info.ip === 'string' && IP.test(info.ip)) ips.set(id, info.ip);
       }
       const list = [...byCode.values()].sort((a, b) => a.code.localeCompare(b.code));
       if (list.length === 0) throw new Error('пустой список узлов');
-      this.countriesCache = { at: Date.now(), list };
-      return list;
+      this.countriesCache = { at: Date.now(), list, ips };
+      return this.countriesCache;
     } catch (err: any) {
-      if (cached) return cached.list;
+      if (cached) return cached;
       throw new HttpError(502, `Не удалось получить список стран у check-host.net: ${err.message}`);
     }
+  }
+
+  /** Страны, в которых у check-host.net есть проверяющие узлы (кэш на сутки) */
+  static async listCountries(): Promise<ProbeCountry[]> {
+    return (await this.loadNodes()).list;
   }
 
   static resetCountriesCache(): void {
@@ -243,50 +334,130 @@ export class ProbeService {
 
   // ---- Проверка ----
 
-  /**
-   * Одна проверка адреса группой узлов: возвращает по каждой стране, сколько узлов дошло до ноды.
-   * Узлы, не ответившие за отведённое время, в итог не входят.
-   */
-  static async checkHost(host: string, port: number | null, nodeIds: string[], countryOfNode: Map<string, string>): Promise<Map<string, CountryAggregate>> {
-    const type = port ? 'tcp' : 'ping';
-    const target = port ? `${net.isIPv6(host) ? `[${host}]` : host}:${port}` : host;
+  private static async startCheck(
+    type: 'http' | 'tcp' | 'udp',
+    target: string,
+    nodeIds: string[],
+    countryOfNode: Map<string, string>,
+    ipOfNode: Map<string, string>
+  ): Promise<StartedCheck> {
     const started = await providerFetch(`/check-${type}?host=${encodeURIComponent(target)}&${nodeIds.map((n) => `node=${encodeURIComponent(n)}`).join('&')}`);
     if (started?.ok !== 1 || !REQUEST_ID.test(String(started.request_id))) {
       throw new Error(typeof started?.error === 'string' ? started.error.slice(0, 120) : 'check-host.net отклонил запрос');
     }
-
-    // Страна узла: из ответа на запуск, иначе из списка узлов
-    const nodeCountry = new Map<string, string>();
+    // Страна и адрес узла: из ответа на запуск, иначе из списка узлов
+    const nodes = new Map<string, { country: string; ip: string | null }>();
     for (const id of nodeIds) {
       const info = started.nodes?.[id];
       const code = Array.isArray(info) && typeof info[0] === 'string' && COUNTRY_CODE.test(info[0]) ? info[0] : countryOfNode.get(id);
-      if (code) nodeCountry.set(id, code);
+      const ip = Array.isArray(info) && typeof info[3] === 'string' && IP.test(info[3]) ? info[3] : ipOfNode.get(id) ?? null;
+      if (code) nodes.set(id, { country: code, ip });
     }
+    return { requestId: String(started.request_id), nodes };
+  }
 
-    const parse = type === 'ping' ? parsePingResult : parseTcpResult;
+  /** Опрос результатов, пока все узлы не ответят или не выйдет время */
+  private static async pollResults(check: StartedCheck, firstDelayMs: number): Promise<Record<string, unknown>> {
+    const ids = [...check.nodes.keys()];
     const deadline = Date.now() + this.pollTotalMs;
     let results: Record<string, unknown> = {};
     for (;;) {
-      await sleep(this.pollDelayMs ?? (type === 'ping' ? 4000 : 2500));
-      results = (await providerFetch(`/check-result/${started.request_id}`)) ?? {};
-      const pending = nodeIds.filter((id) => results[id] === null || results[id] === undefined);
+      await sleep(this.pollDelayMs ?? firstDelayMs);
+      results = (await providerFetch(`/check-result/${check.requestId}`)) ?? {};
+      const pending = ids.filter((id) => results[id] === null || results[id] === undefined);
       if (pending.length === 0 || Date.now() > deadline) break;
     }
+    return results;
+  }
 
-    const aggregate = new Map<string, CountryAggregate>();
-    for (const id of nodeIds) {
-      const country = nodeCountry.get(id);
-      const parsed = country ? parse(results[id]) : null;
-      if (!country || !parsed) continue;
-      const entry = aggregate.get(country) ?? { ok: 0, total: 0, rtts: [] };
-      entry.total++;
-      if (parsed.ok) {
-        entry.ok++;
-        if (parsed.rtt !== null) entry.rtts.push(parsed.rtt);
-      }
-      aggregate.set(country, entry);
+  private static addToCountry(map: Map<string, CountryAggregate>, country: string, entry: { ok: boolean; rtt: number | null; tcpOk: boolean | null; udpOk: boolean | null; spoofed: boolean }) {
+    const a = map.get(country) ?? { ok: 0, total: 0, rtts: [], tcpOk: null, udpOk: null, spoofed: 0 };
+    a.total++;
+    if (entry.ok) {
+      a.ok++;
+      if (entry.rtt !== null) a.rtts.push(entry.rtt);
     }
-    return aggregate;
+    if (entry.tcpOk !== null) a.tcpOk = (a.tcpOk ?? 0) + (entry.tcpOk ? 1 : 0);
+    if (entry.udpOk !== null) a.udpOk = (a.udpOk ?? 0) + (entry.udpOk ? 1 : 0);
+    if (entry.spoofed) a.spoofed++;
+    map.set(country, a);
+  }
+
+  /** TCP-подключение к host:port с проверяющих узлов (по их ответу, без подтверждения на ноде) */
+  static async checkTcp(host: string, port: number, nodeIds: string[], countryOfNode: Map<string, string>, ipOfNode = new Map<string, string>()): Promise<CheckOutcome> {
+    const target = `${net.isIPv6(host) ? `[${host}]` : host}:${port}`;
+    const check = await this.startCheck('tcp', target, nodeIds, countryOfNode, ipOfNode);
+    const results = await this.pollResults(check, 2500);
+    const countries = new Map<string, CountryAggregate>();
+    for (const [id, info] of check.nodes) {
+      const parsed = parseTcpResult(results[id]);
+      if (!parsed) continue;
+      this.addToCountry(countries, info.country, { ok: parsed.ok, rtt: parsed.rtt, tcpOk: parsed.ok, udpOk: null, spoofed: false });
+    }
+    return { method: 'tcp', verified: false, countries };
+  }
+
+  /**
+   * Проверка заглушкой: HTTP-запрос с одноразовой меткой и UDP-пакет на порт заглушки, затем сверка с журналом на ноде.
+   * Нода доступна с узла, если до неё дошёл UDP (как трафик AmneziaWG); если UDP-проверку запустить не удалось — TCP.
+   * Если журнал прочитать не удалось, засчитываются ответы узлов без подтверждения (verified = false).
+   */
+  static async checkStub(
+    server: { id: number; host: string; stub_port: number },
+    nodeIds: string[],
+    countryOfNode: Map<string, string>,
+    ipOfNode = new Map<string, string>(),
+    errors: string[] = []
+  ): Promise<CheckOutcome> {
+    const nonce = crypto.randomBytes(8).toString('hex');
+    const host = net.isIPv6(server.host) ? `[${server.host}]` : server.host;
+    const since = Math.floor(Date.now() / 1000) - 5;
+
+    const [http, udp] = await Promise.all([
+      this.startCheck('http', `http://${host}:${server.stub_port}/${nonce}`, nodeIds, countryOfNode, ipOfNode),
+      this.startCheck('udp', `${host}:${server.stub_port}`, nodeIds, countryOfNode, ipOfNode).catch(() => null),
+    ]);
+    const [httpResults, udpResults] = await Promise.all([this.pollResults(http, 3000), udp ? this.pollResults(udp, 3000) : Promise.resolve({} as Record<string, unknown>)]);
+
+    let hits: StubHit[] | null = null;
+    try {
+      hits = await ProvisionService.readProbeHits(server.id);
+    } catch (err: any) {
+      errors.push(`журнал заглушки не прочитан, результат не подтверждён: ${err.message}`);
+    }
+
+    // Адрес узла из любого из двух запусков
+    const nodes = new Map(http.nodes);
+    for (const [id, info] of udp?.nodes ?? []) {
+      const known = nodes.get(id);
+      if (!known) nodes.set(id, info);
+      else if (!known.ip && info.ip) nodes.set(id, { ...known, ip: info.ip });
+    }
+    const matched = hits ? matchStubHits(hits, nonce, since, nodes, (id) => parseHttpResult(httpResults[id])?.ok === true) : null;
+
+    const countries = new Map<string, CountryAggregate>();
+    for (const [id, info] of nodes) {
+      const httpResult = parseHttpResult(httpResults[id]);
+      const udpResult = udp ? parseUdpResult(udpResults[id]) : null;
+      if (!httpResult && !udpResult) continue;
+      if (matched) {
+        const tcpOk = matched.tcp.has(id);
+        const udpOk = matched.udp.has(id);
+        // Без UDP-проверки узла (не запустилась или узел не закончил) решает TCP
+        const ok = udpResult ? udpOk : tcpOk;
+        this.addToCountry(countries, info.country, {
+          ok,
+          rtt: httpResult?.ok ? httpResult.rtt : null,
+          tcpOk,
+          udpOk: udpResult ? udpOk : null,
+          spoofed: httpResult?.ok === true && !tcpOk,
+        });
+      } else {
+        const ok = httpResult?.ok === true;
+        this.addToCountry(countries, info.country, { ok, rtt: ok ? httpResult!.rtt : null, tcpOk: ok, udpOk: null, spoofed: false });
+      }
+    }
+    return { method: 'stub', verified: matched !== null, countries };
   }
 
   static isDue(): boolean {
@@ -294,6 +465,25 @@ export class ProbeService {
     if (!settings.enabled || settings.countries.length === 0 || this.running) return false;
     const lastRun = getSetting('probe_last_run');
     return !lastRun || Date.now() - new Date(lastRun).getTime() >= settings.interval_minutes * 60000;
+  }
+
+  private static saveResults(serverId: number, outcome: CheckOutcome): void {
+    const now = new Date().toISOString();
+    transaction(() => {
+      const upsert = db.prepare(`
+        INSERT INTO probe_results (server_id, country, method, ok_nodes, total_nodes, tcp_ok, udp_ok, spoofed, verified, rtt_ms, checked_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(server_id, country) DO UPDATE SET method = excluded.method, ok_nodes = excluded.ok_nodes,
+          total_nodes = excluded.total_nodes, tcp_ok = excluded.tcp_ok, udp_ok = excluded.udp_ok, spoofed = excluded.spoofed,
+          verified = excluded.verified, rtt_ms = excluded.rtt_ms, checked_at = excluded.checked_at
+      `);
+      for (const [country, a] of outcome.countries) {
+        upsert.run(
+          serverId, country, outcome.method, a.ok, a.total, a.tcpOk, a.udpOk, a.spoofed, outcome.verified ? 1 : 0,
+          a.rtts.length ? Math.round(a.rtts.reduce((x, y) => x + y, 0) / a.rtts.length) : null, now
+        );
+      }
+    });
   }
 
   /** Проверяет все установленные ноды из выбранных стран и сохраняет результаты */
@@ -306,7 +496,7 @@ export class ProbeService {
     const errors: string[] = [];
     let checked = 0;
     try {
-      const countries = await this.listCountries();
+      const { list: countries, ips: ipOfNode } = await this.loadNodes();
       const byCode = new Map(countries.map((c) => [c.code, c]));
       const countryOfNode = new Map<string, string>();
       for (const c of countries) for (const id of c.nodes) countryOfNode.set(id, c.code);
@@ -321,27 +511,42 @@ export class ProbeService {
       if (missing.length) errors.push(`нет проверяющих узлов в странах: ${missing.join(', ')}`);
       if (nodeIds.length === 0) throw new Error('для выбранных стран нет проверяющих узлов');
 
-      const servers = db.prepare("SELECT id, name, host, probe_port FROM servers WHERE status != 'uninstalled' ORDER BY id").all() as {
+      const servers = db.prepare("SELECT id, name, host, status, probe_port, stub_port, remote_panel_id FROM servers WHERE status != 'uninstalled' ORDER BY id").all() as {
         id: number;
         name: string;
         host: string;
+        status: string;
         probe_port: number | null;
+        stub_port: number | null;
+        remote_panel_id: number | null;
       }[];
 
       for (const server of servers) {
         try {
-          const aggregate = await this.checkHost(server.host, server.probe_port, nodeIds, countryOfNode);
-          const now = new Date().toISOString();
-          transaction(() => {
-            const upsert = db.prepare(`
-              INSERT INTO probe_results (server_id, country, ok_nodes, total_nodes, rtt_ms, checked_at) VALUES (?, ?, ?, ?, ?, ?)
-              ON CONFLICT(server_id, country) DO UPDATE SET ok_nodes = excluded.ok_nodes, total_nodes = excluded.total_nodes,
-                rtt_ms = excluded.rtt_ms, checked_at = excluded.checked_at
-            `);
-            for (const [country, a] of aggregate) {
-              upsert.run(server.id, country, a.ok, a.total, a.rtts.length ? Math.round(a.rtts.reduce((x, y) => x + y, 0) / a.rtts.length) : null, now);
+          // Заглушка ставится на свои ноды автоматически (на ноды партнёров SSH-доступа нет)
+          if (!server.remote_panel_id && !server.stub_port && server.status === 'online') {
+            try {
+              server.stub_port = await ProvisionService.ensureProbeStub(server.id);
+            } catch (err: any) {
+              errors.push(`${server.name}: ${err.message}`);
             }
-          });
+          }
+          let outcome: CheckOutcome;
+          if (server.stub_port) {
+            const notes: string[] = [];
+            outcome = await this.checkStub({ id: server.id, host: server.host, stub_port: server.stub_port }, nodeIds, countryOfNode, ipOfNode, notes);
+            for (const note of notes) errors.push(`${server.name}: ${note}`);
+          } else if (server.probe_port) {
+            outcome = await this.checkTcp(server.host, server.probe_port, nodeIds, countryOfNode, ipOfNode);
+          } else {
+            errors.push(
+              server.remote_panel_id
+                ? `${server.name}: нода партнёра — укажите TCP-порт для проверки`
+                : `${server.name}: заглушка проверки не установлена (нода недоступна по SSH?)`
+            );
+            continue;
+          }
+          this.saveResults(server.id, outcome);
           checked++;
         } catch (err: any) {
           errors.push(`${server.name}: ${err.message}`);
@@ -354,6 +559,7 @@ export class ProbeService {
       setSetting('probe_last_run', new Date().toISOString());
       setSetting('probe_error', errors.length ? errors.join('; ').slice(0, 500) : null);
     }
+    if (this.afterRun) await this.afterRun().catch((err) => console.error('[PROBE] Ошибка после проверки:', err));
     return { checked, errors };
   }
 
@@ -372,9 +578,26 @@ export class ProbeService {
   // ---- Результаты ----
 
   /** Результаты не старше трёх интервалов (но не менее двух часов): устаревшие в подписку не попадают */
-  private static freshSince(): string {
+  static freshSince(): string {
     const minutes = Math.max(this.readSettings().interval_minutes * 3, 120);
     return new Date(Date.now() - minutes * 60000).toISOString();
+  }
+
+  private static toResult(r: any): ProbeResult {
+    return {
+      server_id: r.server_id,
+      country: r.country,
+      method: r.method,
+      ok_nodes: r.ok_nodes,
+      total_nodes: r.total_nodes,
+      tcp_ok: r.tcp_ok ?? null,
+      udp_ok: r.udp_ok ?? null,
+      spoofed: r.spoofed ?? 0,
+      verified: Boolean(r.verified),
+      rtt_ms: r.rtt_ms ?? null,
+      checked_at: r.checked_at,
+      status: probeStatus(r.ok_nodes, r.total_nodes),
+    };
   }
 
   static resultsFor(serverId: number): ProbeResult[] {
@@ -385,7 +608,7 @@ export class ProbeService {
     return rows
       .filter((r) => settings.countries.includes(r.country))
       .sort((a, b) => settings.countries.indexOf(a.country) - settings.countries.indexOf(b.country))
-      .map((r) => ({ ...r, status: probeStatus(r.ok_nodes, r.total_nodes) }));
+      .map((r) => this.toResult(r));
   }
 
   static allResults(): ProbeResult[] {
@@ -395,7 +618,7 @@ export class ProbeService {
     return rows
       .filter((r) => settings.countries.includes(r.country))
       .sort((a, b) => a.server_id - b.server_id || settings.countries.indexOf(a.country) - settings.countries.indexOf(b.country))
-      .map((r) => ({ ...r, status: probeStatus(r.ok_nodes, r.total_nodes) }));
+      .map((r) => this.toResult(r));
   }
 
   // ---- Подписка ----

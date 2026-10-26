@@ -48,7 +48,7 @@ HTTP-кодом. Тела — JSON.
 | GET | `/api/clients/:id/qrcode` | `{qrcode, config, clientName}` |
 
 ## Пользователи подписок `/api/subscribers`
-`GET /`, `POST /` (`name, server_ids, traffic_limit, expire_at`), `PUT /:id` (+ `enabled`), `DELETE /:id`,
+`GET /`, `POST /` (`name, server_ids, traffic_limit, expire_at, country`), `PUT /:id` (+ `enabled`), `DELETE /:id`,
 `POST /:id/reset-token` (новый токен и ключи), `POST /:id/reset-traffic`.
 
 ## Версия
@@ -74,7 +74,11 @@ HTTP-кодом. Тела — JSON.
 перенесённой панели — 410, см. [migration.md](migration.md).
 
 ## Проверка доступности нод `/api/probes`
-`GET /`, `GET /countries`, `PUT /` (`settings`, `servers[{id, probe_port}]`), `POST /run`, см. [probes.md](probes.md). `GET /api/servers` содержит `probes`.
+`GET /`, `GET /countries`, `PUT /` (`settings`, `servers[{id, probe_port}]`), `POST /run`, см. [probes.md](probes.md). `GET /api/servers` содержит `probes` и `stub_port`.
+
+## Мосты `/api/bridges`
+`GET /`, `POST /` (добавить и установить), `PUT /:id`, `PUT /:id/links` (`links[{server_id, mode}]`), `POST /:id/install`, `POST /:id/apply`,
+`POST /:id/test-ssh`, `DELETE /:id` (`?teardown=1&force=1`), см. [bridges.md](bridges.md). SSH-секреты мостов в ответах не отдаются.
 
 ## Безопасность `/api/security`
 `GET /ssl`, `POST /ssl/verify-cf`, `/ssl/cf-zones`, `/ssl/issue-cf`, `/ssl/issue-http`, `/ssl/issue-ip`,

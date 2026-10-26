@@ -3,6 +3,7 @@ import { X, UserPlus, Server as ServerIcon, CheckSquare, Square, Shield } from '
 import type { Server, Subscriber } from '../types';
 import { api } from '../api';
 import { GIB } from '../utils';
+import { CountrySelect } from './CountrySelect';
 
 function toDateInput(iso: string | null): string {
   if (!iso) return '';
@@ -29,6 +30,7 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
   const [selectedServerIds, setSelectedServerIds] = useState<number[]>([]);
   const [limitGb, setLimitGb] = useState('');
   const [expireDate, setExpireDate] = useState('');
+  const [country, setCountry] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,12 +42,14 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
       setSelectedServerIds(editingSubscriber.server_ids || []);
       setLimitGb(editingSubscriber.traffic_limit ? String(+(editingSubscriber.traffic_limit / GIB).toFixed(2)) : '');
       setExpireDate(toDateInput(editingSubscriber.expire_at));
+      setCountry(editingSubscriber.country ?? '');
     } else {
       setName('');
       // By default select all online servers
       setSelectedServerIds(servers.filter((s) => s.status === 'online').map((s) => s.id));
       setLimitGb('');
       setExpireDate('');
+      setCountry('');
     }
     setError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -89,6 +93,7 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
           server_ids: selectedServerIds,
           traffic_limit: limit,
           expire_at: expireAt,
+          country: country || null,
         });
         onSaved(updated);
       } else {
@@ -97,6 +102,7 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
           server_ids: selectedServerIds,
           traffic_limit: limit,
           expire_at: expireAt,
+          country: country || null,
         });
         onSaved(created);
       }
@@ -177,6 +183,19 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
                 className="w-full bg-paper border border-line rounded-xl px-3.5 py-2.5 text-ink focus:outline-none focus:border-mint transition text-sm"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1.5">Страна пользователя</label>
+            <CountrySelect
+              value={country}
+              onChange={setCountry}
+              emptyLabel="Не задана"
+              className="w-full bg-paper border border-line rounded-xl px-3.5 py-2.5 text-ink focus:outline-none focus:border-mint transition text-sm"
+            />
+            <p className="text-[11px] text-faint mt-1">
+              Если нода недоступна из этой страны, а у ноды есть мост в ней, подписка выдаст адрес моста (раздел «Мосты»).
+            </p>
           </div>
 
           {/* Node Selection Checkboxes */}

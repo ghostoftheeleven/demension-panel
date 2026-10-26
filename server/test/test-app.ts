@@ -14,6 +14,7 @@ import { remotePanelsRouter } from '../src/routes/remote-panels.js';
 import { versionRouter } from '../src/routes/version.js';
 import { migrationRouter } from '../src/routes/migration.js';
 import { probesRouter } from '../src/routes/probes.js';
+import { bridgesRouter } from '../src/routes/bridges.js';
 import { migrationGuard, subscriptionFreeze } from '../src/middleware/migration-guard.js';
 import { requireAuth } from '../src/middleware/auth.middleware.js';
 import { errorHandler } from '../src/middleware/error-handler.js';
@@ -48,6 +49,7 @@ export function createTestApp() {
   app.use('/api/partners', partnersRouter);
   app.use('/api/remote-panels', remotePanelsRouter);
   app.use('/api/probes', probesRouter);
+  app.use('/api/bridges', bridgesRouter);
   app.use('/api/version', versionRouter);
   app.use('/api', requireAuth, clientsRouter);
 

@@ -253,7 +253,12 @@ describe('удаление контейнера (teardown)', () => {
     expect(ssh.calls[0].command).toContain('docker rm -f amnezia-awg');
     expect(ssh.calls[0].command).toContain('rm -rf /opt/amnezia/awg');
     expect(ssh.calls[1].command).toContain('docker rm -f amnezia-awg2');
-    expect(ssh.calls[1].command).not.toContain('rm -rf');
+    expect(ssh.calls[1].command).not.toContain('rm -rf /opt/amnezia');
+    // Заглушка проверки доступности — своя у панели, удаляется в обоих случаях
+    for (const call of ssh.calls) {
+      expect(call.command).toContain('docker rm -f dementia-probe');
+      expect(call.command).toContain('rm -rf /opt/dementia-probe');
+    }
   });
 });
 

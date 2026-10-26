@@ -5,7 +5,8 @@ import { SubscriptionService } from '../services/subscription.service.js';
 import { buildSubscriptionHeaders, readSubscriptionSettings } from '../services/subscription-settings.service.js';
 import { contentDisposition } from '../utils/http.js';
 import { paramsFromRow } from '../utils/awg-params.js';
-import { ProbeService } from '../services/probe.service.js';
+import { countryFlag, ProbeService } from '../services/probe.service.js';
+import { BridgeService } from '../services/bridge.service.js';
 
 /** Названия доп. параметров AWG 3.x в amnezia-wg-option mihomo */
 const MIHOMO_EXTRA_KEYS: Record<string, string> = {
@@ -157,11 +158,16 @@ subscriptionRouter.get('/:token', (req, res) => {
   const settings = AwgService.getClientNetworkSettings();
   // Доступность нод из выбранных стран дописывается к названию (если включено)
   const marks = ProbeService.getNameMarks();
-  const entries = peers.map((p) => ({
-    name: [p.sub_name || p.server_name, marks.get(p.server_id)].filter(Boolean).join(' · '),
-    server: { ...p, preshared_key: p.server_psk },
-    client: p,
-  }));
+  // Ноды, недоступные из страны пользователя, выдаются через мост этой страны: меняется только Endpoint (docs/bridges.md)
+  const routes = BridgeService.routesFor(subscriber.country);
+  const entries = peers.map((p) => {
+    const route = routes.get(p.server_id);
+    return {
+      name: [p.sub_name || p.server_name, marks.get(p.server_id), route ? `🌉 ${countryFlag(subscriber.country)}` : null].filter(Boolean).join(' · '),
+      server: { ...p, preshared_key: p.server_psk, ...(route ? { host: route.host, awg_port: route.port } : {}) },
+      client: p,
+    };
+  });
 
   if (format === 'clash') {
     const dns = settings.dns.split(',').map((s) => s.trim()).filter(Boolean);

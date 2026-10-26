@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import type { Subscriber } from '../types';
 import { api } from '../api';
-import { formatBytes } from '../utils';
+import { countryFlag, countryName, formatBytes } from '../utils';
 
 interface SubscribersListProps {
   subscribers: Subscriber[];
@@ -139,6 +139,11 @@ export const SubscribersList: React.FC<SubscribersListProps> = ({
                     <td className="py-3 font-medium text-ink flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-mint flex-shrink-0" />
                       <span>{sub.name}</span>
+                      {sub.country && (
+                        <span title={`Страна: ${countryName(sub.country)}`} className="text-sm leading-none">
+                          {countryFlag(sub.country)}
+                        </span>
+                      )}
                     </td>
 
                     {/* Servers Badges */}

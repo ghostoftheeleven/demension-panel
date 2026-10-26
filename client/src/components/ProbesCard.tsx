@@ -151,8 +151,10 @@ export const ProbesCard: React.FC<{ onChanged?: () => void }> = ({ onChanged }) 
           <div className="p-3 rounded-xl border bg-warn-soft border-line text-warn text-xs flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
             <span>
-              Проверку выполняют узлы сервиса <b>check-host.net</b> в выбранных странах: ему передаются адреса ваших нод. Проверяется
-              доступность адреса (ping или TCP-порт) — это показывает блокировку IP ноды, но не блокировку самого протокола VPN на UDP-порту.
+              Проверку выполняют узлы сервиса <b>check-host.net</b> в выбранных странах: ему передаются адреса ваших нод. На каждую ноду
+              панель ставит заглушку — простую страницу на случайном порту, которая отвечает и по TCP, и по UDP. Узлы обращаются к ней,
+              а панель по журналу на самой ноде проверяет, что запрос действительно дошёл: подменённый провайдером ответ не засчитывается.
+              Блокировку самого протокола AmneziaWG (DPI при открытом адресе) так не увидеть — для этого есть сигнал от клиентов в разделе «Мосты».
             </span>
           </div>
 
@@ -284,25 +286,25 @@ export const ProbesCard: React.FC<{ onChanged?: () => void }> = ({ onChanged }) 
                           <div className="text-[10px] font-mono text-faint">{s.host}</div>
                         </td>
                         <td className="p-2.5">
+                          {!s.remote_panel_id && (
+                            <div className="text-ink mb-1">
+                              Заглушка на ноде{' '}
+                              <span className="text-faint">
+                                {s.stub_port ? `· порт ${s.stub_port}` : '· поставится при первой проверке'}
+                              </span>
+                            </div>
+                          )}
                           <div className="flex items-center gap-2">
-                            <select
-                              value={ports[s.id] ? 'tcp' : 'ping'}
-                              onChange={(e) => setPorts({ ...ports, [s.id]: e.target.value === 'tcp' ? String(s.probe_port || 443) : '' })}
-                              className={inputClass}
-                            >
-                              <option value="ping">ICMP ping</option>
-                              <option value="tcp">TCP-порт</option>
-                            </select>
-                            {ports[s.id] !== '' && ports[s.id] !== undefined && (
-                              <input
-                                type="number"
-                                min={1}
-                                max={65535}
-                                value={ports[s.id]}
-                                onChange={(e) => setPorts({ ...ports, [s.id]: e.target.value })}
-                                className={`${inputClass} w-20`}
-                              />
-                            )}
+                            <span className="text-faint">{s.remote_panel_id ? 'TCP-порт' : 'запасной TCP-порт'}</span>
+                            <input
+                              type="number"
+                              min={1}
+                              max={65535}
+                              placeholder="—"
+                              value={ports[s.id] ?? ''}
+                              onChange={(e) => setPorts({ ...ports, [s.id]: e.target.value })}
+                              className={`${inputClass} w-20`}
+                            />
                           </div>
                         </td>
                         <td className="p-2.5">
@@ -315,7 +317,10 @@ export const ProbesCard: React.FC<{ onChanged?: () => void }> = ({ onChanged }) 
               </div>
             )}
             <p className="text-[11px] text-faint">
-              Если нода не отвечает на ping, выберите TCP-порт, который на ней открыт для всех (например, порт SSH, если он не закрыт фаерволом).
+              Нода считается доступной из страны, если до заглушки дошёл UDP-пакет (так же ходит трафик AmneziaWG). Знак ⚑ — узлы получили
+              ответ, хотя до ноды запрос не дошёл: ответ подделан по дороге. На ноды партнёров заглушку не поставить (нет SSH-доступа) —
+              для них укажите TCP-порт, открытый для всех: он проверяется только по ответу check-host.net, без подтверждения. Запасной порт
+              своей ноды используется, если заглушку поставить не удалось. ICMP ping больше не используется: его ответы подделываются.
             </p>
           </div>
 
