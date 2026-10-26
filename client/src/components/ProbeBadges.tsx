@@ -11,7 +11,7 @@ const MARK: Record<ProbeResult['status'], { symbol: string; label: string; class
 function details(p: ProbeResult): string {
   const parts = [`${p.ok_nodes} из ${p.total_nodes} узлов`];
   if (p.method === 'stub' && p.verified) {
-    if (p.udp_ok !== null) parts.push(`UDP дошёл с ${p.udp_ok}`);
+    parts.push(p.udp_ok !== null ? `UDP дошёл с ${p.udp_ok}` : 'UDP: нет данных');
     if (p.tcp_ok !== null) parts.push(`TCP — с ${p.tcp_ok}`);
     if (p.spoofed > 0) parts.push(`подменённых ответов: ${p.spoofed}`);
   } else if (p.method === 'stub') {

@@ -33,7 +33,12 @@ const NODES_PER_COUNTRY = 2;
 const COUNTRIES_TTL_MS = 24 * 60 * 60 * 1000;
 /** Минимальный промежуток между ручными запусками */
 const MANUAL_COOLDOWN_MS = 60 * 1000;
-const POLL_TOTAL_MS = 45 * 1000;
+/** check-host.net под нагрузкой отдаёт результаты через 1–2 минуты: не дождавшиеся узлы в итог не входят */
+const POLL_TOTAL_MS = 150 * 1000;
+/** Пауза между опросами результата растёт до этого значения (меньше запросов к сервису) */
+const POLL_MAX_DELAY_MS = 8000;
+/** Сколько нод проверяется одновременно (запросы к check-host.net и SSH к нодам) */
+const PARALLEL_SERVERS = 3;
 
 export interface ProbeSettings {
   enabled: boolean;
@@ -361,8 +366,8 @@ export class ProbeService {
     const ids = [...check.nodes.keys()];
     const deadline = Date.now() + this.pollTotalMs;
     let results: Record<string, unknown> = {};
-    for (;;) {
-      await sleep(this.pollDelayMs ?? firstDelayMs);
+    for (let attempt = 0; ; attempt++) {
+      await sleep(this.pollDelayMs ?? Math.min(firstDelayMs + attempt * 1000, POLL_MAX_DELAY_MS));
       results = (await providerFetch(`/check-result/${check.requestId}`)) ?? {};
       const pending = ids.filter((id) => results[id] === null || results[id] === undefined);
       if (pending.length === 0 || Date.now() > deadline) break;
@@ -399,8 +404,9 @@ export class ProbeService {
 
   /**
    * Проверка заглушкой: HTTP-запрос с одноразовой меткой и UDP-пакет на порт заглушки, затем сверка с журналом на ноде.
-   * Нода доступна с узла, если до неё дошёл UDP (как трафик AmneziaWG); если UDP-проверку запустить не удалось — TCP.
-   * Если журнал прочитать не удалось, засчитываются ответы узлов без подтверждения (verified = false).
+   * Нода доступна с узла, если до неё дошёл его запрос — TCP с меткой или UDP. UDP только дополняет картину: проверка UDP у
+   * check-host.net доходит до нод не всегда, и если в журнале нет ни одного UDP-пакета от узлов, UDP считается неизвестным
+   * (udp_ok = null), а не «не дошёл». Если журнал прочитать не удалось, засчитываются ответы узлов без подтверждения (verified = false).
    */
   static async checkStub(
     server: { id: number; host: string; stub_port: number },
@@ -434,6 +440,8 @@ export class ProbeService {
       else if (!known.ip && info.ip) nodes.set(id, { ...known, ip: info.ip });
     }
     const matched = hits ? matchStubHits(hits, nonce, since, nodes, (id) => parseHttpResult(httpResults[id])?.ok === true) : null;
+    // UDP-пакеты check-host.net в этот раз до ноды не дошли ни от одного узла — данных по UDP нет
+    const udpKnown = Boolean(udp && matched && matched.udp.size > 0);
 
     const countries = new Map<string, CountryAggregate>();
     for (const [id, info] of nodes) {
@@ -443,13 +451,11 @@ export class ProbeService {
       if (matched) {
         const tcpOk = matched.tcp.has(id);
         const udpOk = matched.udp.has(id);
-        // Без UDP-проверки узла (не запустилась или узел не закончил) решает TCP
-        const ok = udpResult ? udpOk : tcpOk;
         this.addToCountry(countries, info.country, {
-          ok,
+          ok: tcpOk || udpOk,
           rtt: httpResult?.ok ? httpResult.rtt : null,
-          tcpOk,
-          udpOk: udpResult ? udpOk : null,
+          tcpOk: httpResult ? tcpOk : null,
+          udpOk: udpKnown && udpResult ? udpOk : null,
           spoofed: httpResult?.ok === true && !tcpOk,
         });
       } else {
@@ -521,7 +527,12 @@ export class ProbeService {
         remote_panel_id: number | null;
       }[];
 
-      for (const server of servers) {
+      // Ноды проверяются параллельно: ожидание результатов check-host.net (до 150 с) не складывается по числу нод
+      const queue = [...servers];
+      const worker = async () => {
+        for (let server = queue.shift(); server; server = queue.shift()) await checkServer(server);
+      };
+      const checkServer = async (server: (typeof servers)[number]) => {
         try {
           // Заглушка ставится на свои ноды автоматически (на ноды партнёров SSH-доступа нет)
           if (!server.remote_panel_id && !server.stub_port && server.status === 'online') {
@@ -544,14 +555,15 @@ export class ProbeService {
                 ? `${server.name}: нода партнёра — укажите TCP-порт для проверки`
                 : `${server.name}: заглушка проверки не установлена (нода недоступна по SSH?)`
             );
-            continue;
+            return;
           }
           this.saveResults(server.id, outcome);
           checked++;
         } catch (err: any) {
           errors.push(`${server.name}: ${err.message}`);
         }
-      }
+      };
+      await Promise.all(Array.from({ length: Math.min(PARALLEL_SERVERS, servers.length) }, worker));
     } catch (err: any) {
       errors.push(err.message);
     } finally {

@@ -68,8 +68,8 @@ export function resetProvider() {
     'kz1.node.check-host.net': [{ error: 'Connection timed out' }],
     'de1.node.check-host.net': [{ time: 0.02, address: '203.0.113.9' }],
   };
-  // ru1 дошёл всем, ru2 получил «ответ», но до ноды не дошёл (подмена), kz1 дошёл только по TCP (UDP режется)
-  provider.reach = { tcp: new Set(['ru1.node.check-host.net', 'kz1.node.check-host.net']), udp: new Set(['ru1.node.check-host.net']) };
+  // ru1 дошёл по TCP и UDP; ru2 и kz1 получили «ответ», но до ноды не дошли (подмена)
+  provider.reach = { tcp: new Set(['ru1.node.check-host.net']), udp: new Set(['ru1.node.check-host.net']) };
   provider.egress = {};
   provider.calls = [];
   provider.failNodesList = false;

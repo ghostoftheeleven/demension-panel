@@ -228,7 +228,7 @@ describe('проверка нод заглушкой', () => {
     expect(install.command).not.toContain('amnezia-awg');
   });
 
-  it('доступность считается по журналу ноды: подменённый ответ не засчитывается, UDP решает за AmneziaWG', async () => {
+  it('доступность считается по журналу ноды: подменённый ответ не засчитывается', async () => {
     db.prepare('UPDATE servers SET stub_port = 34567 WHERE id = ?').run(serverId);
     await ProbeService.runAll();
     // повторной установки нет: заглушка уже стоит
@@ -238,11 +238,31 @@ describe('проверка нод заглушкой', () => {
     expect(probes).toEqual([
       // ru1 дошёл по TCP и UDP; ru2 «ответил», но в журнале его нет — подмена
       expect.objectContaining({ country: 'ru', method: 'stub', ok_nodes: 1, total_nodes: 2, tcp_ok: 1, udp_ok: 1, spoofed: 1, verified: true, status: 'partial', rtt_ms: 40 }),
-      // kz1 дошёл по TCP, но UDP до ноды не доходит — AmneziaWG работать не будет
-      expect.objectContaining({ country: 'kz', ok_nodes: 0, total_nodes: 1, tcp_ok: 1, udp_ok: 0, spoofed: 0, verified: true, status: 'fail' }),
+      expect.objectContaining({ country: 'kz', ok_nodes: 0, total_nodes: 1, tcp_ok: 0, udp_ok: 0, spoofed: 1, verified: true, status: 'fail' }),
     ]);
     expect(getSetting('probe_error')).toBeNull();
     expect((await api('/api/probes')).body.status.running).toBe(false);
+  });
+
+  it('check-host.net не доставил ни одного UDP-пакета (как на реальной ноде) — нода доступна по TCP, UDP неизвестен', async () => {
+    provider.reach = {
+      tcp: new Set(['ru1.node.check-host.net', 'ru2.node.check-host.net', 'kz1.node.check-host.net']),
+      udp: new Set(),
+    };
+    await ProbeService.runAll();
+    const probes = (await api('/api/servers')).body[0].probes;
+    expect(probes).toEqual([
+      expect.objectContaining({ country: 'ru', ok_nodes: 2, total_nodes: 2, tcp_ok: 2, udp_ok: null, spoofed: 0, status: 'ok' }),
+      expect.objectContaining({ country: 'kz', ok_nodes: 1, total_nodes: 1, tcp_ok: 1, udp_ok: null, status: 'ok' }),
+    ]);
+  });
+
+  it('до ноды дошёл только UDP (TCP оборвался по дороге) — нода доступна с этого узла', async () => {
+    provider.http['kz1.node.check-host.net'] = [[0, 5.1, 'Broken pipe', null, '203.0.113.9']];
+    provider.reach = { tcp: new Set(['ru1.node.check-host.net']), udp: new Set(['ru1.node.check-host.net', 'kz1.node.check-host.net']) };
+    await ProbeService.runAll();
+    const kz = (await api('/api/servers')).body[0].probes.find((p: any) => p.country === 'kz');
+    expect(kz).toMatchObject({ ok_nodes: 1, total_nodes: 1, tcp_ok: 0, udp_ok: 1, spoofed: 0, status: 'ok' });
   });
 
   it('узел вышел в сеть с другого адреса: обращение с меткой засчитывается ему, UDP с того же адреса — тоже', async () => {
@@ -265,6 +285,7 @@ describe('проверка нод заглушкой', () => {
 
   it('UDP-проверку запустить не удалось — решает TCP по журналу', async () => {
     provider.failUdpStart = true;
+    provider.reach.tcp.add('kz1.node.check-host.net');
     await ProbeService.runAll();
     const probes = (await api('/api/servers')).body[0].probes;
     expect(probes.find((p: any) => p.country === 'kz')).toMatchObject({ ok_nodes: 1, total_nodes: 1, udp_ok: null, tcp_ok: 1 });
