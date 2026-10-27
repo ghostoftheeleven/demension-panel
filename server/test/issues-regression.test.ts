@@ -140,6 +140,27 @@ describe('#30 дубли серверов', () => {
   });
 });
 
+describe('переименование импортированной ноды с подсетью-адресом сети', () => {
+  it('форма редактирования присылает прежнюю подсеть 10.8.1.0/24 — переименование проходит', async () => {
+    const id = insertServer('Amnezia', '192.0.2.77', 'amnezia');
+    db.prepare("UPDATE servers SET subnet = '10.8.1.0/24', status = 'uninstalled' WHERE id = ?").run(id);
+    const res = await api(`/api/servers/${id}`, 'PUT', {
+      name: 'Новое имя', host: '192.0.2.77', ssh_port: 22, ssh_user: 'root', awg_port: 51820, subnet: '10.8.1.0/24',
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe('Новое имя');
+    expect(res.body.subnet).toBe('10.8.1.0/24');
+  });
+
+  it('новая подсеть по-прежнему проверяется строго', async () => {
+    const id = insertServer('Amnezia2', '192.0.2.78', 'amnezia');
+    db.prepare("UPDATE servers SET subnet = '10.8.1.0/24', status = 'uninstalled' WHERE id = ?").run(id);
+    const res = await api(`/api/servers/${id}`, 'PUT', { subnet: '10.8.2.0/24' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('широковещательным');
+  });
+});
+
 describe('#31 импорт пиров с AllowedIPs без /32', () => {
   it('разбирает адрес без маски, с /32 и с пробелами вокруг слэша', () => {
     const conf = `

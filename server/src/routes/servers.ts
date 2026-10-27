@@ -321,13 +321,13 @@ serversRouter.put('/:id', asyncHandler(async (req, res) => {
     updates.awg_port = validatePort(body.awg_port, 'Порт AmneziaWG');
     interfaceChanged ||= updates.awg_port !== server.awg_port;
   }
-  if (body.subnet !== undefined) {
+  // Форма редактирования присылает подсеть всегда; у импортированных нод она бывает адресом сети (10.8.1.0/24),
+  // который строгая проверка не пропускает, — проверяется только изменённая подсеть
+  if (body.subnet !== undefined && String(body.subnet).trim() !== server.subnet) {
     updates.subnet = validateSubnet(body.subnet);
-    if (updates.subnet !== server.subnet) {
-      const count = (db.prepare('SELECT COUNT(*) as c FROM clients WHERE server_id = ?').get(id) as { c: number }).c;
-      if (count > 0) throw new HttpError(400, 'Нельзя изменить подсеть, пока на сервере есть клиенты');
-      interfaceChanged = true;
-    }
+    const count = (db.prepare('SELECT COUNT(*) as c FROM clients WHERE server_id = ?').get(id) as { c: number }).c;
+    if (count > 0) throw new HttpError(400, 'Нельзя изменить подсеть, пока на сервере есть клиенты');
+    interfaceChanged = true;
   }
 
   const current = paramsFromRow(server);
