@@ -557,8 +557,12 @@ export const api = {
     return result.settings;
   },
 
-  testTelegram(): Promise<{ success: boolean; message: string }> {
-    return request(`${API_BASE}/telegram/test`, { method: 'POST' }, 'Ошибка проверки Telegram');
+  testTelegram(data?: { bot_token?: string; chat_id?: string }): Promise<{ success: boolean; message: string }> {
+    return request(`${API_BASE}/telegram/test`, { method: 'POST', ...(data ? json(data) : {}) }, 'Ошибка проверки Telegram');
+  },
+
+  detectTelegramChat(data?: { bot_token?: string }): Promise<{ success: boolean; chat_id?: string; name?: string; message: string }> {
+    return request(`${API_BASE}/telegram/detect-chat`, { method: 'POST', ...(data ? json(data) : {}) }, 'Ошибка определения чата Telegram');
   },
 
   async getBackupSettings(): Promise<BackupSettings> {

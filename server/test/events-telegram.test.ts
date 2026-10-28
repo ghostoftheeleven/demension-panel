@@ -131,4 +131,99 @@ describe('Telegram', () => {
     await TelegramService.deliverEvent({ level: 'error', type: 'test', message: 'Не отправлять' });
     expect(fetchMock).toHaveBeenCalledOnce();
   });
+
+  it('нормализует токен с префиксом bot и ссылку, а также ID чата с пробелами', async () => {
+    const saved = await admin.api('/api/telegram', 'PUT', {
+      enabled: true,
+      chat_id: '  id: 123 456 789  ',
+      bot_token: 'bot123456:ABCDEFGHIJKLMNOPQRSTUVWXYZ12345',
+      notify_info: false,
+    });
+    expect(saved.status).toBe(200);
+    expect(saved.body.settings.chat_id).toBe('123456789');
+
+    const savedChannel = await admin.api('/api/telegram', 'PUT', {
+      enabled: true,
+      chat_id: '@my_super_channel',
+      bot_token: 'https://api.telegram.org/bot123456:ABCDEFGHIJKLMNOPQRSTUVWXYZ12345/sendMessage',
+      notify_info: false,
+    });
+    expect(savedChannel.status).toBe(200);
+    expect(savedChannel.body.settings.chat_id).toBe('@my_super_channel');
+  });
+
+  it('позволяет протестировать ещё не сохранённые параметры через POST /api/telegram/test', async () => {
+    const realFetch = globalThis.fetch;
+    const telegramMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal('fetch', vi.fn((input: any, init?: any) => {
+      const url = typeof input === 'string' ? input : input?.url ?? '';
+      if (url.includes('api.telegram.org')) return telegramMock(input, init);
+      return realFetch(input, init);
+    }));
+
+    const res = await admin.api('/api/telegram/test', 'POST', {
+      bot_token: '123456:ABCDEFGHIJKLMNOPQRSTUVWXYZ12345',
+      chat_id: '999888777',
+    });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true, message: 'Тестовое сообщение отправлено' });
+    expect(telegramMock).toHaveBeenCalledOnce();
+    const [url, options] = telegramMock.mock.calls[0];
+    expect(url).toBe('https://api.telegram.org/bot123456:ABCDEFGHIJKLMNOPQRSTUVWXYZ12345/sendMessage');
+    expect(JSON.parse(options.body).chat_id).toBe('999888777');
+  });
+
+  it('возвращает понятную подсказку о команде /start при ошибке chat not found', async () => {
+    const realFetch = globalThis.fetch;
+    const telegramMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      ok: false,
+      error_code: 400,
+      description: 'Bad Request: chat not found',
+    }), { status: 400 }));
+    vi.stubGlobal('fetch', vi.fn((input: any, init?: any) => {
+      const url = typeof input === 'string' ? input : input?.url ?? '';
+      if (url.includes('api.telegram.org')) return telegramMock(input, init);
+      return realFetch(input, init);
+    }));
+
+    const res = await admin.api('/api/telegram/test', 'POST', {
+      bot_token: '123456:ABCDEFGHIJKLMNOPQRSTUVWXYZ12345',
+      chat_id: '999888777',
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(false);
+    expect(res.body.message).toContain('/start');
+  });
+
+  it('определяет ID чата через getUpdates в detect-chat', async () => {
+    const realFetch = globalThis.fetch;
+    const telegramMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      ok: true,
+      result: [
+        {
+          update_id: 100,
+          message: {
+            message_id: 1,
+            from: { id: 777123, username: 'admin' },
+            chat: { id: 777123, username: 'admin', first_name: 'Admin' },
+            text: '/start',
+          },
+        },
+      ],
+    }), { status: 200 }));
+    vi.stubGlobal('fetch', vi.fn((input: any, init?: any) => {
+      const url = typeof input === 'string' ? input : input?.url ?? '';
+      if (url.includes('api.telegram.org')) return telegramMock(input, init);
+      return realFetch(input, init);
+    }));
+
+    const res = await admin.api('/api/telegram/detect-chat', 'POST', {
+      bot_token: '123456:ABCDEFGHIJKLMNOPQRSTUVWXYZ12345',
+    });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      success: true,
+      chat_id: '777123',
+    });
+  });
 });

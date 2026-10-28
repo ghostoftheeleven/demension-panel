@@ -81,7 +81,7 @@ HTTP-кодом. Тела — JSON.
 `POST /:id/test-ssh`, `DELETE /:id` (`?teardown=1&force=1`), см. [bridges.md](bridges.md). SSH-секреты мостов в ответах не отдаются.
 
 ## События, уведомления и резервные копии
-- `GET /api/events`, `GET/PUT /api/telegram`, `POST /api/telegram/test`.
+- `GET /api/events`, `GET/PUT /api/telegram`, `POST /api/telegram/test`, `POST /api/telegram/detect-chat`.
 - `GET/PUT /api/backups/settings`, `POST /api/backups/test`, `/api/backups/run`, `GET /api/backups`, `GET /api/backups/:id/download`, `DELETE /api/backups/:id`, `POST /api/backups/recovery-key`.
 
 ## Учётная запись и 2FA
