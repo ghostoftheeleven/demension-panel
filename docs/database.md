@@ -24,6 +24,8 @@ SQLite (`node:sqlite`, Node ≥ 22.13), файл `data/dementia.db`, режим 
 | v7 | Версии ПО AmneziaWG на ноде: `node_awg_go`, `node_awg_tools`, `node_image`, `node_image_created`, `node_info_at` |
 | v8 | Проверка доступности из стран: `servers.probe_port`, таблица `probe_results` |
 | v9 | Заглушка проверки (`servers.stub_port`, `stub_token`; `probe_results.method`, `tcp_ok`, `udp_ok`, `spoofed`, `verified`), мосты (`bridges`, `bridge_links`, `bridge_state`), `subscribers.country` |
+| v10 | Журнал событий панели: таблица `events` |
+| v11 | 2FA и сессии: `admins.totp_secret`, `totp_enabled`, `recovery_codes`; таблица `sessions` с `id`, `ip`, `user_agent`, `last_activity` |
 
 ## Таблицы
 

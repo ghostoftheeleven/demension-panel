@@ -138,6 +138,27 @@ describe('обновление с первой версии', () => {
   });
 });
 
+describe('миграция v11: 2FA и расширенная таблица сессий', () => {
+  it('БД версии 10 с сессиями обновляется без потерь: created_at сохраняется без изменений', async () => {
+    const { db, initDatabase, SCHEMA_VERSION } = await openFresh();
+    initDatabase(10);
+    expect(version(db)).toBe(10);
+    db.prepare("INSERT INTO admins (username, password_hash, salt) VALUES ('adm', 'hash', 'salt')").run();
+    db.prepare("INSERT INTO sessions (token, admin_id, expires_at, created_at) VALUES ('tok123', 1, '2027-01-01 00:00:00', '2025-05-10 12:30:00')").run();
+
+    initDatabase();
+    expect(version(db)).toBe(SCHEMA_VERSION);
+    const row = db.prepare("SELECT * FROM sessions WHERE token = 'tok123'").get() as any;
+    expect(row).toBeDefined();
+    expect(row.created_at).toBe('2025-05-10 12:30:00');
+    expect(row.last_activity).toBe('2025-05-10 12:30:00');
+    expect(row.expires_at).toBe('2027-01-01 00:00:00');
+    expect(row.admin_id).toBe(1);
+    expect(row.ip).toBeNull();
+    expect(row.user_agent).toBeNull();
+  });
+});
+
 describe('миграция v8: проверка доступности нод из стран', () => {
   it('БД версии 7 с серверами и клиентами обновляется без потерь: появляются probe_port и таблица результатов', async () => {
     const { db, initDatabase, SCHEMA_VERSION } = await openFresh();

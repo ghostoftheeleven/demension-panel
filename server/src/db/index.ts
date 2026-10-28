@@ -422,8 +422,8 @@ const migrations: Array<() => void> = [
       CREATE INDEX idx_sessions_admin_activity ON sessions_new(admin_id, last_activity);
 
       -- Переносим существующие сессии (IP и user_agent заполнятся при следующей активности)
-      INSERT INTO sessions_new (token, admin_id, expires_at, created_at)
-      SELECT token, admin_id, expires_at, datetime('now') FROM sessions;
+      INSERT INTO sessions_new (token, admin_id, expires_at, created_at, last_activity)
+      SELECT token, admin_id, expires_at, created_at, created_at FROM sessions ORDER BY rowid;
 
       DROP TABLE sessions;
       ALTER TABLE sessions_new RENAME TO sessions;
