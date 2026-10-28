@@ -26,5 +26,6 @@ export function requireAuth(req: AuthenticatedRequest, res: Response, next: Next
   }
 
   req.user = user;
+  AuthService.touchSession(token);
   next();
 }

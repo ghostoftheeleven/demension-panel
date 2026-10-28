@@ -1,11 +1,11 @@
 import React from 'react';
-import { Plus, Server as ServerIcon, Users, Activity, LogOut, KeyRound, Lock, Palette, Handshake, Waypoints } from 'lucide-react';
+import { Plus, Server as ServerIcon, Users, Activity, LogOut, KeyRound, Lock, Palette, Handshake, Waypoints, ScrollText } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { Server, AdminUser } from '../types';
 import { PanelVersion } from './PanelVersion';
 import { BrandMark } from './BrandMark';
 
-export type AppTab = 'servers' | 'bridges' | 'subscribers' | 'subscription' | 'partners' | 'security';
+export type AppTab = 'servers' | 'bridges' | 'subscribers' | 'subscription' | 'partners' | 'events' | 'security';
 
 interface NavbarProps {
   servers: Server[];
@@ -24,6 +24,7 @@ const TABS: { id: AppTab; label: string; icon: LucideIcon }[] = [
   { id: 'subscribers', label: 'Пользователи и подписки', icon: Users },
   { id: 'subscription', label: 'Оформление подписки', icon: Palette },
   { id: 'partners', label: 'Партнёры', icon: Handshake },
+  { id: 'events', label: 'События', icon: ScrollText },
   { id: 'security', label: 'Безопасность', icon: Lock },
 ];
 

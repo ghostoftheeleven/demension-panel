@@ -80,6 +80,13 @@ HTTP-кодом. Тела — JSON.
 `GET /`, `POST /` (добавить и установить), `PUT /:id`, `PUT /:id/links` (`links[{server_id, mode}]`), `POST /:id/install`, `POST /:id/apply`,
 `POST /:id/test-ssh`, `DELETE /:id` (`?teardown=1&force=1`), см. [bridges.md](bridges.md). SSH-секреты мостов в ответах не отдаются.
 
+## События, уведомления и резервные копии
+- `GET /api/events`, `GET/PUT /api/telegram`, `POST /api/telegram/test`.
+- `GET/PUT /api/backups/settings`, `POST /api/backups/test`, `/api/backups/run`, `GET /api/backups`, `GET /api/backups/:id/download`, `DELETE /api/backups/:id`, `POST /api/backups/recovery-key`.
+
+## Учётная запись и 2FA
+`POST /api/auth/login` дополнительно принимает `totp` или `recovery_code`. Настройка: `POST /api/auth/totp/setup`, `/totp/enable`, `/totp/disable`, `/totp/recovery/rotate`. Сессии: `GET /api/auth/sessions`, `DELETE /api/auth/sessions/:id`.
+
 ## Безопасность `/api/security`
 `GET /ssl`, `POST /ssl/verify-cf`, `/ssl/cf-zones`, `/ssl/issue-cf`, `/ssl/issue-http`, `/ssl/issue-ip`,
 `/ssl/custom`, `/ssl/toggle`; `GET /fail2ban`, `POST /fail2ban/ban`, `/fail2ban/unban`, `/fail2ban/setup`.

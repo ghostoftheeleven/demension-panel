@@ -381,6 +381,54 @@ const migrations: Array<() => void> = [
       );
     `);
   },
+
+  // v10: журнал событий панели
+  () => {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        level TEXT NOT NULL,
+        type TEXT NOT NULL,
+        message TEXT NOT NULL,
+        entity_kind TEXT,
+        entity_id TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_events_id ON events(id);
+      CREATE INDEX IF NOT EXISTS idx_events_level_id ON events(level, id);
+    `);
+  },
+
+  // v11: 2FA (TOTP, recovery codes) и расширенная таблица сессий (IP, User-Agent, last activity)
+  () => {
+    addColumn('admins', 'totp_secret TEXT DEFAULT NULL');
+    addColumn('admins', 'totp_enabled INTEGER NOT NULL DEFAULT 0');
+    addColumn('admins', 'recovery_codes TEXT DEFAULT NULL'); // JSON-массив SHA-256 хэшей
+
+    db.exec(`
+      -- Пересоздаём таблицу sessions с дополнительными полями
+      CREATE TABLE sessions_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        token TEXT NOT NULL,
+        admin_id INTEGER NOT NULL,
+        ip TEXT DEFAULT NULL,
+        user_agent TEXT DEFAULT NULL,
+        last_activity TEXT NOT NULL DEFAULT (datetime('now')),
+        expires_at TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (admin_id) REFERENCES admins(id) ON DELETE CASCADE
+      );
+      CREATE UNIQUE INDEX idx_sessions_token ON sessions_new(token);
+      CREATE INDEX idx_sessions_admin_activity ON sessions_new(admin_id, last_activity);
+
+      -- Переносим существующие сессии (IP и user_agent заполнятся при следующей активности)
+      INSERT INTO sessions_new (token, admin_id, expires_at, created_at)
+      SELECT token, admin_id, expires_at, datetime('now') FROM sessions;
+
+      DROP TABLE sessions;
+      ALTER TABLE sessions_new RENAME TO sessions;
+    `);
+  },
 ];
 
 /** Версия схемы, которую умеет эта сборка панели (число миграций) */

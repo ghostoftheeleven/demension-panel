@@ -206,10 +206,12 @@ CI на `main`. Подробно — [docs/releases.md](docs/releases.md).
     `BridgeService.evaluate` с гистерезисом (2 проблемные проверки для включения, 3 удачные и 12 часов для выключения): адрес у
     пользователей не должен меняться при каждом обновлении подписки.
 
+40. **2FA и резервные копии не раскрывают секреты.** TOTP-секрет шифруется, recovery codes хранятся только как SHA-256 и показываются один раз; отключение/перевыпуск требуют пароль. Резервный архив шифруется отдельным ключом, сессии в него не попадают; фоновые копии и Telegram останавливаются `MigrationService.isBackgroundPaused()`, ошибки провайдеров не блокируют панель.
+
 ## Чек-лист перед коммитом
 
 - [ ] `cd server && npx tsc --noEmit && npm test` (при правках провижининга, федерации, WebSocket/HTTPS — с поднятыми нодами `nodes.sh up`)
-- [ ] `cd client && npx tsc -b && npm run lint && npx vite build`
+- [ ] `cd client && npx tsc -b && npm run lint && npm test && npx vite build`
 - [ ] shellcheck, если менялись `install.sh` / `deploy-awg.sh` / `update-panel.sh`; при правках `install.sh` — `server/test/install/run.sh`
 - [ ] Новые поля сервера/клиента не утекают в API (п. 1) и, если нужны клиенту, добавлены в `client/src/types`
 - [ ] Изменение схемы — новой миграцией (п. 21)

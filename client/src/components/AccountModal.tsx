@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { X, Lock, Check, User } from 'lucide-react';
+import { X, Lock, Check, User, ShieldCheck } from 'lucide-react';
 import { api } from '../api';
 import type { AdminUser } from '../types';
+import { TwoFactorCard } from './TwoFactorCard';
+import { SessionsCard } from './SessionsCard';
 
 interface AccountModalProps {
   isOpen: boolean;
@@ -10,7 +12,7 @@ interface AccountModalProps {
   onUsernameChanged: (user: AdminUser) => void;
 }
 
-type AccountTab = 'password' | 'username';
+type AccountTab = 'password' | 'username' | 'security';
 
 const inputClass =
   'w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink focus:outline-none focus:border-mint text-sm';
@@ -127,6 +129,10 @@ export const AccountModal: React.FC<AccountModalProps> = ({ isOpen, user, onClos
               <User className="w-3.5 h-3.5 text-info" />
               <span>Логин</span>
             </button>
+            <button type="button" onClick={() => switchTab('security')} className={tabClass(tab === 'security')}>
+              <ShieldCheck className="w-3.5 h-3.5 text-warn" />
+              <span>Защита</span>
+            </button>
           </div>
         </div>
 
@@ -194,7 +200,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({ isOpen, user, onClos
               </button>
             </div>
           </form>
-        ) : (
+        ) : tab === 'username' ? (
           <form onSubmit={handleUsernameSubmit} className="p-6 space-y-4">
             <div className="text-xs text-muted">
               Текущий логин: <span className="font-mono text-ink">{user?.username ?? '—'}</span>
@@ -243,6 +249,11 @@ export const AccountModal: React.FC<AccountModalProps> = ({ isOpen, user, onClos
               </button>
             </div>
           </form>
+        ) : (
+          <div className="p-6 space-y-6 overflow-y-auto max-h-[70vh]">
+            <TwoFactorCard />
+            <div className="border-t border-line pt-6"><SessionsCard /></div>
+          </div>
         )}
       </div>
     </div>

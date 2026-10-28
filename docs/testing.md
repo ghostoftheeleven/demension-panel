@@ -93,9 +93,10 @@ server/test/docker/nodes.sh down
 
 ## CI
 
-`.github/workflows/ci.yml`: `server` (типы, тесты без Docker, сборка), `client`, `scripts` (shellcheck), `install` (`install.sh` в чистом
-Ubuntu, `test/install/run.sh`) и `e2e` — поднимает
-тестовые ноды и запускает весь набор, включая Docker-тесты (`continue-on-error`, пока не накоплена статистика стабильности).
+Клиентские компонентные тесты запускаются `cd client && npm test` (Vitest, jsdom, Testing Library).
+
+`.github/workflows/ci.yml`: `server` (типы, тесты без Docker, сборка), `client` (линт, тесты, сборка), `scripts` (shellcheck), `install` (`install.sh` в чистом
+Ubuntu, `test/install/run.sh`) и `e2e` — поднимает тестовые ноды и запускает весь набор, включая Docker-тесты. Сбой любого задания блокирует CI.
 Локально ту же проверку на Linux можно выполнить в контейнере:
 
 ```bash

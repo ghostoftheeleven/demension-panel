@@ -18,6 +18,8 @@ import type { SslStatus, Fail2banStatus, CloudflareZone, PanelSettings } from '.
 import { api } from '../api';
 import { PanelSettingsCard } from './PanelSettingsCard';
 import { MigrationCard } from './MigrationCard';
+import { TelegramCard } from './TelegramCard';
+import { BackupsCard } from './BackupsCard';
 
 /**
  * HTTPS включается сразу (без перезапуска). Открытая по HTTP панель после этого
@@ -287,6 +289,8 @@ export const SecurityView: React.FC<{
   return (
     <div className="space-y-8">
       <PanelSettingsCard onSaved={onSettingsSaved} />
+      <TelegramCard />
+      <BackupsCard />
 
       {/* Notification banner */}
       {message && (

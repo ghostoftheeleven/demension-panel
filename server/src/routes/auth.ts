@@ -1,8 +1,11 @@
 import { Router } from 'express';
+import crypto from 'node:crypto';
+import { db } from '../db/index.js';
 import { AuthService, MIN_PASSWORD_LENGTH, USERNAME_PATTERN } from '../services/auth.service.js';
 import { requireAuth, AuthenticatedRequest, getBearerToken } from '../middleware/auth.middleware.js';
 import { loginIpLimiter, loginUserLimiter, reauthLimiter } from '../middleware/rate-limit.js';
 import { HttpError } from '../utils/http.js';
+import { EventService } from '../services/event.service.js';
 
 export const authRouter = Router();
 
@@ -18,7 +21,7 @@ function assertReauthAllowed(adminId: number): string {
 
 // POST /api/auth/login
 authRouter.post('/login', (req, res) => {
-  const { username, password } = req.body ?? {};
+  const { username, password, totp, recovery_code } = req.body ?? {};
   if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) {
     return res.status(400).json({ error: 'Логин и пароль обязательны' });
   }
@@ -36,18 +39,31 @@ authRouter.post('/login', (req, res) => {
     });
   }
 
-  const result = AuthService.login(username, password);
+  const result = AuthService.loginWithTotp(username, password, totp, recovery_code, req.ip, req.get('user-agent'));
+
+  if (result === 'totp_required') {
+    // 2FA включена, клиент должен запросить код и отправить повторно
+    return res.json({ totp_required: true });
+  }
+
   if (!result) {
     loginIpLimiter.registerFailure(ipKey);
     loginUserLimiter.registerFailure(userKey);
+    // Неверный TOTP/recovery тоже считается в reauthLimiter (смена учётных данных защищена)
+    if (totp || recovery_code) {
+      reauthLimiter.registerFailure(`admin:login:${username.toLowerCase()}`);
+    }
     // Логин задаёт посторонний: JSON.stringify экранирует переводы строк и не даёт подделать записи журнала
     console.warn(`[AUTH] Неудачная попытка входа для ${JSON.stringify(username.slice(0, 64))} с ${ipKey}`);
+    EventService.log('warning', 'auth.login_failed', `Неудачный вход для ${username.slice(0, 64)} с ${ipKey}`);
     return res.status(401).json({ error: 'Неверное имя пользователя или пароль' });
   }
 
   loginIpLimiter.reset(ipKey);
   loginUserLimiter.reset(userKey);
+  reauthLimiter.reset(`admin:login:${username.toLowerCase()}`);
   if (ipKey !== 'unknown') AuthService.rememberLoginIp(ipKey);
+  EventService.log('info', 'auth.login', `Администратор ${result.user.username} вошёл в панель`, { kind: 'admin', id: result.user.id });
   res.json(result);
 });
 
@@ -80,7 +96,7 @@ authRouter.post('/change-password', requireAuth, (req: AuthenticatedRequest, res
     return res.status(400).json({ error: 'Неверный старый пароль' });
   }
   reauthLimiter.reset(limiterKey);
-
+  EventService.log('info', 'auth.password_changed', 'Пароль администратора изменён', { kind: 'admin', id: req.user!.id });
   res.json({ success: true, token, message: 'Пароль успешно изменен. Остальные сессии завершены.' });
 });
 
@@ -108,10 +124,117 @@ authRouter.post('/change-username', requireAuth, (req: AuthenticatedRequest, res
   if (result === 'taken') return res.status(409).json({ error: 'Такой логин уже занят' });
 
   console.log(`[AUTH] Логин администратора изменён с ${JSON.stringify(req.user!.username)} на ${JSON.stringify(result.username)}`);
+  EventService.log('info', 'auth.username_changed', `Логин администратора изменён на ${result.username}`, { kind: 'admin', id: req.user!.id });
   res.json({
     success: true,
     token: result.token,
     user: { id: req.user!.id, username: result.username },
     message: 'Логин изменён. Остальные сессии завершены.',
   });
+});
+
+// ========== 2FA / TOTP ==========
+
+// POST /api/auth/totp/setup — генерирует секрет и otpauth URI для QR-кода
+authRouter.post('/totp/setup', requireAuth, (req: AuthenticatedRequest, res) => {
+  const { secret, uri } = AuthService.generateTotpSecret(req.user!.username);
+  res.json({ secret, uri });
+});
+
+// POST /api/auth/totp/enable — включает 2FA после подтверждения первым кодом
+authRouter.post('/totp/enable', requireAuth, (req: AuthenticatedRequest, res) => {
+  const { secret, code, password } = req.body ?? {};
+  if (typeof secret !== 'string' || typeof code !== 'string' || typeof password !== 'string' || !secret || !code || !password) {
+    return res.status(400).json({ error: 'Секрет, код и пароль обязательны' });
+  }
+  const limiterKey = assertReauthAllowed(req.user!.id);
+  if (!AuthService.confirmPassword(req.user!.id, password)) {
+    reauthLimiter.registerFailure(limiterKey);
+    return res.status(400).json({ error: 'Неверный пароль' });
+  }
+  reauthLimiter.reset(limiterKey);
+
+  const result = AuthService.enableTotp(req.user!.id, secret, code);
+  if (result === 'invalid_code') {
+    return res.status(400).json({ error: 'Неверный код. Проверьте приложение-аутентификатор.' });
+  }
+
+  res.json({ success: true, recovery_codes: result.recoveryCodes, message: 'Двухфакторная аутентификация включена. Сохраните коды восстановления.' });
+});
+
+// POST /api/auth/totp/disable — отключает 2FA (требует пароль)
+authRouter.post('/totp/disable', requireAuth, (req: AuthenticatedRequest, res) => {
+  const { password } = req.body ?? {};
+  if (typeof password !== 'string' || !password) {
+    return res.status(400).json({ error: 'Пароль обязателен' });
+  }
+
+  const limiterKey = assertReauthAllowed(req.user!.id);
+  if (!AuthService.confirmPassword(req.user!.id, password)) {
+    reauthLimiter.registerFailure(limiterKey);
+    return res.status(400).json({ error: 'Неверный пароль' });
+  }
+  reauthLimiter.reset(limiterKey);
+
+  AuthService.disableTotp(req.user!.id);
+  res.json({ success: true, message: 'Двухфакторная аутентификация отключена' });
+});
+
+// POST /api/auth/totp/recovery/rotate — пересоздаёт коды восстановления (требует пароль)
+authRouter.post('/totp/recovery/rotate', requireAuth, (req: AuthenticatedRequest, res) => {
+  const { password } = req.body ?? {};
+  if (typeof password !== 'string' || !password) {
+    return res.status(400).json({ error: 'Пароль обязателен' });
+  }
+
+  const limiterKey = assertReauthAllowed(req.user!.id);
+  if (!AuthService.confirmPassword(req.user!.id, password)) {
+    reauthLimiter.registerFailure(limiterKey);
+    return res.status(400).json({ error: 'Неверный пароль' });
+  }
+  reauthLimiter.reset(limiterKey);
+
+  const newCodes = AuthService.rotateRecoveryCodes(req.user!.id);
+  res.json({ success: true, recovery_codes: newCodes, message: 'Новые коды восстановления созданы. Старые более не действительны.' });
+});
+
+// ========== Управление сессиями ==========
+
+// GET /api/auth/sessions — список активных сессий
+authRouter.get('/sessions', requireAuth, (req: AuthenticatedRequest, res) => {
+  const currentToken = getBearerToken(req);
+  const currentHash = currentToken ? crypto.createHash('sha256').update(currentToken).digest('hex') : null;
+
+  const sessions = db.prepare(`
+    SELECT id, ip, user_agent, last_activity, created_at
+    FROM sessions
+    WHERE admin_id = ? AND expires_at > ?
+    ORDER BY last_activity DESC
+  `).all(req.user!.id, new Date().toISOString()) as any[];
+
+  const items = sessions.map((s) => ({
+    id: s.id,
+    ip: s.ip || 'Неизвестно',
+    user_agent: s.user_agent || 'Неизвестно',
+    last_activity: s.last_activity,
+    created_at: s.created_at,
+    current: currentHash ? (db.prepare('SELECT 1 FROM sessions WHERE id = ? AND token = ?').get(s.id, currentHash) !== undefined) : false,
+  }));
+
+  res.json({ sessions: items });
+});
+
+// DELETE /api/auth/sessions/:id — отзыв сессии
+authRouter.delete('/sessions/:id', requireAuth, (req: AuthenticatedRequest, res) => {
+  const sessionId = parseInt(req.params.id, 10);
+  if (isNaN(sessionId)) return res.status(400).json({ error: 'Неверный ID сессии' });
+
+  // Проверяем, что сессия принадлежит текущему администратору
+  const sess = db.prepare('SELECT admin_id FROM sessions WHERE id = ?').get(sessionId) as any;
+  if (!sess || sess.admin_id !== req.user!.id) {
+    return res.status(404).json({ error: 'Сессия не найдена' });
+  }
+
+  db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId);
+  res.json({ success: true, message: 'Сессия завершена' });
 });

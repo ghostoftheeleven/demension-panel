@@ -1,5 +1,7 @@
 import crypto from 'node:crypto';
 import { db, transaction } from '../db/index.js';
+import { encryptSecret, decryptSecret } from './secrets.service.js';
+import { EventService } from './event.service.js';
 
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 /** Сколько помнится IP, с которого администратор входил (исключение из блокировки по логину) */
@@ -108,11 +110,16 @@ export class AuthService {
     return Boolean(row) && Date.now() - new Date(row!.last_login_at).getTime() < KNOWN_IP_TTL_MS;
   }
 
-  private static createSession(adminId: number): string {
+  private static createSession(adminId: number, ip?: string, userAgent?: string): string {
     const token = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
-    db.prepare('INSERT INTO sessions (token, admin_id, expires_at) VALUES (?, ?, ?)').run(hashToken(token), adminId, expiresAt);
+    db.prepare('INSERT INTO sessions (token, admin_id, expires_at, ip, user_agent) VALUES (?, ?, ?, ?, ?)')
+      .run(hashToken(token), adminId, expiresAt, ip?.slice(0, 100) ?? null, userAgent?.slice(0, 500) ?? null);
     return token;
+  }
+
+  static touchSession(token: string): void {
+    db.prepare('UPDATE sessions SET last_activity = ? WHERE token = ?').run(new Date().toISOString(), hashToken(token));
   }
 
   /**
@@ -202,5 +209,203 @@ export class AuthService {
       db.prepare('DELETE FROM sessions WHERE admin_id = ?').run(adminId);
       return { token: this.createSession(adminId), username: newUsername };
     });
+  }
+
+  // ========== 2FA / TOTP ==========
+
+  /**
+   * Генерирует TOTP-код по RFC 6238 (SHA-1, 30с окно, 6 цифр)
+   */
+  public static generateTotp(secret: Buffer, counter = Math.floor(Date.now() / 1000 / 30)): string {
+    const hmac = crypto.createHmac('sha1', secret);
+    const counterBuf = Buffer.alloc(8);
+    counterBuf.writeBigUInt64BE(BigInt(counter));
+    hmac.update(counterBuf);
+    const hash = hmac.digest();
+
+    const offset = hash[hash.length - 1] & 0x0f;
+    const code = (hash.readUInt32BE(offset) & 0x7fffffff) % 1000000;
+    return code.toString().padStart(6, '0');
+  }
+
+  /**
+   * Проверяет TOTP-код с окном ±1 (допускается сдвиг часов на 30с)
+   */
+  public static verifyTotp(secret: Buffer, code: string, window = 1): boolean {
+    const now = Math.floor(Date.now() / 1000 / 30);
+    for (let i = -window; i <= window; i++) {
+      if (this.generateTotp(secret, now + i) === code) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Генерирует секрет TOTP (base32, 160 бит) и otpauth:// URI для QR-кода
+   */
+  static generateTotpSecret(username: string): { secret: string; uri: string } {
+    const secretBytes = crypto.randomBytes(20);
+    const secret = this.base32Encode(secretBytes);
+    const uri = `otpauth://totp/Dementia%20Panel:${encodeURIComponent(username)}?secret=${secret}&issuer=Dementia%20Panel`;
+    return { secret, uri };
+  }
+
+  /** Base32-кодирование (RFC 4648, без паддинга) для TOTP-секрета */
+  public static base32Encode(buffer: Buffer): string {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    let bits = 0;
+    let value = 0;
+    let result = '';
+    for (const byte of buffer) {
+      value = (value << 8) | byte;
+      bits += 8;
+      while (bits >= 5) {
+        result += alphabet[(value >>> (bits - 5)) & 0x1f];
+        bits -= 5;
+      }
+    }
+    if (bits > 0) result += alphabet[(value << (5 - bits)) & 0x1f];
+    return result;
+  }
+
+  /** Base32-декодирование секрета TOTP */
+  public static base32Decode(str: string): Buffer {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    let bits = 0;
+    let value = 0;
+    const result: number[] = [];
+    for (const char of str.toUpperCase()) {
+      const idx = alphabet.indexOf(char);
+      if (idx === -1) continue;
+      value = (value << 5) | idx;
+      bits += 5;
+      if (bits >= 8) {
+        result.push((value >>> (bits - 8)) & 0xff);
+        bits -= 8;
+      }
+    }
+    return Buffer.from(result);
+  }
+
+  /**
+   * Включает 2FA для администратора: сохраняет зашифрованный секрет и генерирует recovery codes
+   */
+  static enableTotp(adminId: number, totpSecret: string, firstCode: string): { recoveryCodes: string[] } | 'invalid_code' {
+    const secretBuf = this.base32Decode(totpSecret);
+    if (!this.verifyTotp(secretBuf, firstCode)) return 'invalid_code';
+
+    const recoveryCodes = this.generateRecoveryCodes();
+    const hashes = recoveryCodes.map((c) => crypto.createHash('sha256').update(c).digest('hex'));
+
+    return transaction(() => {
+      db.prepare('UPDATE admins SET totp_secret = ?, totp_enabled = 1, recovery_codes = ? WHERE id = ?').run(
+        encryptSecret(totpSecret),
+        JSON.stringify(hashes),
+        adminId
+      );
+      EventService.log('info', 'admin_2fa_enabled', 'Двухфакторная аутентификация включена', { kind: 'admin', id: adminId });
+      return { recoveryCodes };
+    });
+  }
+
+  /** Генерирует 10 recovery codes (8 символов, A-Z0-9, без путаемых 0/O, 1/I) */
+  private static generateRecoveryCodes(): string[] {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // без 0, O, 1, I
+    const codes: string[] = [];
+    for (let i = 0; i < 10; i++) {
+      codes.push(randomString(alphabet, 8));
+    }
+    return codes;
+  }
+
+  /**
+   * Отключает 2FA: удаляет секрет и recovery codes
+   */
+  static disableTotp(adminId: number): void {
+    transaction(() => {
+      db.prepare('UPDATE admins SET totp_secret = NULL, totp_enabled = 0, recovery_codes = NULL WHERE id = ?').run(adminId);
+      EventService.log('warning', 'admin_2fa_disabled', 'Двухфакторная аутентификация отключена', { kind: 'admin', id: adminId });
+      // Сессии не сбрасываем: администратор мог отключить 2FA специально, чтобы не потерять доступ
+    });
+  }
+
+  /**
+   * Проверяет TOTP-код для администратора
+   */
+  static checkTotp(adminId: number, code: string): boolean {
+    const admin = db.prepare('SELECT totp_secret, totp_enabled FROM admins WHERE id = ?').get(adminId) as any;
+    if (!admin || !admin.totp_enabled || !admin.totp_secret) return false;
+
+    const secret = decryptSecret(admin.totp_secret);
+    if (!secret) return false;
+    const secretBuf = this.base32Decode(secret);
+    return this.verifyTotp(secretBuf, code);
+  }
+
+  /**
+   * Использует recovery code (одноразовый): проверяет SHA-256 и удаляет из списка
+   */
+  static useRecoveryCode(adminId: number, code: string): boolean {
+    const admin = db.prepare('SELECT recovery_codes FROM admins WHERE id = ?').get(adminId) as any;
+    if (!admin || !admin.recovery_codes) return false;
+
+    const hashes: string[] = JSON.parse(admin.recovery_codes);
+    const hash = crypto.createHash('sha256').update(code.toUpperCase()).digest('hex');
+    const idx = hashes.indexOf(hash);
+    if (idx === -1) return false;
+
+    // Удаляем использованный код
+    hashes.splice(idx, 1);
+    db.prepare('UPDATE admins SET recovery_codes = ? WHERE id = ?').run(JSON.stringify(hashes), adminId);
+    return true;
+  }
+
+  /**
+   * Пересоздаёт recovery codes (администратор потерял старые)
+   */
+  static rotateRecoveryCodes(adminId: number): string[] {
+    const newCodes = this.generateRecoveryCodes();
+    const hashes = newCodes.map((c) => crypto.createHash('sha256').update(c).digest('hex'));
+    db.prepare('UPDATE admins SET recovery_codes = ? WHERE id = ?').run(JSON.stringify(hashes), adminId);
+    EventService.log('warning', 'admin_recovery_codes_rotated', 'Коды восстановления перевыпущены', { kind: 'admin', id: adminId });
+    return newCodes;
+  }
+
+  /**
+   * Расширенная версия login: принимает TOTP или recovery code, если 2FA включена
+   */
+  static loginWithTotp(
+    username: string,
+    password: string,
+    totp?: string,
+    recoveryCode?: string,
+    ip?: string,
+    userAgent?: string,
+  ): { token: string; user: { id: number; username: string } } | 'totp_required' | null {
+    const admin = db.prepare('SELECT * FROM admins WHERE username = ?').get(username) as any;
+    if (!admin) {
+      this.hashPassword(password);
+      return null;
+    }
+
+    if (!this.verifyPassword(password, admin.password_hash, admin.salt)) return null;
+
+    // Если 2FA включена, требуем код
+    if (admin.totp_enabled) {
+      if (!totp && !recoveryCode) return 'totp_required';
+
+      let codeValid = false;
+      if (totp) {
+        codeValid = this.checkTotp(admin.id, totp);
+      } else if (recoveryCode) {
+        codeValid = this.useRecoveryCode(admin.id, recoveryCode);
+      }
+
+      if (!codeValid) return null;
+    }
+
+    return {
+      token: this.createSession(admin.id, ip, userAgent),
+      user: { id: admin.id, username: admin.username },
+    };
   }
 }

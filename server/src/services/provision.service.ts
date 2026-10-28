@@ -8,6 +8,7 @@ import { decryptSecret } from './secrets.service.js';
 import { shellQuote, parseSubnet } from '../utils/net.js';
 import { parseServerConfig, paramsToColumns, ParsedServerConfig } from '../utils/awg-params.js';
 import { FederationClient } from './federation-client.service.js';
+import { EventService } from './event.service.js';
 import {
   newStubToken,
   parseStubHits,
@@ -545,9 +546,11 @@ export class ProvisionService {
       `).run(pubKey, privKey, psk, PANEL_CONTAINER, PANEL_CONF, serverId);
 
       log('\r\n=== AmneziaWG успешно установлен и готов к работе! ===\r\n');
+      EventService.log('info', 'server.installed', `AmneziaWG установлен на ноде «${server.name}»`, { kind: 'server', id: serverId });
       return { success: true };
     } catch (err: any) {
       db.prepare("UPDATE servers SET status = 'error', last_error = ? WHERE id = ?").run(err.message, serverId);
+      EventService.log('error', 'server.install_failed', `Не удалось установить ноду «${server.name}»: ${err.message}`, { kind: 'server', id: serverId });
       log(`\r\n❌ Ошибка: ${err.message}\r\n`);
       return { success: false, error: err.message };
     }
@@ -801,6 +804,7 @@ export class ProvisionService {
           last_error = CASE WHEN needs_sync = 0 AND needs_apply = 0 THEN NULL ELSE last_error END
         WHERE id = ?
       `).run(serverId);
+      if (!wasOnline) EventService.log('info', 'server.online', `Нода «${server.name}» снова доступна`, { kind: 'server', id: serverId });
 
       const infoAge = server.node_info_at ? Date.now() - Date.parse(server.node_info_at) : Infinity;
       if (!(infoAge < NODE_INFO_TTL_MS)) await this.fetchNodeInfo(server);
@@ -821,6 +825,9 @@ export class ProvisionService {
           status = CASE WHEN fail_count + 1 >= ? THEN 'offline' ELSE status END
         WHERE id = ?
       `).run(err.message, OFFLINE_THRESHOLD, serverId);
+      if (server.status !== 'offline' && server.fail_count + 1 >= OFFLINE_THRESHOLD) {
+        EventService.log('error', 'server.offline', `Нода «${server.name}» недоступна: ${err.message}`, { kind: 'server', id: serverId });
+      }
     }
   }
 

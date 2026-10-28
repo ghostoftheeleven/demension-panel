@@ -37,6 +37,7 @@ jobs:
           cache-dependency-path: client/package-lock.json
       - run: npm ci
       - run: npm run lint
+      - run: npm test
       - run: npm run build
       # CSP панели (font-src 'self') блокирует встроенные data:-шрифты и внешние ресурсы
       - run: |
@@ -51,21 +52,19 @@ jobs:
 
   # install.sh целиком в чистом Ubuntu: настоящие apt, Node.js, сборка и запуск; проверяет случайные логин/пароль и вывод данных
   # подключения, перенос панели между двумя контейнерами и обновление работающей панели с предыдущего релиза (нужны теги: fetch-depth 0).
-  # Не блокирует остальные проверки, пока не накоплена статистика стабильности (нужен интернет).
+  # Сбой установки блокирует CI и автоматический релиз.
   install:
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - run: bash server/test/install/run.sh
 
-  # Реальные ноды (Docker-in-Docker с SSH): весь набор тестов, включая real-*.test.ts. Не блокирует остальные проверки,
-  # пока не накоплена статистика стабильности (тесты скачивают образ AmneziaWG из интернета).
+  # Реальные ноды (Docker-in-Docker с SSH): весь набор тестов, включая real-*.test.ts.
+  # Сбой критических сценариев блокирует CI и автоматический релиз.
   e2e:
     runs-on: ubuntu-latest
-    continue-on-error: true
     defaults:
       run:
         working-directory: server

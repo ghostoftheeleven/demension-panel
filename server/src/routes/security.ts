@@ -3,6 +3,7 @@ import { SslService } from '../services/ssl.service.js';
 import { Fail2banService } from '../services/fail2ban.service.js';
 import { requireAuth } from '../middleware/auth.middleware.js';
 import { asyncHandler, HttpError } from '../utils/http.js';
+import { EventService } from '../services/event.service.js';
 
 export const securityRouter = Router();
 
@@ -80,6 +81,7 @@ securityRouter.post('/ssl/custom', asyncHandler(async (req, res) => {
 securityRouter.post('/ssl/toggle', asyncHandler(async (req, res) => {
   const enabled = Boolean(req.body?.enabled);
   await wrap(() => SslService.toggleSsl(enabled));
+  EventService.log('info', 'tls.toggled', enabled ? 'HTTPS включён' : 'HTTPS отключён');
   res.json({ success: true, enabled });
 }));
 

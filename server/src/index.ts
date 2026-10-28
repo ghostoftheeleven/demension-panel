@@ -26,6 +26,10 @@ import { migrationRouter } from './routes/migration.js';
 import { probesRouter } from './routes/probes.js';
 import { ProbeService } from './services/probe.service.js';
 import { bridgesRouter } from './routes/bridges.js';
+import { eventsRouter } from './routes/events.js';
+import { telegramRouter } from './routes/telegram.js';
+import { backupsRouter } from './routes/backups.js';
+import { BackupService } from './services/backup.service.js';
 import { BridgeService } from './services/bridge.service.js';
 import { migrationGuard, subscriptionFreeze } from './middleware/migration-guard.js';
 import { MigrationService } from './services/migration.service.js';
@@ -120,6 +124,9 @@ app.use('/api/partners', partnersRouter);
 app.use('/api/remote-panels', remotePanelsRouter);
 app.use('/api/probes', probesRouter);
 app.use('/api/bridges', bridgesRouter);
+app.use('/api/events', eventsRouter);
+app.use('/api/telegram', telegramRouter);
+app.use('/api/backups', backupsRouter);
 app.use('/api/version', versionRouter);
 app.use('/api', requireAuth, clientsRouter);
 
@@ -315,6 +322,17 @@ async function probeLoop() {
   }
 }
 setTimeout(probeLoop, 20000);
+
+async function backupLoop() {
+  try {
+    await BackupService.runIfDue();
+  } catch (err) {
+    console.error('[BACKUP] Ошибка фонового копирования:', err);
+  } finally {
+    setTimeout(backupLoop, 60000);
+  }
+}
+setTimeout(backupLoop, 30000);
 
 setInterval(() => {
   cleanupFederationLimits();

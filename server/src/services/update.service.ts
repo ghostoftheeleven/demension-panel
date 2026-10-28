@@ -7,6 +7,7 @@ import { dataDir } from '../config.js';
 import { panelEnv } from '../utils/env.js';
 import { HttpError } from '../utils/http.js';
 import { PANEL_VERSION, parseVersion, VersionService } from './version.service.js';
+import { EventService } from './event.service.js';
 
 const execFileAsync = promisify(execFile);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -183,6 +184,7 @@ export class UpdateService {
       throw new HttpError(500, `Не удалось запустить обновление: ${detail}`);
     }
     console.log(`[UPDATE] Запущено обновление панели ${PANEL_VERSION} → ${target} (служба ${UPDATE_UNIT})`);
+    EventService.log('info', 'panel.update_started', `Запущено обновление панели ${PANEL_VERSION} → ${target}`);
     return this.getStatus();
   }
 

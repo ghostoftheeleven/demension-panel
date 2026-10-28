@@ -8,6 +8,7 @@ import { requireAuth } from '../middleware/auth.middleware.js';
 import { asyncHandler, HttpError, parseId } from '../utils/http.js';
 import { pendingIp } from '../services/federation-client.service.js';
 import { subscriberPeerName } from '../utils/names.js';
+import { EventService } from '../services/event.service.js';
 
 export const subscribersRouter = Router();
 
@@ -54,9 +55,8 @@ function validateExpireAt(value: unknown): string | null {
   return date.toISOString();
 }
 
-function serializeSubscriber(sub: any) {
-  const usage = SubscriptionService.getUsage(sub.id);
-  const peers = db.prepare(`
+function serializeSubscriber(sub: any, usage = SubscriptionService.getUsage(sub.id), peers?: any[]) {
+  peers ??= db.prepare(`
     SELECT c.id, c.server_id, c.client_ip, c.enabled, s.name as server_name, s.host
     FROM clients c
     JOIN servers s ON c.server_id = s.id
@@ -123,7 +123,27 @@ function loadServers(ids: number[]): any[] {
 // GET /api/subscribers
 subscribersRouter.get('/', (req, res) => {
   const subscribers = db.prepare('SELECT * FROM subscribers ORDER BY id DESC').all() as any[];
-  res.json(subscribers.map(serializeSubscriber));
+  const usageRows = db.prepare(`
+    SELECT subscriber_id, COALESCE(SUM(total_rx), 0) AS rx, COALESCE(SUM(total_tx), 0) AS tx
+    FROM clients WHERE subscriber_id IS NOT NULL GROUP BY subscriber_id
+  `).all() as any[];
+  const peers = db.prepare(`
+    SELECT c.id, c.subscriber_id, c.server_id, c.client_ip, c.enabled, s.name as server_name, s.host
+    FROM clients c JOIN servers s ON c.server_id = s.id
+    WHERE c.subscriber_id IS NOT NULL ORDER BY c.id
+  `).all() as any[];
+  const usage = new Map(usageRows.map((row) => [row.subscriber_id, { upload: row.rx, download: row.tx, used: row.rx + row.tx }]));
+  const peersBySubscriber = new Map<number, any[]>();
+  for (const peer of peers) {
+    const list = peersBySubscriber.get(peer.subscriber_id) ?? [];
+    list.push(peer);
+    peersBySubscriber.set(peer.subscriber_id, list);
+  }
+  res.json(subscribers.map((sub) => serializeSubscriber(
+    sub,
+    usage.get(sub.id) ?? { upload: 0, download: 0, used: 0 },
+    peersBySubscriber.get(sub.id) ?? [],
+  )));
 });
 
 // POST /api/subscribers
@@ -150,6 +170,7 @@ subscribersRouter.post('/', asyncHandler(async (req, res) => {
   await syncServers(serverIds);
 
   const created = db.prepare('SELECT * FROM subscribers WHERE id = ?').get(subscriberId);
+  EventService.log('info', 'subscriber.created', `Создан пользователь «${name}»`, { kind: 'subscriber', id: subscriberId });
   res.status(201).json(serializeSubscriber(created));
 }));
 
@@ -216,24 +237,26 @@ subscribersRouter.put('/:id', asyncHandler(async (req, res) => {
   await syncServers(affectedServers);
 
   const updated = db.prepare('SELECT * FROM subscribers WHERE id = ?').get(subscriberId);
+  EventService.log('info', 'subscriber.updated', `Изменён пользователь «${name}»`, { kind: 'subscriber', id: subscriberId });
   res.json(serializeSubscriber(updated));
 }));
 
 // POST /api/subscribers/:id/reset-traffic
 subscribersRouter.post('/:id/reset-traffic', (req, res) => {
   const subscriberId = parseId(req.params.id);
-  const subscriber = db.prepare('SELECT * FROM subscribers WHERE id = ?').get(subscriberId);
+  const subscriber = db.prepare('SELECT * FROM subscribers WHERE id = ?').get(subscriberId) as any;
   if (!subscriber) throw new HttpError(404, 'Пользователь не найден');
 
   db.prepare('UPDATE clients SET total_rx = 0, total_tx = 0 WHERE subscriber_id = ?').run(subscriberId);
   SubscriptionService.refreshSuspension(subscriberId);
+  EventService.log('info', 'subscriber.traffic_reset', `Сброшен трафик пользователя «${subscriber.name}»`, { kind: 'subscriber', id: subscriberId });
   res.json(serializeSubscriber(db.prepare('SELECT * FROM subscribers WHERE id = ?').get(subscriberId)));
 });
 
 // DELETE /api/subscribers/:id
 subscribersRouter.delete('/:id', asyncHandler(async (req, res) => {
   const subscriberId = parseId(req.params.id);
-  const subscriber = db.prepare('SELECT * FROM subscribers WHERE id = ?').get(subscriberId);
+  const subscriber = db.prepare('SELECT * FROM subscribers WHERE id = ?').get(subscriberId) as any;
   if (!subscriber) throw new HttpError(404, 'Пользователь не найден');
 
   // Find all affected server IDs before deleting
@@ -243,6 +266,7 @@ subscribersRouter.delete('/:id', asyncHandler(async (req, res) => {
   db.prepare('DELETE FROM subscribers WHERE id = ?').run(subscriberId);
   await syncServers(peers.map((p) => p.server_id));
 
+  EventService.log('info', 'subscriber.deleted', `Удалён пользователь «${subscriber.name}»`, { kind: 'subscriber', id: subscriberId });
   res.json({ success: true, message: 'Пользователь и его пиры удалены' });
 }));
 
@@ -279,5 +303,6 @@ subscribersRouter.post('/:id/reset-token', asyncHandler(async (req, res) => {
   // Ноды партнёров ждём: пока владелец не выдал IP новым ключам, они не попадают в подписку
   await syncServers(new Set(peers.map((p) => p.server_id)));
 
+  EventService.log('warning', 'subscriber.token_reset', `Перевыпущена подписка пользователя #${subscriberId}`, { kind: 'subscriber', id: subscriberId });
   res.json({ success: true, token });
 }));

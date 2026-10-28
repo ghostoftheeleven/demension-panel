@@ -439,3 +439,36 @@ export interface BridgeOperationResult {
   log?: string;
   bridge: Bridge;
 }
+
+export type EventLevel = 'info' | 'warning' | 'error';
+export interface PanelEvent {
+  id: number;
+  level: EventLevel;
+  type: string;
+  message: string;
+  entity_kind: string | null;
+  entity_id: string | null;
+  created_at: string;
+}
+export interface EventsPage { items: PanelEvent[]; total: number }
+export interface TelegramSettings {
+  enabled: boolean;
+  chat_id: string;
+  bot_token_saved: boolean;
+  notify_info: boolean;
+}
+export interface BackupSettings {
+  enabled: boolean;
+  provider: 'yandex' | 'google';
+  interval_hours: number;
+  retention: number;
+  yandex_username: string;
+  yandex_password_saved: boolean;
+  google_client_id: string;
+  google_client_secret_saved: boolean;
+  google_refresh_token_saved: boolean;
+  google_folder_id: string;
+  last_run: string | null;
+  last_error: string | null;
+}
+export interface RemoteBackup { id: string; name: string; created_at: string; size: number }

@@ -90,7 +90,7 @@ SQLite (`node:sqlite`, Node ≥ 22.13), файл `data/dementia.db`, режим 
 Связи удаляются каскадно вместе с мостом и нодой.
 
 ### Прочее
-- `admins` — администратор (scrypt), `sessions` — SHA-256 токенов с `expires_at`, `trusted_login_ips` — IP успешных входов
+- `admins` — администратор (scrypt), зашифрованный `totp_secret`, `totp_enabled`, SHA-256 кодов восстановления; `sessions` — SHA-256 токенов с `expires_at`, IP, User-Agent и активностью, `trusted_login_ips` — IP успешных входов
   администратора (исключение из блокировки по логину, см. [security.md](security.md)).
 - `settings` — ключ/значение: `ssl_*`, `cf_token` (**зашифрован**), `public_url`, `client_dns`, `client_mtu`,
   `sub_*` (оформление подписки), `probe_*` (проверка из стран), `migration_*` (состояние переноса панели: `migration_state`,

@@ -29,6 +29,7 @@ export interface ImportResult {
 export interface ImportOptions {
   /** Разрешить заменить данные уже работающей панели (копия сохраняется в data/backups) */
   replace?: boolean;
+  backupPrefix?: string;
 }
 
 function targetPath(name: ArchiveFileName): string {
@@ -46,7 +47,7 @@ function existingPanelHasData(): boolean {
   let existing: DatabaseSync | null = null;
   try {
     existing = new DatabaseSync(dbFile, { readOnly: true });
-    for (const table of ['servers', 'clients', 'subscribers', 'partners']) {
+    for (const table of ['servers', 'clients', 'subscribers', 'partners', 'admins', 'settings']) {
       const row = existing.prepare(`SELECT COUNT(*) AS c FROM ${table}`).get() as { c: number };
       if (row.c > 0) return true;
     }
@@ -72,6 +73,10 @@ function writeFileAtomic(file: string, data: Buffer, mode: number): void {
  */
 export async function importMigrationArchive(archive: Buffer, code: string, options: ImportOptions = {}): Promise<ImportResult> {
   const { encKey } = deriveMigrationKeys(code);
+  return importPanelArchive(archive, encKey, options);
+}
+
+export async function importPanelArchive(archive: Buffer, encKey: Buffer, options: ImportOptions = {}): Promise<ImportResult> {
   const { manifest, files } = openArchive(archive, encKey);
 
   const secretKey = files['secret.key']!.toString('utf8').trim();
@@ -94,7 +99,7 @@ export async function importMigrationArchive(archive: Buffer, code: string, opti
   for (const file of ownedPaths()) previous.set(file, fs.existsSync(file) ? fs.readFileSync(file) : null);
   let backupDir: string | null = null;
   if (hadData) {
-    backupDir = path.join(dataDir, 'backups', `pre-migration-${new Date().toISOString().replace(/[:.]/g, '-')}`);
+    backupDir = path.join(dataDir, 'backups', `${options.backupPrefix || 'pre-migration'}-${new Date().toISOString().replace(/[:.]/g, '-')}`);
     fs.mkdirSync(backupDir, { recursive: true, mode: 0o700 });
     for (const [file, content] of previous) {
       if (content) fs.writeFileSync(path.join(backupDir, path.relative(dataDir, file).replace(/[\\/]/g, '__')), content, { mode: 0o600 });

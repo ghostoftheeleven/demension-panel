@@ -11,6 +11,9 @@ interface LoginViewProps {
 export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [code, setCode] = useState('');
+  const [totpRequired, setTotpRequired] = useState(false);
+  const [useRecovery, setUseRecovery] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,7 +23,16 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     setLoading(true);
 
     try {
-      const res = await api.login(username.trim(), password);
+      const res = await api.login(
+        username.trim(),
+        password,
+        totpRequired && !useRecovery ? code : undefined,
+        totpRequired && useRecovery ? code : undefined,
+      );
+      if ('totp_required' in res) {
+        setTotpRequired(true);
+        return;
+      }
       onLoginSuccess(res.user);
     } catch (err: any) {
       setError(err.message || 'Неверный логин или пароль');
@@ -81,6 +93,33 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               <Lock className="w-4 h-4 text-faint absolute left-3.5 top-3" />
             </div>
           </div>
+
+          {totpRequired && (
+            <div>
+              <label className="block text-xs font-medium text-muted mb-1.5">
+                {useRecovery ? 'Код восстановления' : 'Код из приложения-аутентификатора'}
+              </label>
+              <input
+                type="text"
+                required
+                autoFocus
+                aria-label={useRecovery ? 'Код восстановления' : 'Код из приложения-аутентификатора'}
+                autoComplete="one-time-code"
+                inputMode={useRecovery ? 'text' : 'numeric'}
+                maxLength={useRecovery ? 8 : 6}
+                value={code}
+                onChange={(e) => setCode(e.target.value.trim())}
+                className="w-full bg-paper border border-line rounded-xl px-4 py-2.5 text-ink focus:outline-none focus:border-mint text-sm text-center tracking-widest font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => { setUseRecovery(!useRecovery); setCode(''); setError(null); }}
+                className="mt-2 text-xs text-muted hover:text-ink"
+              >
+                {useRecovery ? 'Ввести код из приложения' : 'Использовать код восстановления'}
+              </button>
+            </div>
+          )}
 
           <button
             type="submit"

@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { db, initDatabase } from '../src/db/index.js';
 import { AuthService } from '../src/services/auth.service.js';
 import { startTestServer } from './test-app.js';
@@ -134,6 +134,23 @@ describe('API: Подписчики и подписки (интеграцион�
     const newSubRes = await testEnv.request(`/sub/${newToken}`);
     expect(newSubRes.status).toBe(200);
     subToken = newToken;
+  });
+
+  it('список подписчиков использует постоянное число SQL-запросов', async () => {
+    for (let i = 0; i < 4; i++) {
+      db.prepare('INSERT INTO subscribers (name, token) VALUES (?, ?)').run(`query-count-${i}`, `query-token-${i}`);
+    }
+    const spy = vi.spyOn(db, 'prepare');
+    try {
+      const res = await testEnv.request('/api/subscribers', { headers: authHeaders() });
+      expect(res.status).toBe(200);
+      const items = await res.json();
+      expect(items).toHaveLength(5);
+      const listQueries = spy.mock.calls.filter(([sql]) => sql.includes('FROM subscribers') || sql.includes('FROM clients'));
+      expect(listQueries).toHaveLength(3);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it('отключение подписчика возвращает 403 в /sub/:token', async () => {

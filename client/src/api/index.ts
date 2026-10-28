@@ -27,6 +27,11 @@ import type {
   BridgeInput,
   BridgeLinkMode,
   BridgeOperationResult,
+  EventLevel,
+  EventsPage,
+  TelegramSettings,
+  BackupSettings,
+  RemoteBackup,
 } from '../types';
 
 const API_BASE = '/api';
@@ -109,15 +114,15 @@ const json = (body: unknown): RequestInit => ({ body: JSON.stringify(body) });
 
 export const api = {
   // Auth
-  async login(username: string, password: string): Promise<{ token: string; user: AdminUser }> {
+  async login(username: string, password: string, totp?: string, recoveryCode?: string): Promise<{ token: string; user: AdminUser } | { totp_required: true }> {
     const res = await fetch(`${API_BASE}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, totp, recovery_code: recoveryCode }),
     });
     if (!res.ok) throw new Error(await errorMessage(res, 'Ошибка входа'));
     const data = await res.json();
-    setToken(data.token);
+    if (data.token) setToken(data.token);
     return data;
   },
 
@@ -149,6 +154,31 @@ export const api = {
     );
     if (data.token) setToken(data.token);
     return data.user;
+  },
+
+  setupTotp(): Promise<{ secret: string; uri: string }> {
+    return request(`${API_BASE}/auth/totp/setup`, { method: 'POST' }, 'Ошибка настройки 2FA');
+  },
+
+  enableTotp(secret: string, code: string, password: string): Promise<{ recovery_codes: string[] }> {
+    return request(`${API_BASE}/auth/totp/enable`, { method: 'POST', ...json({ secret, code, password }) }, 'Ошибка включения 2FA');
+  },
+
+  disableTotp(password: string): Promise<void> {
+    return request(`${API_BASE}/auth/totp/disable`, { method: 'POST', ...json({ password }) }, 'Ошибка отключения 2FA');
+  },
+
+  rotateRecoveryCodes(password: string): Promise<{ recovery_codes: string[] }> {
+    return request(`${API_BASE}/auth/totp/recovery/rotate`, { method: 'POST', ...json({ password }) }, 'Ошибка перевыпуска кодов');
+  },
+
+  async getSessions(): Promise<Array<{ id: number; ip: string; user_agent: string; last_activity: string; created_at: string; current: boolean }>> {
+    const data = await request<{ sessions: Array<{ id: number; ip: string; user_agent: string; last_activity: string; created_at: string; current: boolean }> }>(`${API_BASE}/auth/sessions`, {}, 'Ошибка загрузки сессий');
+    return data.sessions;
+  },
+
+  async revokeSession(id: number): Promise<void> {
+    await request(`${API_BASE}/auth/sessions/${id}`, { method: 'DELETE' }, 'Ошибка завершения сессии');
   },
 
   // Servers
@@ -507,5 +537,57 @@ export const api = {
 
   setupFail2ban(): Promise<{ success: boolean; message: string }> {
     return request(`${API_BASE}/security/fail2ban/setup`, { method: 'POST' }, 'Ошибка установки Fail2ban');
+  },
+
+  getEvents(options: { level?: EventLevel; limit?: number; offset?: number } = {}): Promise<EventsPage> {
+    const params = new URLSearchParams();
+    if (options.level) params.set('level', options.level);
+    if (options.limit) params.set('limit', String(options.limit));
+    if (options.offset) params.set('offset', String(options.offset));
+    return request(`${API_BASE}/events?${params}`, {}, 'Ошибка загрузки событий');
+  },
+
+  async getTelegramSettings(): Promise<TelegramSettings> {
+    const data = await request<{ settings: TelegramSettings }>(`${API_BASE}/telegram`, {}, 'Ошибка загрузки Telegram');
+    return data.settings;
+  },
+
+  async updateTelegramSettings(data: Omit<TelegramSettings, 'bot_token_saved'> & { bot_token?: string }): Promise<TelegramSettings> {
+    const result = await request<{ settings: TelegramSettings }>(`${API_BASE}/telegram`, { method: 'PUT', ...json(data) }, 'Ошибка сохранения Telegram');
+    return result.settings;
+  },
+
+  testTelegram(): Promise<{ success: boolean; message: string }> {
+    return request(`${API_BASE}/telegram/test`, { method: 'POST' }, 'Ошибка проверки Telegram');
+  },
+
+  async getBackupSettings(): Promise<BackupSettings> {
+    return (await request<{ settings: BackupSettings }>(`${API_BASE}/backups/settings`, {}, 'Ошибка загрузки настроек копий')).settings;
+  },
+  async updateBackupSettings(data: Partial<BackupSettings> & { yandex_password?: string; google_client_secret?: string; google_refresh_token?: string }): Promise<BackupSettings> {
+    return (await request<{ settings: BackupSettings }>(`${API_BASE}/backups/settings`, { method: 'PUT', ...json(data) }, 'Ошибка сохранения настроек копий')).settings;
+  },
+  testBackups(): Promise<{ success: boolean; message: string }> {
+    return request(`${API_BASE}/backups/test`, { method: 'POST' }, 'Ошибка проверки хранилища');
+  },
+  runBackup(): Promise<{ success: boolean; error?: string }> {
+    return request(`${API_BASE}/backups/run`, { method: 'POST' }, 'Ошибка создания копии');
+  },
+  getBackups(): Promise<{ backups: RemoteBackup[] }> {
+    return request(`${API_BASE}/backups`, {}, 'Ошибка загрузки списка копий');
+  },
+  async downloadBackup(id: string, name: string): Promise<void> {
+    const res = await fetchWithAuth(`${API_BASE}/backups/${encodeURIComponent(id)}/download`);
+    if (!res.ok) throw new Error(await errorMessage(res, 'Ошибка скачивания копии'));
+    const url = URL.createObjectURL(await res.blob());
+    const link = document.createElement('a');
+    link.href = url; link.download = name; link.click();
+    URL.revokeObjectURL(url);
+  },
+  async deleteBackup(id: string): Promise<void> {
+    await request(`${API_BASE}/backups/${encodeURIComponent(id)}`, { method: 'DELETE' }, 'Ошибка удаления копии');
+  },
+  getBackupRecoveryKey(password: string): Promise<{ recovery_key: string }> {
+    return request(`${API_BASE}/backups/recovery-key`, { method: 'POST', ...json({ password }) }, 'Ошибка получения ключа');
   },
 };

@@ -1,14 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Navbar, type AppTab } from './components/Navbar';
-import { SubscriptionSettingsView } from './components/SubscriptionSettingsView';
-import { PartnersView } from './components/PartnersView';
-import { BridgesView } from './components/BridgesView';
 import { ServerCards } from './components/ServerCards';
 import { ProbesCard } from './components/ProbesCard';
 import { ServersOverview } from './components/ServersOverview';
 import { ClientList } from './components/ClientList';
-import { SubscribersList } from './components/SubscribersList';
-import { SecurityView } from './components/SecurityView';
 import { AddServerModal } from './components/AddServerModal';
 import { InstallLogsModal } from './components/InstallLogsModal';
 import { AwgParamsModal } from './components/AwgParamsModal';
@@ -21,6 +16,13 @@ import { LoginView } from './components/LoginView';
 import type { Server, Client, Subscriber, QrCodeData, AdminUser, MigrationStatus } from './types';
 import { api } from './api';
 import { ShieldCheck, Plus, Terminal, Zap, Sparkles, AlertTriangle } from 'lucide-react';
+
+const SubscriptionSettingsView = React.lazy(() => import('./components/SubscriptionSettingsView').then((m) => ({ default: m.SubscriptionSettingsView })));
+const PartnersView = React.lazy(() => import('./components/PartnersView').then((m) => ({ default: m.PartnersView })));
+const BridgesView = React.lazy(() => import('./components/BridgesView').then((m) => ({ default: m.BridgesView })));
+const SubscribersList = React.lazy(() => import('./components/SubscribersList').then((m) => ({ default: m.SubscribersList })));
+const SecurityView = React.lazy(() => import('./components/SecurityView').then((m) => ({ default: m.SecurityView })));
+const EventsView = React.lazy(() => import('./components/EventsView').then((m) => ({ default: m.EventsView })));
 
 export const App: React.FC = () => {
   const [user, setUser] = useState<AdminUser | null>(null);
@@ -49,6 +51,8 @@ export const App: React.FC = () => {
   const [publicUrl, setPublicUrl] = useState<string | null>(null);
   // Номер последнего запроса клиентов: ответ для ранее выбранного сервера отбрасывается
   const clientsRequestRef = useRef(0);
+  const dataInFlightRef = useRef(false);
+  const settingsLoadedRef = useRef(false);
   const [isAccountOpen, setIsAccountOpen] = useState(false);
   const [migrationState, setMigrationState] = useState<MigrationStatus['state']>('idle');
 
@@ -73,24 +77,29 @@ export const App: React.FC = () => {
   }, []);
 
   const loadData = async () => {
-    if (!user) return;
+    if (!user || dataInFlightRef.current) return;
+    dataInFlightRef.current = true;
     try {
       const [serversData, subscribersData, settings, migration] = await Promise.all([
         api.getServers(),
         api.getSubscribers(),
-        api.getSettings().catch(() => null),
+        settingsLoadedRef.current ? Promise.resolve(null) : api.getSettings().catch(() => null),
         api.getMigrationStatus().catch(() => null),
       ]);
       if (migration) setMigrationState(migration.state);
       setServers(serversData);
       setSubscribers(subscribersData);
-      if (settings) setPublicUrl(settings.public_url || null);
+      if (settings) {
+        settingsLoadedRef.current = true;
+        setPublicUrl(settings.public_url || null);
+      }
       setSelectedServerId((current) =>
         current !== null && serversData.some((s) => s.id === current) ? current : serversData[0]?.id ?? null
       );
     } catch (err) {
       console.error('Ошибка загрузки данных:', err);
     } finally {
+      dataInFlightRef.current = false;
       setLoading(false);
     }
   };
@@ -126,6 +135,7 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (!user) return;
     const interval = setInterval(() => {
+      if (document.hidden) return;
       loadersRef.current.loadData();
       if (selectedServerId !== null) {
         loadersRef.current.loadClients(selectedServerId);
@@ -257,6 +267,7 @@ export const App: React.FC = () => {
       )}
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        <React.Suspense fallback={<div className="flex items-center justify-center py-24 text-faint text-sm">Загрузка раздела...</div>}>
         {loading ? (
           <div className="flex items-center justify-center py-24 text-faint text-sm">
             Загрузка данных...
@@ -267,6 +278,8 @@ export const App: React.FC = () => {
           <PartnersView servers={servers} publicUrl={publicUrl} onChanged={loadData} />
         ) : activeTab === 'subscription' ? (
           <SubscriptionSettingsView subscribers={subscribers} publicUrl={publicUrl} />
+        ) : activeTab === 'events' ? (
+          <EventsView />
         ) : activeTab === 'security' ? (
           /* Security: HTTPS & Fail2ban Tab */
           <SecurityView
@@ -325,7 +338,7 @@ export const App: React.FC = () => {
 
               <div className="p-4 bg-paper border border-line rounded-2xl">
                 <Zap className="w-5 h-5 text-warn mb-2" />
-                <h4 className="text-xs font-semibold text-ink">Подписки HAPP / Incy</h4>
+                <h4 className="text-xs font-semibold text-ink">Подписки Incy и mihomo</h4>
                 <p className="text-[11px] text-muted mt-1">Автообновление списка серверов без ручной настройки.</p>
               </div>
             </div>
@@ -374,6 +387,7 @@ export const App: React.FC = () => {
             )}
           </>
         )}
+        </React.Suspense>
       </main>
 
       {/* Modals */}

@@ -9,6 +9,7 @@ import { isValidHost, isValidPort, parseSubnet } from '../utils/net.js';
 import { LATEST_AWG_VERSION, paramsFromRow, paramsToColumns } from '../utils/awg-params.js';
 import { AmneziaKeyError, decodeAmneziaKey, splitAmneziaKeys } from '../utils/amnezia-key.js';
 import { ProbeService } from '../services/probe.service.js';
+import { EventService } from '../services/event.service.js';
 
 export const serversRouter = Router();
 
@@ -176,6 +177,7 @@ serversRouter.post('/', (req, res) => {
   assertEndpointFree(host, awgPort);
 
   const id = insertServer({ name, host, sshPort, sshUser, sshPassword, sshKey, awgPort, subnet });
+  EventService.log('info', 'server.created', `Добавлена нода «${name}»`, { kind: 'server', id });
   res.status(201).json(serializeServer(selectServerWithCounts(id)));
 });
 
@@ -386,6 +388,7 @@ serversRouter.put('/:id', asyncHandler(async (req, res) => {
     }
   }
 
+  EventService.log('info', 'server.updated', `Изменены настройки ноды «${updates.name ?? server.name}»`, { kind: 'server', id });
   res.json(serializeServer(selectServerWithCounts(id)));
 }));
 
@@ -406,6 +409,7 @@ serversRouter.delete('/:id', asyncHandler(async (req, res) => {
   }
 
   db.prepare('DELETE FROM servers WHERE id = ?').run(id);
+  EventService.log('info', 'server.deleted', `Удалена нода «${server.name}»`, { kind: 'server', id });
   res.json({ success: true, message: 'Сервер удален из панели' });
 }));
 

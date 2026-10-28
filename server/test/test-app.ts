@@ -15,6 +15,9 @@ import { versionRouter } from '../src/routes/version.js';
 import { migrationRouter } from '../src/routes/migration.js';
 import { probesRouter } from '../src/routes/probes.js';
 import { bridgesRouter } from '../src/routes/bridges.js';
+import { eventsRouter } from '../src/routes/events.js';
+import { telegramRouter } from '../src/routes/telegram.js';
+import { backupsRouter } from '../src/routes/backups.js';
 import { migrationGuard, subscriptionFreeze } from '../src/middleware/migration-guard.js';
 import { requireAuth } from '../src/middleware/auth.middleware.js';
 import { errorHandler } from '../src/middleware/error-handler.js';
@@ -50,6 +53,9 @@ export function createTestApp() {
   app.use('/api/remote-panels', remotePanelsRouter);
   app.use('/api/probes', probesRouter);
   app.use('/api/bridges', bridgesRouter);
+  app.use('/api/events', eventsRouter);
+  app.use('/api/telegram', telegramRouter);
+  app.use('/api/backups', backupsRouter);
   app.use('/api/version', versionRouter);
   app.use('/api', requireAuth, clientsRouter);
 

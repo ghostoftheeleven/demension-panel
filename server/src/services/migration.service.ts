@@ -18,6 +18,7 @@ import {
 import { decryptSecret, encryptSecret, exportSecretKey } from './secrets.service.js';
 import { SslService, accountKeyPath, certPath, keyPath } from './ssl.service.js';
 import { PANEL_VERSION } from './version.service.js';
+import { PanelArchiveService } from './panel-archive.service.js';
 
 /**
  * Перенос панели на другой сервер — сторона прежней (отдающей) панели.
@@ -201,7 +202,7 @@ export class MigrationService {
     const key = Buffer.from(decryptSecret(getSetting('migration_key')) ?? '', 'base64');
     if (key.length !== 32) throw new HttpError(500, 'Ключ переноса повреждён: подготовьте перенос заново');
 
-    const sealed = sealArchive(this.collect(), key);
+    const sealed = PanelArchiveService.create(key);
 
     setSetting('migration_state', 'exporting');
     setSetting('migration_exported_at', new Date().toISOString());
