@@ -120,10 +120,10 @@ describe('2FA (TOTP)', () => {
       expect(result).toHaveProperty('user');
     });
 
-    test('с неверным TOTP-кодом возвращает null', () => {
+    test('с неверным TOTP-кодом возвращает invalid_code', () => {
       const result = AuthService.loginWithTotp(username, password, '000000');
 
-      expect(result).toBe(null);
+      expect(result).toBe('invalid_code');
     });
 
     test('с неверным паролем возвращает null, даже с верным TOTP', () => {
@@ -167,7 +167,7 @@ describe('2FA (TOTP)', () => {
 
       // Второй раз с тем же кодом — отклонён
       const result2 = AuthService.loginWithTotp(username + '_3', password, undefined, recoveryCode);
-      expect(result2).toBe(null);
+      expect(result2).toBe('invalid_code');
     });
   });
 
@@ -243,7 +243,7 @@ describe('2FA (TOTP)', () => {
       AuthService.rotateRecoveryCodes(adminId2);
 
       const result = AuthService.loginWithTotp(username + '_4', password, undefined, oldCodes[0]);
-      expect(result).toBe(null);
+      expect(result).toBe('invalid_code');
     });
 
     test('логирует перевыпуск recovery codes', () => {

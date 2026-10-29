@@ -39,7 +39,20 @@ authRouter.post('/login', (req, res) => {
     });
   }
 
-  const result = AuthService.loginWithTotp(username, password, totp, recovery_code, req.ip, req.get('user-agent'));
+  // Перебор кода 2FA (при верном пароле) ограничен отдельно: 5 неверных кодов за 15 минут — затем 429
+  const codeKey = `admin:login:${userKey}`;
+  const codeSubmitted = Boolean(totp || recovery_code);
+  const codeBlockedMs = codeSubmitted ? reauthLimiter.blockedFor(codeKey) : 0;
+  if (codeBlockedMs > 0) {
+    res.setHeader('Retry-After', Math.ceil(codeBlockedMs / 1000));
+    return res.status(429).json({ error: `Слишком много неверных кодов. Повторите через ${Math.ceil(codeBlockedMs / 60000)} мин.` });
+  }
+
+  let result = AuthService.loginWithTotp(username, password, totp, recovery_code, req.ip, req.get('user-agent'));
+  if (result === 'invalid_code') {
+    reauthLimiter.registerFailure(codeKey);
+    result = null;
+  }
 
   if (result === 'totp_required') {
     // 2FA включена, клиент должен запросить код и отправить повторно
@@ -49,10 +62,6 @@ authRouter.post('/login', (req, res) => {
   if (!result) {
     loginIpLimiter.registerFailure(ipKey);
     loginUserLimiter.registerFailure(userKey);
-    // Неверный TOTP/recovery тоже считается в reauthLimiter (смена учётных данных защищена)
-    if (totp || recovery_code) {
-      reauthLimiter.registerFailure(`admin:login:${username.toLowerCase()}`);
-    }
     // Логин задаёт посторонний: JSON.stringify экранирует переводы строк и не даёт подделать записи журнала
     console.warn(`[AUTH] Неудачная попытка входа для ${JSON.stringify(username.slice(0, 64))} с ${ipKey}`);
     EventService.log('warning', 'auth.login_failed', `Неудачный вход для ${username.slice(0, 64)} с ${ipKey}`);
@@ -61,7 +70,7 @@ authRouter.post('/login', (req, res) => {
 
   loginIpLimiter.reset(ipKey);
   loginUserLimiter.reset(userKey);
-  reauthLimiter.reset(`admin:login:${username.toLowerCase()}`);
+  reauthLimiter.reset(codeKey);
   // Адрес гостя в доверенные не попадает: исключение из блокировки по логину — только для администратора
   if (ipKey !== 'unknown' && result.user.role === 'admin') AuthService.rememberLoginIp(ipKey);
   if (result.user.role === 'guest') {
@@ -95,7 +104,7 @@ authRouter.post('/change-password', requireAuth, (req: AuthenticatedRequest, res
   }
 
   const limiterKey = assertReauthAllowed(req.user!.id);
-  const token = AuthService.changePassword(req.user!.id, oldPassword, newPassword);
+  const token = AuthService.changePassword(req.user!.id, oldPassword, newPassword, req.ip, req.get('user-agent'));
   if (!token) {
     reauthLimiter.registerFailure(limiterKey);
     return res.status(400).json({ error: 'Неверный старый пароль' });
@@ -120,7 +129,7 @@ authRouter.post('/change-username', requireAuth, (req: AuthenticatedRequest, res
   }
 
   const limiterKey = assertReauthAllowed(req.user!.id);
-  const result = AuthService.changeUsername(req.user!.id, password, username);
+  const result = AuthService.changeUsername(req.user!.id, password, username, req.ip, req.get('user-agent'));
   if (result === 'wrong_password') {
     reauthLimiter.registerFailure(limiterKey);
     return res.status(400).json({ error: 'Неверный пароль' });

@@ -187,7 +187,7 @@ export class AuthService {
   /**
    * Change admin password. All sessions are revoked; a fresh token for the caller is returned.
    */
-  static changePassword(adminId: number, oldPass: string, newPass: string): string | null {
+  static changePassword(adminId: number, oldPass: string, newPass: string, ip?: string, userAgent?: string): string | null {
     const admin = db.prepare('SELECT * FROM admins WHERE id = ?').get(adminId) as any;
     if (!admin) return null;
 
@@ -199,7 +199,7 @@ export class AuthService {
     return transaction(() => {
       db.prepare('UPDATE admins SET password_hash = ?, salt = ? WHERE id = ?').run(hash, salt, adminId);
       db.prepare('DELETE FROM sessions WHERE admin_id = ?').run(adminId);
-      return this.createSession(adminId);
+      return this.createSession(adminId, ip, userAgent);
     });
   }
 
@@ -213,7 +213,7 @@ export class AuthService {
    * Смена логина администратора (по текущему паролю). Как и при смене пароля, остальные сессии завершаются, а вызывающему
    * выдаётся новый токен. Возвращает причину отказа или новый токен.
    */
-  static changeUsername(adminId: number, password: string, newUsername: string): { token: string; username: string } | 'wrong_password' | 'taken' {
+  static changeUsername(adminId: number, password: string, newUsername: string, ip?: string, userAgent?: string): { token: string; username: string } | 'wrong_password' | 'taken' {
     if (!this.confirmPassword(adminId, password)) return 'wrong_password';
 
     return transaction(() => {
@@ -222,7 +222,7 @@ export class AuthService {
       if (taken || newUsername === getSetting('guest_username')) return 'taken' as const;
       db.prepare('UPDATE admins SET username = ? WHERE id = ?').run(newUsername, adminId);
       db.prepare('DELETE FROM sessions WHERE admin_id = ?').run(adminId);
-      return { token: this.createSession(adminId), username: newUsername };
+      return { token: this.createSession(adminId, ip, userAgent), username: newUsername };
     });
   }
 
@@ -247,11 +247,16 @@ export class AuthService {
    * Проверяет TOTP-код с окном ±1 (допускается сдвиг часов на 30с)
    */
   public static verifyTotp(secret: Buffer, code: string, window = 1): boolean {
+    return this.matchTotp(secret, code, window) !== null;
+  }
+
+  /** Номер 30-секундного шага, которому соответствует код (или null) */
+  private static matchTotp(secret: Buffer, code: string, window = 1): number | null {
     const now = Math.floor(Date.now() / 1000 / 30);
     for (let i = -window; i <= window; i++) {
-      if (this.generateTotp(secret, now + i) === code) return true;
+      if (this.generateTotp(secret, now + i) === code) return now + i;
     }
-    return false;
+    return null;
   }
 
   /**
@@ -347,14 +352,20 @@ export class AuthService {
    * Проверяет TOTP-код для администратора
    */
   static checkTotp(adminId: number, code: string): boolean {
+    // Перехваченный код нельзя использовать повторно, пока он ещё в окне допуска (±30 с)
     const admin = db.prepare('SELECT totp_secret, totp_enabled FROM admins WHERE id = ?').get(adminId) as any;
     if (!admin || !admin.totp_enabled || !admin.totp_secret) return false;
 
     const secret = decryptSecret(admin.totp_secret);
     if (!secret) return false;
-    const secretBuf = this.base32Decode(secret);
-    return this.verifyTotp(secretBuf, code);
+    const step = this.matchTotp(this.base32Decode(secret), code);
+    if (step === null || step <= (this.lastTotpStep.get(adminId) ?? -1)) return false;
+    this.lastTotpStep.set(adminId, step);
+    return true;
   }
+
+  /** Последний принятый при входе шаг TOTP по администраторам (после перезапуска панели начинается заново) */
+  private static lastTotpStep = new Map<number, number>();
 
   /**
    * Использует recovery code (одноразовый): проверяет SHA-256 и удаляет из списка
@@ -395,7 +406,7 @@ export class AuthService {
     recoveryCode?: string,
     ip?: string,
     userAgent?: string,
-  ): { token: string; user: SessionUser } | 'totp_required' | null {
+  ): { token: string; user: SessionUser } | 'totp_required' | 'invalid_code' | null {
     const admin = db.prepare('SELECT * FROM admins WHERE username = ?').get(username) as any;
     if (!admin) return this.loginGuest(username, password, ip, userAgent);
 
@@ -412,7 +423,8 @@ export class AuthService {
         codeValid = this.useRecoveryCode(admin.id, recoveryCode);
       }
 
-      if (!codeValid) return null;
+      // Пароль верный, код нет: отличается от неверного пароля, чтобы лимитировать перебор кода отдельно
+      if (!codeValid) return 'invalid_code';
     }
 
     return {
