@@ -5,6 +5,7 @@ import type { Server, Bridge, Subscriber, AdminUser } from '../types';
 import { PanelVersion } from './PanelVersion';
 import { BrandMark } from './BrandMark';
 import { formatBytes } from '../utils';
+import { InstallAppButton } from './InstallAppButton';
 
 export type AppTab = 'servers' | 'bridges' | 'subscribers' | 'subscription' | 'partners' | 'events' | 'security';
 
@@ -67,7 +68,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const traffic = subscribers.reduce((acc, s) => acc + (s.traffic_used || 0), 0);
 
   return (
-    <header className="bg-page/85 backdrop-blur-md sticky top-0 z-30 border-b border-line">
+    <header className="bg-page/85 backdrop-blur-md sticky top-0 z-30 border-b border-line pt-safe">
       <div className="max-w-[1600px] mx-auto px-4 sm:px-6 pt-3 flex items-center gap-4">
         {/* Логотип и версия */}
         <div className="flex items-center gap-3 min-w-0">
@@ -119,6 +120,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="hidden sm:inline">Пользователь</span>
             </button>
           )}
+
+          {user && <InstallAppButton />}
 
           {user && (
             <>

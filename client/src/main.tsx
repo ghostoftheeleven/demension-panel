@@ -11,6 +11,7 @@ import './index.css'
 import App from './App.tsx'
 import { ErrorBoundary } from './components/ErrorBoundary.tsx'
 import { FeedbackProvider } from './components/ui/Feedback.tsx'
+import { registerServiceWorker } from './pwa.ts'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -21,3 +22,5 @@ createRoot(document.getElementById('root')!).render(
     </ErrorBoundary>
   </StrictMode>,
 )
+
+registerServiceWorker()

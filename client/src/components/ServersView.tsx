@@ -192,12 +192,12 @@ export const ServersView: React.FC<ServersViewProps> = (props) => {
           subscribers={subscribers}
           selected={valid}
           onSelect={select}
-          className="h-[58vh] min-h-[380px] lg:h-[calc(100vh-11.5rem)] lg:min-h-[520px] rounded-2xl border border-line bg-page/60"
+          className="h-[58dvh] min-h-[380px] lg:h-[calc(100dvh-11.5rem)] lg:min-h-[520px] rounded-2xl border border-line bg-page/60"
         />
 
         <div
           ref={inspectorRef}
-          className="lg:h-[calc(100vh-11.5rem)] lg:min-h-[520px] lg:overflow-y-auto rounded-2xl border border-line bg-card/90 p-5 space-y-5 scroll-mt-32"
+          className="lg:h-[calc(100dvh-11.5rem)] lg:min-h-[520px] lg:overflow-y-auto rounded-2xl border border-line bg-card/90 p-5 space-y-5 scroll-mt-32"
           aria-live="polite"
           data-testid="inspector"
         >

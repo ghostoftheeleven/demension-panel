@@ -31,6 +31,7 @@ import { telegramRouter } from './routes/telegram.js';
 import { backupsRouter } from './routes/backups.js';
 import { BackupService } from './services/backup.service.js';
 import { LiveService } from './services/live.service.js';
+import { REVALIDATE, staticHeaders } from './middleware/static-cache.js';
 import { BridgeService } from './services/bridge.service.js';
 import { migrationGuard, subscriptionFreeze } from './middleware/migration-guard.js';
 import { MigrationService } from './services/migration.service.js';
@@ -146,8 +147,10 @@ const clientDistCandidates = [
 ];
 const clientDistPath = clientDistCandidates.find((p) => fs.existsSync(p));
 if (clientDistPath) {
-  app.use(express.static(clientDistPath));
+  app.use(express.static(clientDistPath, { setHeaders: staticHeaders(clientDistPath) }));
+  // Запасной маршрут SPA: оболочка всегда с проверкой (см. middleware/static-cache.ts)
   app.get('*', (req, res) => {
+    res.setHeader('Cache-Control', REVALIDATE);
     res.sendFile(path.join(clientDistPath, 'index.html'));
   });
 }

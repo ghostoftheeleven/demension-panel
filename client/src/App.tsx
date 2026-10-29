@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Navbar, type AppTab } from './components/Navbar';
 import { ServersView } from './components/ServersView';
 import { AddServerModal } from './components/AddServerModal';
@@ -14,8 +14,9 @@ import { useGuestLock } from './guestLock';
 import { useFeedback } from './components/ui/feedback-context';
 import { useLiveUpdates } from './live';
 import type { Server, Client, Subscriber, Bridge, QrCodeData, AdminUser, MigrationStatus } from './types';
-import { api } from './api';
-import { ShieldCheck, Plus, Terminal, Zap, Sparkles, AlertTriangle, Eye } from 'lucide-react';
+import { api, getToken } from './api';
+import { ShieldCheck, Plus, Terminal, Zap, Sparkles, AlertTriangle, Eye, WifiOff } from 'lucide-react';
+import { ConnectionLost } from './components/ConnectionLost';
 
 const SubscriptionSettingsView = React.lazy(() => import('./components/SubscriptionSettingsView').then((m) => ({ default: m.SubscriptionSettingsView })));
 const PartnersView = React.lazy(() => import('./components/PartnersView').then((m) => ({ default: m.PartnersView })));
@@ -24,10 +25,26 @@ const SubscribersList = React.lazy(() => import('./components/SubscribersList').
 const SecurityView = React.lazy(() => import('./components/SecurityView').then((m) => ({ default: m.SecurityView })));
 const EventsView = React.lazy(() => import('./components/EventsView').then((m) => ({ default: m.EventsView })));
 
+type Session = { kind: 'user'; user: AdminUser } | { kind: 'lost' } | { kind: 'anonymous' };
+
+/** Проверка сессии: 401 стирает токен (api/index.ts), поэтому «токен остался» значит, что запрос не дошёл до панели (сеть, перезапуск) */
+async function resolveSession(): Promise<Session> {
+  try {
+    const res = await api.me();
+    return { kind: 'user', user: res.user };
+  } catch {
+    return getToken() ? { kind: 'lost' } : { kind: 'anonymous' };
+  }
+}
+
 export const App: React.FC = () => {
   const { toast, alert: showAlert } = useFeedback();
   const [user, setUser] = useState<AdminUser | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
+  // Сессия есть, но сервер недоступен (сеть, перезапуск панели): не показываем форму входа и не стираем токен
+  const [connectionLost, setConnectionLost] = useState(false);
+  // Уже вошли, но обновление данных не удаётся: остаются последние полученные данные и баннер
+  const [offline, setOffline] = useState(false);
 
   const [activeTab, setActiveTab] = useState<AppTab>('servers');
   const [servers, setServers] = useState<Server[]>([]);
@@ -62,25 +79,24 @@ export const App: React.FC = () => {
   const mainRef = useRef<HTMLElement>(null);
   useGuestLock(isGuest, mainRef);
 
-  // Check auth on mount
+  // Результат проверки применяется отдельно от самой проверки: состояние меняется только в ответе, а не в теле эффекта
+  const applySession = useCallback((session: Session) => {
+    if (session.kind === 'user') setUser(session.user);
+    else if (session.kind === 'anonymous') setUser(null);
+    setConnectionLost(session.kind === 'lost');
+    setAuthChecking(false);
+  }, []);
+  const checkAuth = useCallback(() => resolveSession().then(applySession), [applySession]);
+
   useEffect(() => {
-    api.me()
-      .then((res) => {
-        setUser(res.user);
-      })
-      .catch(() => {
-        setUser(null);
-      })
-      .finally(() => {
-        setAuthChecking(false);
-      });
+    checkAuth();
 
     const handleUnauthorized = () => {
       setUser(null);
     };
     window.addEventListener('auth_unauthorized', handleUnauthorized);
     return () => window.removeEventListener('auth_unauthorized', handleUnauthorized);
-  }, []);
+  }, [checkAuth]);
 
   const loadData = async () => {
     if (!user || dataInFlightRef.current) return;
@@ -104,8 +120,10 @@ export const App: React.FC = () => {
       setSelectedServerId((current) =>
         current !== null && serversData.some((s) => s.id === current) ? current : serversData[0]?.id ?? null
       );
+      setOffline(false);
     } catch (err) {
       console.error('Ошибка загрузки данных:', err);
+      setOffline(true);
     } finally {
       dataInFlightRef.current = false;
       setLoading(false);
@@ -147,6 +165,18 @@ export const App: React.FC = () => {
   };
   const live = useLiveUpdates(Boolean(user) && !isGuest, refresh);
 
+  // Вернулась сеть (телефон вышел из метро или проснулся) — не ждём очередного опроса
+  const refreshRef = useRef(refresh);
+  useEffect(() => {
+    refreshRef.current = refresh;
+  });
+  useEffect(() => {
+    if (!user) return;
+    const onOnline = () => refreshRef.current();
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
+  }, [user]);
+
   // Периодический опрос: раз в 15 секунд, а пока сокет жив — лишь как страховка раз в минуту
   useEffect(() => {
     if (!user) return;
@@ -162,10 +192,14 @@ export const App: React.FC = () => {
 
   if (authChecking) {
     return (
-      <div className="min-h-screen bg-page flex items-center justify-center text-faint text-sm">
+      <div className="min-h-dvh bg-page flex items-center justify-center text-faint text-sm">
         Загрузка панели...
       </div>
     );
+  }
+
+  if (connectionLost) {
+    return <ConnectionLost onRetry={checkAuth} />;
   }
 
   if (!user) {
@@ -250,7 +284,7 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-page text-ink flex flex-col font-sans selection:bg-ok-soft selection:text-ok">
+    <div className="min-h-dvh bg-page text-ink flex flex-col font-sans selection:bg-ok-soft selection:text-ok">
       <Navbar
         servers={servers}
         bridges={bridges}
@@ -271,6 +305,15 @@ export const App: React.FC = () => {
           setUser(null);
         }}
       />
+
+      {offline && (
+        <div role="status" className="bg-warn-soft border-b border-line text-warn text-xs">
+          <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-2.5 flex flex-wrap items-center gap-2">
+            <WifiOff className="w-4 h-4 flex-shrink-0" />
+            <span>Нет связи с панелью: показаны последние полученные данные, панель переподключится сама.</span>
+          </div>
+        </div>
+      )}
 
       {isGuest && (
         <div className="bg-info-soft border-b border-line text-info text-xs">
@@ -295,7 +338,7 @@ export const App: React.FC = () => {
         </div>
       )}
 
-      <main ref={mainRef} className="flex-1 max-w-[1600px] w-full mx-auto px-4 sm:px-6 py-5">
+      <main ref={mainRef} className="flex-1 max-w-[1600px] w-full mx-auto px-4 sm:px-6 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
         <React.Suspense fallback={<div className="flex items-center justify-center py-24 text-faint text-sm">Загрузка раздела...</div>}>
         <div className={activeTab === 'servers' && servers.length > 0 ? '' : 'max-w-7xl mx-auto space-y-8'}>
         {loading ? (

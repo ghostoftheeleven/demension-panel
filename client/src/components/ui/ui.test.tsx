@@ -23,6 +23,19 @@ const Host: React.FC<{ onClose?: () => void }> = ({ onClose = () => {} }) => {
 };
 
 describe('ModalShell', () => {
+  it('выводится в body, а не внутри предка с backdrop-filter (иначе fixed считается от предка)', () => {
+    render(
+      <header style={{ backdropFilter: 'blur(4px)' }} data-testid="blurred">
+        <ModalShell label="Из шапки" onClose={() => {}}>
+          <button>ок</button>
+        </ModalShell>
+      </header>
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Из шапки' });
+    expect(dialog.parentElement).toBe(document.body);
+    expect(screen.getByTestId('blurred').contains(dialog)).toBe(false);
+  });
+
   it('объявляет диалог и переводит фокус внутрь', () => {
     render(<Host />);
     const dialog = screen.getByRole('dialog', { name: 'Тест' });

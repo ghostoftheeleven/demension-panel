@@ -89,7 +89,7 @@ export const FeedbackProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     <FeedbackContext.Provider value={value}>
       {children}
 
-      <div className="fixed z-[70] bottom-4 right-4 left-4 sm:left-auto sm:w-96 flex flex-col gap-2 pointer-events-none" aria-live="polite">
+      <div className="fixed z-[70] bottom-safe-4 right-4 left-4 sm:left-auto sm:w-96 flex flex-col gap-2 pointer-events-none" aria-live="polite">
         {toasts.map((t) => (
           <ToastView key={t.id} item={t} onDismiss={dismiss} />
         ))}

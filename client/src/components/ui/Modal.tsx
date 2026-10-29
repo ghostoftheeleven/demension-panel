@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 
 /**
  * Каркас всех модальных окон: затемнение, role="dialog", Esc, возврат фокуса и ловушка Tab.
@@ -82,7 +83,8 @@ export const ModalShell: React.FC<ModalShellProps> = ({ label, onClose, elevated
     };
   }, []);
 
-  return (
+  // Через портал в body: предок с backdrop-filter/transform (например, шапка) превращает position: fixed в «относительно предка»
+  return createPortal(
     <div
       ref={ref}
       role="dialog"
@@ -92,6 +94,7 @@ export const ModalShell: React.FC<ModalShellProps> = ({ label, onClose, elevated
       className={`fixed inset-0 ${elevated ? 'z-[60]' : 'z-50'} flex items-center justify-center p-4 bg-black/70 animate-in fade-in duration-200 outline-none`}
     >
       {children}
-    </div>
+    </div>,
+    document.body
   );
 };

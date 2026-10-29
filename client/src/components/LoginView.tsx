@@ -42,7 +42,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div className="min-h-screen bg-page flex items-center justify-center p-4">
+    <div className="min-h-dvh bg-page flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-card border border-line rounded-2xl p-8 shadow-pop relative overflow-hidden">
         {/* Логотип */}
         <div className="flex flex-col items-center text-center mb-8">
