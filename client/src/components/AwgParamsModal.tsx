@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, Dna, Shuffle, Save, Info, KeyRound, ArrowUpCircle } from 'lucide-react';
 import { api } from '../api';
 import type { Server, ServerUpdate } from '../types';
-import { useFeedback } from './ui/Feedback';
+import { useFeedback } from './ui/feedback-context';
 import { ModalShell } from './ui/Modal';
 
 interface AwgParamsModalProps {

@@ -22,7 +22,7 @@ interface Attention {
 const LEVEL_CLASS = { bad: 'text-bad bg-bad-soft', warn: 'text-warn bg-warn-soft', info: 'text-info bg-info-soft' } as const;
 
 /** Что требует внимания: ноды и мосты без связи, неприменённые изменения, устаревший протокол, недоступность из стран */
-export function collectAttention(servers: Server[], bridges: Bridge[]): Attention[] {
+function collectAttention(servers: Server[], bridges: Bridge[]): Attention[] {
   const items: Attention[] = [];
   for (const s of servers) {
     const target: Selection = { kind: 'server', id: s.id };

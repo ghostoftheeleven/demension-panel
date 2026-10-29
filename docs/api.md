@@ -13,7 +13,7 @@ HTTP-кодом. Тела — JSON.
 | POST | `/api/auth/login` | `{username, password}` → `{token, user}`; 429 при переборе |
 | GET | `/.well-known/acme-challenge/:token` | Let's Encrypt HTTP-01 |
 | * | `/api/federation/v1/*` | Партнёрский API (токен партнёра), см. [partners.md](partners.md) |
-| WS | `/ws` | Логи установки: `{type:'auth', token}` → `auth_ok` → `{type:'start_install', serverId}` → `log`… `install_finished` |
+| WS | `/ws` | Первое сообщение `{type:'auth', token}` → `auth_ok`. Затем: логи установки (`{type:'start_install', serverId}` → `log`… `install_finished`) и живые обновления — сервер присылает `{type:'changed'}` (без данных) после успешной записи через API и итога фоновых опросов; клиент в ответ перезапрашивает списки. Гость сокет не открывает (закрытие 4401); при недействительной сессии сокет закрывается кодом 4401 на очередной рассылке |
 
 ## Авторизация
 `GET /api/auth/me`, `POST /api/auth/logout`, `POST /api/auth/change-password` (`{oldPassword, newPassword}` → новый `token`),

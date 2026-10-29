@@ -3,7 +3,7 @@ import { X, QrCode, Download, Copy, Check } from 'lucide-react';
 import type { QrCodeData } from '../types';
 import { api } from '../api';
 import { copyToClipboard } from '../utils';
-import { useFeedback } from './ui/Feedback';
+import { useFeedback } from './ui/feedback-context';
 import { ModalShell } from './ui/Modal';
 
 interface QrCodeModalProps {

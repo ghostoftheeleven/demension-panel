@@ -3,7 +3,7 @@ import { X, Server, Key, Lock, Shield } from 'lucide-react';
 import { api } from '../api';
 import { AmneziaImportPanel } from './AmneziaImportPanel';
 import type { Server as ServerType, ServerUpdate } from '../types';
-import { useFeedback } from './ui/Feedback';
+import { useFeedback } from './ui/feedback-context';
 import { ModalShell } from './ui/Modal';
 
 interface AddServerModalProps {

@@ -4,7 +4,7 @@ import type { Subscriber, SubscriptionServer, SubscriptionSettings } from '../ty
 import { api } from '../api';
 import { copyToClipboard } from '../utils';
 import { AwgClientsGuide } from './AwgClientsGuide';
-import { useFeedback } from './ui/Feedback';
+import { useFeedback } from './ui/feedback-context';
 
 const TITLE_MAX = 25;
 const ANNOUNCE_MAX = 200;

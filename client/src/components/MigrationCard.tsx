@@ -3,7 +3,7 @@ import { ArrowRightLeft, Copy, Download, Loader2, KeyRound, XCircle, AlertTriang
 import type { MigrationStatus } from '../types';
 import { api } from '../api';
 import { copyToClipboard } from '../utils';
-import { useFeedback } from './ui/Feedback';
+import { useFeedback } from './ui/feedback-context';
 
 const INSTALL_COMMAND = 'curl -sSL https://raw.githubusercontent.com/ghostoftheeleven/dementia-panel/main/install.sh | sudo bash';
 

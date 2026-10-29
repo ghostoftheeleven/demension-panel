@@ -4,7 +4,7 @@ import type { Bridge, BridgeLinkMode, Server } from '../types';
 import { api } from '../api';
 import { countryFlag, countryName } from '../utils';
 import { BridgeModal } from './BridgeModal';
-import { useFeedback } from './ui/Feedback';
+import { useFeedback } from './ui/feedback-context';
 
 const STATUS: Record<Bridge['status'], { label: string; className: string }> = {
   online: { label: 'работает', className: 'bg-ok-soft text-ok' },

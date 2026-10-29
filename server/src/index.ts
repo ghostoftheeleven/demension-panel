@@ -30,6 +30,7 @@ import { eventsRouter } from './routes/events.js';
 import { telegramRouter } from './routes/telegram.js';
 import { backupsRouter } from './routes/backups.js';
 import { BackupService } from './services/backup.service.js';
+import { LiveService } from './services/live.service.js';
 import { BridgeService } from './services/bridge.service.js';
 import { migrationGuard, subscriptionFreeze } from './middleware/migration-guard.js';
 import { MigrationService } from './services/migration.service.js';
@@ -94,6 +95,9 @@ app.use(express.json({ limit: '1mb' }));
 
 // Во время переноса на другой сервер изменения блокируются, после переноса панель заморожена
 app.use('/api', migrationGuard);
+
+// Любая успешная запись через API обновляет интерфейсы администраторов по WebSocket
+app.use('/api', LiveService.middleware);
 
 // Public Health Check
 app.get('/api/health', (req, res) => {
@@ -192,7 +196,7 @@ const mainServer = net.createServer((socket) => {
 });
 
 // ==============================================================================
-// WebSocket: живые логи установки. Первое сообщение — {type: 'auth', token}.
+// WebSocket: живые логи установки и сигнал «данные изменились» для интерфейса. Первое сообщение — {type: 'auth', token}.
 // ==============================================================================
 
 const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
@@ -241,6 +245,8 @@ wss.on('connection', (ws: WebSocket) => {
         return ws.close(4401, 'unauthorized');
       }
       clearTimeout(authTimer);
+      const token: string = msg.token;
+      LiveService.add(ws, () => AuthService.validateSession(token) !== null);
       return send(ws, { type: 'auth_ok' });
     }
 
@@ -253,6 +259,7 @@ wss.on('connection', (ws: WebSocket) => {
         send(ws, { type: 'log', data: `Запуск задачи установки для сервера #${msg.serverId}...\r\n` });
         const result = await ProvisionService.installServer(msg.serverId, (logChunk) => send(ws, { type: 'log', data: logChunk }));
         send(ws, { type: 'install_finished', result });
+        LiveService.notify();
       }
     } catch (err: any) {
       send(ws, { type: 'error', message: err.message });
@@ -281,11 +288,15 @@ async function statsLoop() {
     // Пока ноды переходят к новой панели, эта не должна ни синхронизировать их, ни менять статусы
     if (MigrationService.isBackgroundPaused()) return;
     const servers = db.prepare("SELECT id FROM servers WHERE status IN ('online', 'offline', 'error')").all() as { id: number }[];
-    await mapLimit(servers, 5, (s) => ProvisionService.fetchServerStats(s.id));
+    await mapLimit(servers, 5, async (s) => {
+      await ProvisionService.fetchServerStats(s.id);
+      LiveService.notify();
+    });
     // Мосты: правила из БД применены и на месте
     await BridgeService.checkAll();
     SubscriptionService.refreshSuspension();
     PartnerService.refreshSuspension();
+    LiveService.notify();
   } catch (err) {
     console.error('[STATS] Ошибка фонового опроса:', err);
   } finally {
@@ -299,6 +310,7 @@ async function federationLoop() {
   try {
     if (MigrationService.isBackgroundPaused()) return;
     await FederationClient.syncAll();
+    LiveService.notify();
   } catch (err) {
     console.error('[FEDERATION] Ошибка синхронизации:', err);
   } finally {
@@ -317,6 +329,7 @@ async function probeLoop() {
     if (ProbeService.isDue()) await ProbeService.runAll();
     // Сигнал от клиентов (обрыв рукопожатий) учитывается чаще, чем идут проверки из стран
     BridgeService.evaluate(false);
+    LiveService.notify();
   } catch (err) {
     console.error('[PROBE] Ошибка проверки:', err);
   } finally {

@@ -5,7 +5,7 @@ import type { Subscriber } from '../types';
 import { api } from '../api';
 import { AwgClientsGuide } from './AwgClientsGuide';
 import { copyToClipboard } from '../utils';
-import { useFeedback } from './ui/Feedback';
+import { useFeedback } from './ui/feedback-context';
 import { ModalShell } from './ui/Modal';
 
 interface SubscriptionModalProps {
@@ -26,16 +26,15 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
 }) => {
   const { toast, confirm } = useFeedback();
   const [copied, setCopied] = useState(false);
-  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
+  const [qr, setQr] = useState<{ url: string; image: string } | null>(null);
   const [resetting, setResetting] = useState(false);
 
   const subUrl = subscriber ? api.getSubscriptionUrl(subscriber.token, publicUrl) : '';
+  // QR относится к конкретной ссылке: после её смены старый код не показывается
+  const qrCodeUrl = qr && qr.url === subUrl ? qr.image : null;
 
   useEffect(() => {
-    if (!subUrl) {
-      setQrCodeUrl(null);
-      return;
-    }
+    if (!subUrl) return;
 
     QRCode.toDataURL(subUrl, {
       errorCorrectionLevel: 'M',
@@ -43,7 +42,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
       width: 300,
       color: { dark: '#000000', light: '#ffffff' },
     })
-      .then((url) => setQrCodeUrl(url))
+      .then((image) => setQr({ url: subUrl, image }))
       .catch(() => {});
   }, [subUrl]);
 

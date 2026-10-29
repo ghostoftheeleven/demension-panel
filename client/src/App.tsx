@@ -11,7 +11,8 @@ import { AccountModal } from './components/AccountModal';
 import { QrCodeModal } from './components/QrCodeModal';
 import { LoginView } from './components/LoginView';
 import { useGuestLock } from './guestLock';
-import { useFeedback } from './components/ui/Feedback';
+import { useFeedback } from './components/ui/feedback-context';
+import { useLiveUpdates } from './live';
 import type { Server, Client, Subscriber, Bridge, QrCodeData, AdminUser, MigrationStatus } from './types';
 import { api } from './api';
 import { ShieldCheck, Plus, Terminal, Zap, Sparkles, AlertTriangle, Eye } from 'lucide-react';
@@ -138,7 +139,15 @@ export const App: React.FC = () => {
     }
   }, [selectedServerId, user]);
 
-  // Periodic polling (every 15 seconds)
+  // Живые обновления по WebSocket (гостю сокет не нужен: он опрашивает API); при обрыве работает прежний опрос
+  const refresh = () => {
+    if (document.hidden) return;
+    loadersRef.current.loadData();
+    if (selectedServerId !== null) loadersRef.current.loadClients(selectedServerId);
+  };
+  const live = useLiveUpdates(Boolean(user) && !isGuest, refresh);
+
+  // Периодический опрос: раз в 15 секунд, а пока сокет жив — лишь как страховка раз в минуту
   useEffect(() => {
     if (!user) return;
     const interval = setInterval(() => {
@@ -147,9 +156,9 @@ export const App: React.FC = () => {
       if (selectedServerId !== null) {
         loadersRef.current.loadClients(selectedServerId);
       }
-    }, 15000);
+    }, live ? 60000 : 15000);
     return () => clearInterval(interval);
-  }, [selectedServerId, user]);
+  }, [selectedServerId, user, live]);
 
   if (authChecking) {
     return (
@@ -248,7 +257,7 @@ export const App: React.FC = () => {
         subscribers={subscribers}
         user={user}
         readOnly={isGuest}
-        live="poll"
+        live={live ? 'ws' : 'poll'}
         activeTab={activeTab}
         onSelectTab={(tab) => setActiveTab(tab)}
         onAddServer={() => setIsAddServerOpen(true)}

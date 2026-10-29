@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { ModalShell } from './Modal';
-import { FeedbackProvider, useFeedback } from './Feedback';
+import { FeedbackProvider } from './Feedback';
+import { useFeedback } from './feedback-context';
 
 const Host: React.FC<{ onClose?: () => void }> = ({ onClose = () => {} }) => {
   const [open, setOpen] = useState(true);

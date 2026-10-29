@@ -16,7 +16,7 @@ import {
 import type { Client } from '../types';
 import { api } from '../api';
 import { formatBytes } from '../utils';
-import { useFeedback } from './ui/Feedback';
+import { useFeedback } from './ui/feedback-context';
 import { sortClients, clientStatus, type ClientSortKey, type SortDirection } from './clientSort';
 
 interface ClientListProps {

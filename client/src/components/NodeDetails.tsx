@@ -16,7 +16,7 @@ import {
 import type { Server } from '../types';
 import { api } from '../api';
 import { ProbeBadges } from './ProbeBadges';
-import { useFeedback } from './ui/Feedback';
+import { useFeedback } from './ui/feedback-context';
 
 interface NodeDetailsProps {
   server: Server;
@@ -27,7 +27,7 @@ interface NodeDetailsProps {
   onServerChanged: () => void;
 }
 
-export const STATUS_LABELS: Record<Server['status'], string> = {
+const STATUS_LABELS: Record<Server['status'], string> = {
   online: 'AmneziaWG активен',
   installing: 'Идёт установка',
   offline: 'Недоступен',

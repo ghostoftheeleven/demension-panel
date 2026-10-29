@@ -15,7 +15,7 @@ import {
 import type { Subscriber } from '../types';
 import { api } from '../api';
 import { countryFlag, countryName, formatBytes } from '../utils';
-import { useFeedback } from './ui/Feedback';
+import { useFeedback } from './ui/feedback-context';
 
 interface SubscribersListProps {
   subscribers: Subscriber[];
