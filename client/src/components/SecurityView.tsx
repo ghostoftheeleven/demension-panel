@@ -332,7 +332,7 @@ export const SecurityView: React.FC<{
             <div className="flex items-center gap-2">
               <span
                 className={`w-2.5 h-2.5 rounded-full ${
-                  sslStatus?.enabled ? 'bg-mint  ' : 'bg-faint'
+                  sslStatus?.enabled ? 'bg-ok' : 'bg-faint'
                 }`}
               />
               <span className="text-xs font-semibold text-ink">
@@ -346,7 +346,7 @@ export const SecurityView: React.FC<{
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
                 sslStatus?.enabled
                   ? 'bg-soft text-ink hover:bg-soft-2'
-                  : 'bg-mint hover:bg-mint text-on-accent disabled:opacity-40'
+                  : 'bg-brand hover:bg-brand text-on-accent disabled:opacity-40'
               }`}
             >
               <Power className="w-3.5 h-3.5" />
@@ -459,7 +459,7 @@ export const SecurityView: React.FC<{
                       setCfToken(e.target.value);
                       setCfValid(null);
                     }}
-                    className="flex-1 min-w-0 bg-paper border border-line rounded-xl px-3.5 py-2 text-ink text-xs font-mono focus:outline-none focus:border-mint"
+                    className="flex-1 min-w-0 bg-paper border border-line rounded-xl px-3.5 py-2 text-ink text-xs font-mono focus:outline-none focus:border-brand"
                   />
                   <button
                     type="button"
@@ -490,7 +490,7 @@ export const SecurityView: React.FC<{
                     placeholder="например: panel.example.com"
                     value={cfDomain}
                     onChange={(e) => setCfDomain(e.target.value)}
-                    className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink text-xs focus:outline-none focus:border-mint"
+                    className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink text-xs focus:outline-none focus:border-brand"
                   />
                 </div>
 
@@ -504,7 +504,7 @@ export const SecurityView: React.FC<{
                     placeholder="admin@example.com"
                     value={cfEmail}
                     onChange={(e) => setCfEmail(e.target.value)}
-                    className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink text-xs focus:outline-none focus:border-mint"
+                    className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink text-xs focus:outline-none focus:border-brand"
                   />
                 </div>
               </div>
@@ -526,7 +526,7 @@ export const SecurityView: React.FC<{
                 <button
                   type="submit"
                   disabled={cfIssuing || !cfToken.trim()}
-                  className="flex items-center gap-2 bg-mint disabled:opacity-50 text-on-accent font-bold text-xs px-5 py-2.5 rounded-full transition btn-press"
+                  className="flex items-center gap-2 bg-brand disabled:opacity-50 text-on-accent font-bold text-xs px-5 py-2.5 rounded-full transition btn-press"
                 >
                   {cfIssuing ? (
                     <>
@@ -573,7 +573,7 @@ export const SecurityView: React.FC<{
                   placeholder="например: 194.87.12.34"
                   value={ipTarget}
                   onChange={(e) => setIpTarget(e.target.value)}
-                  className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink text-xs font-mono focus:outline-none focus:border-mint"
+                  className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink text-xs font-mono focus:outline-none focus:border-brand"
                 />
               </div>
 
@@ -607,7 +607,7 @@ export const SecurityView: React.FC<{
                     placeholder="panel.example.com"
                     value={httpDomain}
                     onChange={(e) => setHttpDomain(e.target.value)}
-                    className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink text-xs focus:outline-none focus:border-mint"
+                    className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink text-xs focus:outline-none focus:border-brand"
                   />
                 </div>
                 <div>
@@ -618,7 +618,7 @@ export const SecurityView: React.FC<{
                     placeholder="admin@example.com"
                     value={httpEmail}
                     onChange={(e) => setHttpEmail(e.target.value)}
-                    className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink text-xs focus:outline-none focus:border-mint"
+                    className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink text-xs focus:outline-none focus:border-brand"
                   />
                 </div>
               </div>
@@ -626,7 +626,7 @@ export const SecurityView: React.FC<{
               <button
                 type="submit"
                 disabled={httpIssuing || !httpDomain.trim()}
-                className="flex items-center gap-2 bg-mint hover:bg-mint disabled:opacity-50 text-on-accent font-bold text-xs px-5 py-2.5 rounded-full transition btn-press hover:text-on-accent"
+                className="flex items-center gap-2 bg-brand hover:bg-brand disabled:opacity-50 text-on-accent font-bold text-xs px-5 py-2.5 rounded-full transition btn-press hover:text-on-accent"
               >
                 {httpIssuing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
                 <span>Выпустить сертификат (HTTP-01)</span>
@@ -646,7 +646,7 @@ export const SecurityView: React.FC<{
                   placeholder="например: mydomain.com или 194.87.1.1"
                   value={customDomain}
                   onChange={(e) => setCustomDomain(e.target.value)}
-                  className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink text-xs focus:outline-none focus:border-mint"
+                  className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink text-xs focus:outline-none focus:border-brand"
                 />
               </div>
 
@@ -660,7 +660,7 @@ export const SecurityView: React.FC<{
                   placeholder="-----BEGIN CERTIFICATE----- ... -----END CERTIFICATE-----"
                   value={customCert}
                   onChange={(e) => setCustomCert(e.target.value)}
-                  className="w-full bg-paper border border-line rounded-xl p-3 text-ink text-[11px] font-mono focus:outline-none focus:border-mint"
+                  className="w-full bg-paper border border-line rounded-xl p-3 text-ink text-xs font-mono focus:outline-none focus:border-brand"
                 />
               </div>
 
@@ -674,7 +674,7 @@ export const SecurityView: React.FC<{
                   placeholder="-----BEGIN PRIVATE KEY----- ... -----END PRIVATE KEY-----"
                   value={customKey}
                   onChange={(e) => setCustomKey(e.target.value)}
-                  className="w-full bg-paper border border-line rounded-xl p-3 text-ink text-[11px] font-mono focus:outline-none focus:border-mint"
+                  className="w-full bg-paper border border-line rounded-xl p-3 text-ink text-xs font-mono focus:outline-none focus:border-brand"
                 />
               </div>
 
@@ -724,7 +724,7 @@ export const SecurityView: React.FC<{
               <button
                 onClick={handleSetupFail2ban}
                 disabled={f2bSettingUp}
-                className="flex items-center gap-1.5 bg-mint hover:bg-mint text-on-accent font-bold text-xs px-3.5 py-1.5 rounded-full transition btn-press hover:text-on-accent"
+                className="flex items-center gap-1.5 bg-brand hover:bg-brand text-on-accent font-bold text-xs px-3.5 py-1.5 rounded-full transition btn-press hover:text-on-accent"
               >
                 {f2bSettingUp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
                 <span>Установить Fail2ban</span>
@@ -820,7 +820,7 @@ export const SecurityView: React.FC<{
             placeholder="Заблокировать IP вручную (например: 1.2.3.4)..."
             value={manualBanIp}
             onChange={(e) => setManualBanIp(e.target.value)}
-            className="flex-1 min-w-0 bg-paper border border-line rounded-xl px-3.5 py-2 text-xs text-ink font-mono focus:outline-none focus:border-mint"
+            className="flex-1 min-w-0 bg-paper border border-line rounded-xl px-3.5 py-2 text-xs text-ink font-mono focus:outline-none focus:border-brand"
           />
           <button
             type="submit"

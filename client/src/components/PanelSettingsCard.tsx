@@ -4,7 +4,7 @@ import type { PanelSettings } from '../types';
 import { api } from '../api';
 
 const inputClass =
-  'w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-mint transition text-sm';
+  'w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-brand transition text-sm';
 
 export const PanelSettingsCard: React.FC<{ onSaved?: (settings: PanelSettings) => void }> = ({ onSaved }) => {
   const [form, setForm] = useState<PanelSettings | null>(null);
@@ -67,7 +67,7 @@ export const PanelSettingsCard: React.FC<{ onSaved?: (settings: PanelSettings) =
             onChange={(e) => update('public_url', e.target.value)}
             className={inputClass}
           />
-          <p className="text-[11px] text-faint mt-1">
+          <p className="text-xs text-faint mt-1">
             Укажите, если панель открыта через SSH-туннель, localhost или внутренний адрес — иначе пользователи получат нерабочую ссылку.
           </p>
         </div>
@@ -95,7 +95,7 @@ export const PanelSettingsCard: React.FC<{ onSaved?: (settings: PanelSettings) =
         <button
           type="submit"
           disabled={saving}
-          className="flex items-center gap-2 bg-mint hover:bg-mint disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2 rounded-full transition btn-press hover:text-on-accent"
+          className="flex items-center gap-2 bg-brand hover:bg-brand disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2 rounded-full transition btn-press hover:text-on-accent"
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           <span>Сохранить</span>

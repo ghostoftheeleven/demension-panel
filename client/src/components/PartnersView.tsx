@@ -19,10 +19,12 @@ import {
 import type { Partner, PartnerAuditEntry, PartnerClient, RemotePanel, Server } from '../types';
 import { api } from '../api';
 import { copyToClipboard, formatBytes, GIB } from '../utils';
+import { useFeedback } from './ui/Feedback';
+import { ModalShell } from './ui/Modal';
 
 const cardClass = 'bg-card border border-line rounded-2xl p-6 shadow-pop space-y-4';
 const inputClass =
-  'w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-mint transition text-sm';
+  'w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-brand transition text-sm';
 const iconButton = 'p-1.5 text-muted hover:bg-soft rounded-lg transition border border-line';
 
 const AUDIT_LABELS: Record<string, string> = {
@@ -96,7 +98,7 @@ const PartnerModal: React.FC<{
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 animate-in fade-in duration-200">
+    <ModalShell label="Партнёрский доступ" onClose={onClose}>
       <form onSubmit={handleSubmit} className="bg-card border border-line rounded-2xl w-full max-w-lg shadow-pop overflow-hidden flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between px-6 py-4 border-b border-line">
           <h2 className="text-base font-semibold text-ink">{partner ? 'Изменить доступ партнёра' : 'Выдать доступ к нодам'}</h2>
@@ -141,7 +143,7 @@ const PartnerModal: React.FC<{
               <input type="date" value={expireDate} onChange={(e) => setExpireDate(e.target.value)} className={inputClass} />
             </div>
           </div>
-          <p className="text-[11px] text-faint">
+          <p className="text-xs text-faint">
             Партнёр сможет создавать клиентов на выбранных нодах из своей панели. Приватные ключи его клиентов к вам не попадают;
             вы видите клиентов, их трафик и можете блокировать их.
           </p>
@@ -150,13 +152,13 @@ const PartnerModal: React.FC<{
           <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-muted hover:text-ink">
             Отмена
           </button>
-          <button type="submit" disabled={saving} className="flex items-center gap-2 bg-mint hover:bg-mint disabled:opacity-50 text-on-accent text-sm font-bold px-5 py-2 rounded-full btn-press hover:text-on-accent">
+          <button type="submit" disabled={saving} className="flex items-center gap-2 bg-brand hover:bg-brand disabled:opacity-50 text-on-accent text-sm font-bold px-5 py-2 rounded-full btn-press hover:text-on-accent">
             {saving && <Loader2 className="w-4 h-4 animate-spin" />}
             <span>{partner ? 'Сохранить' : 'Создать доступ'}</span>
           </button>
         </div>
       </form>
-    </div>
+    </ModalShell>
   );
 };
 
@@ -168,7 +170,7 @@ const TokenModal: React.FC<{ connectString: string; onClose: () => void }> = ({ 
   const [copied, setCopied] = useState(false);
   const insecure = connectString.startsWith('http:');
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 animate-in fade-in duration-200">
+    <ModalShell label="Токен партнёра" onClose={onClose}>
       <div className="bg-card border border-line rounded-2xl w-full max-w-lg shadow-pop p-6 space-y-4">
         <h2 className="text-base font-semibold text-ink flex items-center gap-2">
           <KeyRound className="w-5 h-5 text-warn" />
@@ -193,7 +195,7 @@ const TokenModal: React.FC<{ connectString: string; onClose: () => void }> = ({ 
                 setTimeout(() => setCopied(false), 2000);
               }
             }}
-            className="flex items-center gap-2 bg-mint hover:bg-mint text-on-accent text-sm font-bold px-4 py-2 rounded-full btn-press hover:text-on-accent"
+            className="flex items-center gap-2 bg-brand hover:bg-brand text-on-accent text-sm font-bold px-4 py-2 rounded-full btn-press hover:text-on-accent"
           >
             <Copy className="w-4 h-4" />
             <span>{copied ? 'Скопировано' : 'Копировать'}</span>
@@ -203,7 +205,7 @@ const TokenModal: React.FC<{ connectString: string; onClose: () => void }> = ({ 
           </button>
         </div>
       </div>
-    </div>
+    </ModalShell>
   );
 };
 
@@ -212,6 +214,7 @@ const TokenModal: React.FC<{ connectString: string; onClose: () => void }> = ({ 
 // ==============================================================================
 
 const PartnerDetails: React.FC<{ partner: Partner }> = ({ partner }) => {
+  const { toast } = useFeedback();
   const [clients, setClients] = useState<PartnerClient[] | null>(null);
   const [audit, setAudit] = useState<PartnerAuditEntry[]>([]);
 
@@ -221,7 +224,7 @@ const PartnerDetails: React.FC<{ partner: Partner }> = ({ partner }) => {
         setClients(c);
         setAudit(a);
       })
-      .catch((err) => alert(err.message));
+      .catch((err) => toast(err.message, 'error'));
   }, [partner.id]);
 
   useEffect(load, [load]);
@@ -231,7 +234,7 @@ const PartnerDetails: React.FC<{ partner: Partner }> = ({ partner }) => {
       await api.updateClient(client.id, { enabled: client.owner_blocked ? 1 : 0 });
       load();
     } catch (err: any) {
-      alert(err.message);
+      toast(err.message, 'error');
     }
   };
 
@@ -261,8 +264,8 @@ const PartnerDetails: React.FC<{ partner: Partner }> = ({ partner }) => {
                   <tr key={c.id}>
                     <td className="py-2 text-ink">
                       {c.name}
-                      {c.owner_blocked && <span className="ml-1.5 text-[10px] text-bad">заблокирован</span>}
-                      {!c.enabled && !c.owner_blocked && <span className="ml-1.5 text-[10px] text-faint">выключен партнёром</span>}
+                      {c.owner_blocked && <span className="ml-1.5 text-xs text-bad">заблокирован</span>}
+                      {!c.enabled && !c.owner_blocked && <span className="ml-1.5 text-xs text-faint">выключен партнёром</span>}
                     </td>
                     <td className="py-2 text-muted">{c.server_name}</td>
                     <td className="py-2 font-mono text-muted">{c.client_ip}</td>
@@ -289,7 +292,7 @@ const PartnerDetails: React.FC<{ partner: Partner }> = ({ partner }) => {
         <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
           {audit.length === 0 && <p className="text-xs text-faint">Пусто</p>}
           {audit.map((entry) => (
-            <div key={entry.id} className="text-[11px]">
+            <div key={entry.id} className="text-xs">
               <span className="text-ink">{AUDIT_LABELS[entry.action] || entry.action}</span>
               {entry.details && <span className="text-faint"> · {entry.details}</span>}
               <div className="text-faint">
@@ -312,6 +315,7 @@ export const PartnersView: React.FC<{ servers: Server[]; publicUrl: string | nul
   servers,
   onChanged,
 }) => {
+  const { toast, confirm } = useFeedback();
   const [partners, setPartners] = useState<Partner[]>([]);
   const [panels, setPanels] = useState<RemotePanel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -329,7 +333,7 @@ export const PartnersView: React.FC<{ servers: Server[]; publicUrl: string | nul
       setPartners(p);
       setPanels(r);
     } catch (err: any) {
-      alert(err.message);
+      toast(err.message, 'error');
     } finally {
       setLoading(false);
     }
@@ -342,33 +346,33 @@ export const PartnersView: React.FC<{ servers: Server[]; publicUrl: string | nul
   const serverName = (id: number) => servers.find((s) => s.id === id)?.name || `#${id}`;
 
   const togglePartner = async (partner: Partner) => {
-    if (partner.enabled && !confirm(`Отключить доступ «${partner.name}»? Все его клиенты на ваших нодах перестанут работать.`)) return;
+    if (partner.enabled && !(await confirm({ message: `Отключить доступ «${partner.name}»? Все его клиенты на ваших нодах перестанут работать.`, danger: true, confirmLabel: 'Отключить' }))) return;
     try {
       await api.updatePartner(partner.id, { enabled: !partner.enabled });
       load();
     } catch (err: any) {
-      alert(err.message);
+      toast(err.message, 'error');
     }
   };
 
   const regenerate = async (partner: Partner) => {
-    if (!confirm(`Перевыпустить токен «${partner.name}»? Старый токен перестанет работать — партнёру нужно будет переподключить панель.`)) return;
+    if (!(await confirm({ message: `Перевыпустить токен «${partner.name}»? Старый токен перестанет работать — партнёру нужно будет переподключить панель.`, danger: true, confirmLabel: 'Перевыпустить' }))) return;
     try {
       const res = await api.regeneratePartnerToken(partner.id);
       setConnectString(res.connect_string);
       load();
     } catch (err: any) {
-      alert(err.message);
+      toast(err.message, 'error');
     }
   };
 
   const removePartner = async (partner: Partner) => {
-    if (!confirm(`Удалить доступ «${partner.name}»? Все клиенты партнёра будут удалены с ваших нод.`)) return;
+    if (!(await confirm({ message: `Удалить доступ «${partner.name}»? Все клиенты партнёра будут удалены с ваших нод.`, danger: true, confirmLabel: 'Удалить' }))) return;
     try {
       await api.deletePartner(partner.id);
       load();
     } catch (err: any) {
-      alert(err.message);
+      toast(err.message, 'error');
     }
   };
 
@@ -382,7 +386,7 @@ export const PartnersView: React.FC<{ servers: Server[]; publicUrl: string | nul
       await load();
       onChanged();
     } catch (err: any) {
-      alert(err.message);
+      toast(err.message, 'error');
     } finally {
       setConnecting(false);
     }
@@ -395,21 +399,21 @@ export const PartnersView: React.FC<{ servers: Server[]; publicUrl: string | nul
       await load();
       onChanged();
     } catch (err: any) {
-      alert(err.message);
+      toast(err.message, 'error');
     } finally {
       setSyncing(null);
     }
   };
 
   const disconnectPanel = async (panel: RemotePanel) => {
-    if (!confirm(`Отключить панель «${panel.name}»? Её ноды пропадут из подписок, а ваши клиенты на них будут удалены.`)) return;
+    if (!(await confirm({ message: `Отключить панель «${panel.name}»? Её ноды пропадут из подписок, а ваши клиенты на них будут удалены.`, danger: true, confirmLabel: 'Отключить' }))) return;
     try {
       const res = await api.disconnectRemotePanel(panel.id);
-      if (!res.remoteCleanup) alert('Панель отключена, но удалить клиентов на стороне партнёра не удалось — сообщите ему.');
+      if (!res.remoteCleanup) toast('Панель отключена, но удалить клиентов на стороне партнёра не удалось — сообщите ему.', 'error');
       await load();
       onChanged();
     } catch (err: any) {
-      alert(err.message);
+      toast(err.message, 'error');
     }
   };
 
@@ -432,11 +436,11 @@ export const PartnersView: React.FC<{ servers: Server[]; publicUrl: string | nul
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-semibold text-ink">Доступ к моим нодам</h3>
-            <p className="text-[11px] text-faint">Партнёры создают клиентов на ваших нодах из своих панелей</p>
+            <p className="text-xs text-faint">Партнёры создают клиентов на ваших нодах из своих панелей</p>
           </div>
           <button
             onClick={() => setModalPartner(null)}
-            className="flex items-center gap-1.5 bg-mint hover:bg-mint text-on-accent text-xs font-bold px-3.5 py-2 rounded-full btn-press hover:text-on-accent"
+            className="flex items-center gap-1.5 bg-brand hover:bg-brand text-on-accent text-xs font-bold px-3.5 py-2 rounded-full btn-press hover:text-on-accent"
           >
             <Plus className="w-4 h-4" />
             <span>Выдать доступ</span>
@@ -460,15 +464,15 @@ export const PartnersView: React.FC<{ servers: Server[]; publicUrl: string | nul
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-ink">{p.name}</span>
                         <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                          className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${
                             ok ? 'bg-ok-soft text-ok border-line' : 'bg-warn-soft text-warn border-line'
                           }`}
                         >
                           {status}
                         </span>
-                        <span className="text-[10px] font-mono text-faint">{p.token_hint}</span>
+                        <span className="text-xs font-mono text-faint">{p.token_hint}</span>
                       </div>
-                      <div className="text-[11px] text-faint mt-0.5 space-x-3">
+                      <div className="text-xs text-faint mt-0.5 space-x-3">
                         <span>ноды: {p.node_ids.map(serverName).join(', ') || '—'}</span>
                         <span>
                           клиенты: {p.usage.clients}
@@ -513,7 +517,7 @@ export const PartnersView: React.FC<{ servers: Server[]; publicUrl: string | nul
       <div className={cardClass}>
         <div>
           <h3 className="text-sm font-semibold text-ink">Ноды партнёров</h3>
-          <p className="text-[11px] text-faint">
+          <p className="text-xs text-faint">
             Вставьте строку подключения, которую выдал владелец нод. Его ноды появятся в списке серверов, и вы сможете выдавать их своим пользователям.
           </p>
         </div>
@@ -530,7 +534,7 @@ export const PartnersView: React.FC<{ servers: Server[]; publicUrl: string | nul
           <button
             type="submit"
             disabled={connecting}
-            className="flex items-center justify-center gap-1.5 bg-mint hover:bg-mint disabled:opacity-50 text-on-accent text-xs font-bold px-4 py-2 rounded-full btn-press hover:text-on-accent"
+            className="flex items-center justify-center gap-1.5 bg-brand hover:bg-brand disabled:opacity-50 text-on-accent text-xs font-bold px-4 py-2 rounded-full btn-press hover:text-on-accent"
           >
             {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
             <span>Подключить</span>
@@ -550,7 +554,7 @@ export const PartnersView: React.FC<{ servers: Server[]; publicUrl: string | nul
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium text-ink">{panel.name}</span>
                       <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                        className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${
                           panel.status === 'online'
                             ? 'bg-ok-soft text-ok border-line'
                             : 'bg-warn-soft text-warn border-line'
@@ -558,9 +562,9 @@ export const PartnersView: React.FC<{ servers: Server[]; publicUrl: string | nul
                       >
                         {statusLabel}
                       </span>
-                      <span className="text-[10px] font-mono text-faint">{panel.base_url}</span>
+                      <span className="text-xs font-mono text-faint">{panel.base_url}</span>
                     </div>
-                    <div className="text-[11px] text-faint mt-0.5 space-x-3">
+                    <div className="text-xs text-faint mt-0.5 space-x-3">
                       <span>ноды: {panel.node_count}</span>
                       <span>
                         клиенты: {panel.client_count}
@@ -575,7 +579,7 @@ export const PartnersView: React.FC<{ servers: Server[]; publicUrl: string | nul
                       {panel.limits?.expire_at && <span>до {new Date(panel.limits.expire_at).toLocaleDateString()}</span>}
                       <span>синхронизация: {formatDate(panel.last_sync_at)}</span>
                     </div>
-                    {panel.last_error && <p className="text-[11px] text-warn mt-1 break-all">{panel.last_error}</p>}
+                    {panel.last_error && <p className="text-xs text-warn mt-1 break-all">{panel.last_error}</p>}
                   </div>
                   <div className="flex items-center gap-1">
                     <button onClick={() => syncPanel(panel)} disabled={syncing === panel.id} title="Синхронизировать" className={`${iconButton} hover:text-ok`}>

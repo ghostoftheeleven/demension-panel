@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
 /*
- * Оформление Bento: тёмный фон, плитки с крупным скруглением и тонкой линией, сочные плоские акценты (лайм, оранжевый,
- * голубой, розовый), крупная типографика Unbounded в заголовках и Onest в тексте.
- * Цвета интерфейса — только семантические токены ниже (bg-card, text-muted, border-line, bg-mint text-on-accent…),
+ * Оформление Topology: тёмно-синий «операторский» фон с точечной сеткой, циановый акцент (токен brand), статусы зелёным/красным/
+ * янтарным, данные — моноширинным IBM Plex Mono, текст и заголовки — Onest (в Space Grotesk из макета нет кириллицы).
+ * Цвета интерфейса — только семантические токены ниже (bg-card, text-muted, border-line, bg-brand text-on-accent…),
  * а не палитра Tailwind (zinc, emerald…): так тема меняется в одном месте. Текст на яркой заливке — text-on-accent.
  * Шрифты и флаги лежат локально — CSP панели запрещает внешние ресурсы (server/src/middleware/security-headers.ts).
  */
@@ -19,47 +19,47 @@
 
 @theme {
   --font-sans: 'Twemoji Country Flags', Onest, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-display: 'Twemoji Country Flags', Unbounded, Onest, system-ui, sans-serif;
-  --font-mono: 'Twemoji Country Flags', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-display: 'Twemoji Country Flags', Onest, system-ui, sans-serif;
+  --font-mono: 'Twemoji Country Flags', 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   /* Поверхности и текст */
-  --color-paper: #141318;     /* поля ввода и вложенные блоки (темнее плитки) */
-  --color-card: #1b1a21;      /* плитки, карточки, модальные окна */
-  --color-soft: #24232b;      /* вторичные кнопки, выделение, неактивные вкладки */
-  --color-soft-2: #2f2e37;    /* наведение на soft */
-  --color-line: #2d2c35;      /* рамки и разделители */
-  --color-ink: #f4f2ee;       /* основной текст */
-  --color-muted: #a29fae;     /* второстепенный текст */
-  --color-faint: #6c6977;     /* подписи, плейсхолдеры */
-  --color-on-accent: #16151a; /* текст на яркой заливке */
-  --color-page: #111015;      /* фон страницы */
+  --color-page: #050b14;      /* фон страницы */
+  --color-paper: #070f1c;     /* поля ввода и вложенные блоки (темнее плитки) */
+  --color-card: #0a1424;      /* плитки, карточки, модальные окна */
+  --color-soft: #0f1c32;      /* вторичные кнопки, выделение, неактивные вкладки */
+  --color-soft-2: #16284a;    /* наведение на soft */
+  --color-line: #17304f;      /* рамки и разделители */
+  --color-ink: #dcecff;       /* основной текст */
+  --color-muted: #8aa4c4;     /* второстепенный текст */
+  --color-faint: #5d7798;     /* подписи, плейсхолдеры */
+  --color-on-accent: #04121c; /* текст на яркой заливке */
 
   /* Акценты — плоские заливки, текст на них text-on-accent */
-  --color-mint: #d4ff3f;      /* основное действие, «в сети» (лайм) */
-  --color-yellow: #f1e7d6;    /* активная вкладка, нейтральный акцент (песочный) */
-  --color-pink: #ff5d8f;
-  --color-blue: #6aa8ff;
-  --color-violet: #b69cff;
-  --color-orange: #ff7a45;
-  --color-danger: #ff5d8f;
+  --color-brand: #27e1ff;     /* основное действие, выбранный элемент (циан) */
+  --color-pink: #ff4d6d;
+  --color-blue: #5ab0ff;
+  --color-violet: #9a8cff;    /* мосты */
+  --color-orange: #ffb23e;    /* внимание (янтарь) */
+  --color-danger: #ff4d6d;
 
   /* Тексты статусов (читаемые на тёмном) и полупрозрачные подложки */
-  --color-ok: #d4ff3f;
-  --color-ok-soft: rgb(212 255 63 / 0.12);
-  --color-bad: #ff7da3;
-  --color-bad-soft: rgb(255 93 143 / 0.14);
-  --color-warn: #ffa06b;
-  --color-warn-soft: rgb(255 122 69 / 0.14);
-  --color-info: #8dbcff;
-  --color-info-soft: rgb(106 168 255 / 0.14);
-  --color-accent: #c6b2ff;
-  --color-accent-soft: rgb(182 156 255 / 0.14);
+  --color-ok: #37f0a5;
+  --color-ok-soft: rgb(55 240 165 / 0.1);
+  --color-bad: #ff7a90;
+  --color-bad-soft: rgb(255 77 109 / 0.12);
+  --color-warn: #ffb23e;
+  --color-warn-soft: rgb(255 178 62 / 0.12);
+  --color-info: #6fbfff;
+  --color-info-soft: rgb(90 176 255 / 0.12);
+  --color-accent: #b3a8ff;
+  --color-accent-soft: rgb(154 140 255 / 0.14);
+  --color-brand-soft: rgb(39 225 255 / 0.1);
 
-  --shadow-pop: 0 24px 60px -20px rgb(0 0 0 / 0.75);
+  --shadow-pop: 0 24px 60px -24px rgb(0 0 0 / 0.8);
 
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
-  --radius-2xl: 1.75rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
 }
 
 :root {
@@ -68,19 +68,36 @@
 
 body {
   margin: 0;
+  position: relative;
   background-color: var(--color-page);
   color: var(--color-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
+/* Точечная сетка под всем интерфейсом (карта и разделы «плавают» над ней) */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle, #14304d 1px, transparent 1.4px);
+  background-size: 26px 26px;
+  opacity: 0.55;
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
 @layer base {
-  /* Заголовки — Unbounded, как в плитках Bento */
   h1,
   h2,
   h3 {
     font-family: var(--font-display);
-    letter-spacing: -0.02em;
+    letter-spacing: -0.01em;
   }
   input:not([type='checkbox']):not([type='radio']):not([type='range']),
   select,
@@ -91,19 +108,19 @@ body {
   select:focus,
   textarea:focus {
     outline: none;
-    border-color: var(--color-mint);
-    box-shadow: 0 0 0 3px rgb(212 255 63 / 0.15);
+    border-color: var(--color-brand);
+    box-shadow: 0 0 0 3px rgb(39 225 255 / 0.18);
   }
   input[type='checkbox'],
   input[type='radio'] {
-    accent-color: var(--color-mint);
+    accent-color: var(--color-brand);
   }
   :focus-visible {
-    outline: 2px solid var(--color-mint);
+    outline: 2px solid var(--color-brand);
     outline-offset: 2px;
   }
   ::selection {
-    background: var(--color-mint);
+    background: var(--color-brand);
     color: var(--color-on-accent);
   }
 }
@@ -141,6 +158,51 @@ body {
   background: var(--color-faint);
 }
 
+/* Карта топологии: бегущие штрихи на активных линиях, вспышка узла, «дыхание» панели, фокус с клавиатуры */
+@keyframes topology-dash {
+  to {
+    stroke-dashoffset: -22;
+  }
+}
+
+@keyframes topology-ping {
+  from {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(2);
+  }
+}
+
+@keyframes topology-breathe {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.topology-flow {
+  stroke-dasharray: 3 8;
+  animation: topology-dash 1.2s linear infinite;
+}
+
+.topology-ping {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: topology-ping 1.6s ease-out 1 both;
+  pointer-events: none;
+}
+
+.topology-breathe {
+  animation: topology-breathe 4s ease-in-out infinite;
+}
+
+.topology-node:focus-visible circle:first-of-type,
+.topology-node:focus-visible rect {
+  stroke-width: 3.5;
+}
+
 /* Появление модальных окон (классы animate-in / fade-in) */
 @keyframes dementia-fade-in {
   from {
@@ -161,6 +223,11 @@ body {
   }
   .btn-press {
     transition: none;
+  }
+  .topology-flow,
+  .topology-ping,
+  .topology-breathe {
+    animation: none;
   }
 }
 

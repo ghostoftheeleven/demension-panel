@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, ArrowUpCircle, Loader2, CheckCircle2, AlertTriangle, ExternalLink, RotateCcw, Terminal } from 'lucide-react';
 import type { PanelUpdateStatus, VersionInfo } from '../types';
 import { api } from '../api';
+import { ModalShell } from './ui/Modal';
 
 interface PanelUpdateModalProps {
   info: VersionInfo;
@@ -89,7 +90,7 @@ export const PanelUpdateModal: React.FC<PanelUpdateModalProps> = ({ info, onClos
   const showResult = status && !running && status.state !== 'idle' && (status.to === info.latest || status.state !== 'success');
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 animate-in fade-in duration-200">
+    <ModalShell label="Обновление панели" onClose={onClose}>
       <div className="bg-card border border-line rounded-2xl w-full max-w-xl shadow-pop overflow-hidden flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between px-6 py-4 border-b border-line bg-card">
           <div className="flex items-center gap-2">
@@ -98,6 +99,7 @@ export const PanelUpdateModal: React.FC<PanelUpdateModalProps> = ({ info, onClos
           </div>
           <button
             onClick={onClose}
+            aria-label="Закрыть"
             disabled={!canClose}
             title={canClose ? 'Закрыть' : 'Дождитесь окончания обновления'}
             className="text-muted hover:text-ink transition p-1 rounded-lg hover:bg-soft disabled:opacity-30 disabled:hover:bg-transparent border border-line"
@@ -109,12 +111,12 @@ export const PanelUpdateModal: React.FC<PanelUpdateModalProps> = ({ info, onClos
         <div className="px-6 py-5 space-y-4 overflow-y-auto">
           <div className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-paper border border-line">
             <div>
-              <div className="text-[11px] text-faint">Установлена</div>
+              <div className="text-xs text-faint">Установлена</div>
               <div className="font-mono text-sm text-ink">{status?.current ?? info.current}</div>
             </div>
             <div className="text-faint">→</div>
             <div className="text-right">
-              <div className="text-[11px] text-faint">Последний релиз</div>
+              <div className="text-xs text-faint">Последний релиз</div>
               <div className="font-mono text-sm text-ok">{info.latest ?? '—'}</div>
             </div>
           </div>
@@ -161,7 +163,7 @@ export const PanelUpdateModal: React.FC<PanelUpdateModalProps> = ({ info, onClos
                 <div>Данные, ноды, клиенты и подписки сохранены. Страница перезагрузится, чтобы загрузить новый интерфейс.</div>
                 <button
                   onClick={() => window.location.reload()}
-                  className="px-3 py-1.5 rounded-full bg-mint text-on-accent font-semibold hover:bg-mint transition btn-press hover:text-on-accent"
+                  className="px-3 py-1.5 rounded-full bg-brand text-on-accent font-semibold hover:bg-brand transition btn-press hover:text-on-accent"
                 >
                   Перезагрузить страницу
                 </button>
@@ -194,7 +196,7 @@ export const PanelUpdateModal: React.FC<PanelUpdateModalProps> = ({ info, onClos
               </div>
               <div>{status.reason}</div>
               <div>Обновите панель из терминала сервера — повторный запуск установки сохраняет все данные:</div>
-              <code className="block p-2 rounded-lg bg-black/70 border border-line text-[11px] text-ok break-all select-all">
+              <code className="block p-2 rounded-lg bg-black/70 border border-line text-xs text-ok break-all select-all">
                 {INSTALL_COMMAND}
               </code>
             </div>
@@ -232,7 +234,7 @@ export const PanelUpdateModal: React.FC<PanelUpdateModalProps> = ({ info, onClos
                   <button
                     onClick={start}
                     disabled={starting}
-                    className="flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold bg-mint text-on-accent hover:bg-mint transition disabled:opacity-60 btn-press hover:text-on-accent"
+                    className="flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold bg-brand text-on-accent hover:bg-brand transition disabled:opacity-60 btn-press hover:text-on-accent"
                   >
                     {starting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                     Обновить сейчас
@@ -243,7 +245,7 @@ export const PanelUpdateModal: React.FC<PanelUpdateModalProps> = ({ info, onClos
               <div className="flex justify-end">
                 <button
                   onClick={() => setConfirm(true)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold bg-mint text-on-accent hover:bg-mint transition btn-press hover:text-on-accent"
+                  className="flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold bg-brand text-on-accent hover:bg-brand transition btn-press hover:text-on-accent"
                 >
                   <ArrowUpCircle className="w-4 h-4" />
                   Обновить до {info.latest}
@@ -253,7 +255,7 @@ export const PanelUpdateModal: React.FC<PanelUpdateModalProps> = ({ info, onClos
           </div>
         )}
       </div>
-    </div>,
+    </ModalShell>,
     document.body
   );
 };

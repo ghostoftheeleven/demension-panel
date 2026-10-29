@@ -8,7 +8,7 @@ import { ProbeBadges } from './ProbeBadges';
 const INTERVALS = [10, 15, 30, 60, 120, 360, 720, 1440];
 
 const inputClass =
-  'bg-paper border border-line rounded-xl px-3 py-1.5 text-ink placeholder-faint focus:outline-none focus:border-mint transition text-xs';
+  'bg-paper border border-line rounded-xl px-3 py-1.5 text-ink placeholder-faint focus:outline-none focus:border-brand transition text-xs';
 
 function intervalLabel(minutes: number): string {
   return minutes < 60 ? `${minutes} мин` : minutes === 1440 ? 'сутки' : `${minutes / 60} ч`;
@@ -138,7 +138,7 @@ export const ProbesCard: React.FC<{ onChanged?: () => void }> = ({ onChanged }) 
         <span className="flex items-center gap-2.5">
           <Globe2 className="w-4 h-4 text-info" />
           <span className="text-sm font-semibold text-ink">Доступность нод из стран</span>
-          <span className="text-[11px] text-faint">
+          <span className="text-xs text-faint">
             {overview.settings.enabled
               ? `проверяется из: ${overview.settings.countries.map((c) => countryFlag(c)).join(' ')}`
               : 'выключено'}
@@ -194,7 +194,7 @@ export const ProbesCard: React.FC<{ onChanged?: () => void }> = ({ onChanged }) 
                     type="button"
                     key={code}
                     onClick={() => toggleCountry(code)}
-                    className="text-[11px] bg-info-soft border border-line text-info rounded-lg px-2 py-1 hover:bg-info-soft"
+                    className="text-xs bg-info-soft border border-line text-info rounded-lg px-2 py-1 hover:bg-info-soft"
                     title="Убрать"
                   >
                     {countryFlag(code)} {countryName(code)} ✕
@@ -225,14 +225,14 @@ export const ProbesCard: React.FC<{ onChanged?: () => void }> = ({ onChanged }) 
                       <input type="checkbox" checked={selected} disabled={disabled} onChange={() => toggleCountry(c.code)} />
                       <span>{countryFlag(c.code)}</span>
                       <span className="truncate">{countryName(c.code)}</span>
-                      <span className="ml-auto text-[10px] text-faint">{c.nodes.length}</span>
+                      <span className="ml-auto text-xs text-faint">{c.nodes.length}</span>
                     </label>
                   );
                 })}
                 {filtered.length === 0 && <p className="text-xs text-faint col-span-full">Ничего не найдено</p>}
               </div>
             )}
-            <p className="text-[11px] text-faint">Число справа — сколько узлов check-host.net в стране. Из каждой страны привлекаются до двух узлов.</p>
+            <p className="text-xs text-faint">Число справа — сколько узлов check-host.net в стране. Из каждой страны привлекаются до двух узлов.</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
@@ -259,7 +259,7 @@ export const ProbesCard: React.FC<{ onChanged?: () => void }> = ({ onChanged }) 
               <span>Пояснение в описании подписки</span>
             </label>
           </div>
-          <p className="text-[11px] text-faint">
+          <p className="text-xs text-faint">
             В подписке название ноды получит вид «Frankfurt · 🇷🇺✅ 🇰🇿❌»: ✅ доступна, ⚠️ доступна не со всех узлов страны, ❌ недоступна.
             Пометки меняются вместе с результатами — в приложениях на ядре mihomo выбранный вручную сервер при смене пометки придётся выбрать заново
             (отключите «в названии», если это мешает: пояснение в описании останется).
@@ -284,7 +284,7 @@ export const ProbesCard: React.FC<{ onChanged?: () => void }> = ({ onChanged }) 
                       <tr key={s.id}>
                         <td className="p-2.5">
                           <div className="text-ink font-medium">{s.name}</div>
-                          <div className="text-[10px] font-mono text-faint">{s.host}</div>
+                          <div className="text-xs font-mono text-faint">{s.host}</div>
                         </td>
                         <td className="p-2.5">
                           {!s.remote_panel_id && (
@@ -317,7 +317,7 @@ export const ProbesCard: React.FC<{ onChanged?: () => void }> = ({ onChanged }) 
                 </table>
               </div>
             )}
-            <p className="text-[11px] text-faint">
+            <p className="text-xs text-faint">
               Нода считается доступной с узла страны, если его запрос (TCP или UDP) записан в журнале самой ноды. Знак ⚑ — узлы получили
               ответ, хотя до ноды запрос не дошёл: ответ подделан по дороге. На ноды партнёров заглушку не поставить (нет SSH-доступа) —
               для них укажите TCP-порт, открытый для всех: он проверяется только по ответу check-host.net, без подтверждения. Запасной порт
@@ -326,7 +326,7 @@ export const ProbesCard: React.FC<{ onChanged?: () => void }> = ({ onChanged }) 
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="text-[11px] text-faint space-y-0.5">
+            <div className="text-xs text-faint space-y-0.5">
               {overview.status.running && <div className="text-info">Идёт проверка...</div>}
               {overview.status.last_run && <div>Последняя проверка: {new Date(overview.status.last_run).toLocaleString()}</div>}
               {overview.status.error && <div className="text-bad">Ошибка: {overview.status.error}</div>}
@@ -344,7 +344,7 @@ export const ProbesCard: React.FC<{ onChanged?: () => void }> = ({ onChanged }) 
               <button
                 type="submit"
                 disabled={saving}
-                className="flex items-center gap-2 bg-mint hover:bg-mint disabled:opacity-50 text-on-accent font-bold text-xs px-5 py-2 rounded-full transition btn-press hover:text-on-accent"
+                className="flex items-center gap-2 bg-brand hover:bg-brand disabled:opacity-50 text-on-accent font-bold text-xs px-5 py-2 rounded-full transition btn-press hover:text-on-accent"
               >
                 {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                 <span>Сохранить</span>

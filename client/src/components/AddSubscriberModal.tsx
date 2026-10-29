@@ -4,6 +4,7 @@ import type { Server, Subscriber } from '../types';
 import { api } from '../api';
 import { GIB } from '../utils';
 import { CountrySelect } from './CountrySelect';
+import { ModalShell } from './ui/Modal';
 
 function toDateInput(iso: string | null): string {
   if (!iso) return '';
@@ -115,7 +116,7 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 animate-in fade-in duration-200">
+    <ModalShell label="Пользователь" onClose={onClose}>
       <div className="bg-card border border-line rounded-2xl w-full max-w-lg shadow-pop overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-line bg-card">
@@ -132,6 +133,7 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
           </div>
           <button
             onClick={onClose}
+            aria-label="Закрыть"
             className="text-muted hover:text-ink transition p-1 rounded-lg hover:bg-soft border border-line"
           >
             <X className="w-5 h-5" />
@@ -157,7 +159,7 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
               placeholder="например: Иван, Alex-iOS, Client-01"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full bg-paper border border-line rounded-xl px-3.5 py-2.5 text-ink placeholder-faint focus:outline-none focus:border-mint transition text-sm"
+              className="w-full bg-paper border border-line rounded-xl px-3.5 py-2.5 text-ink placeholder-faint focus:outline-none focus:border-brand transition text-sm"
             />
           </div>
 
@@ -171,7 +173,7 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
                 placeholder="без лимита"
                 value={limitGb}
                 onChange={(e) => setLimitGb(e.target.value)}
-                className="w-full bg-paper border border-line rounded-xl px-3.5 py-2.5 text-ink placeholder-faint focus:outline-none focus:border-mint transition text-sm"
+                className="w-full bg-paper border border-line rounded-xl px-3.5 py-2.5 text-ink placeholder-faint focus:outline-none focus:border-brand transition text-sm"
               />
             </div>
             <div>
@@ -180,7 +182,7 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
                 type="date"
                 value={expireDate}
                 onChange={(e) => setExpireDate(e.target.value)}
-                className="w-full bg-paper border border-line rounded-xl px-3.5 py-2.5 text-ink focus:outline-none focus:border-mint transition text-sm"
+                className="w-full bg-paper border border-line rounded-xl px-3.5 py-2.5 text-ink focus:outline-none focus:border-brand transition text-sm"
               />
             </div>
           </div>
@@ -191,9 +193,9 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
               value={country}
               onChange={setCountry}
               emptyLabel="Не задана"
-              className="w-full bg-paper border border-line rounded-xl px-3.5 py-2.5 text-ink focus:outline-none focus:border-mint transition text-sm"
+              className="w-full bg-paper border border-line rounded-xl px-3.5 py-2.5 text-ink focus:outline-none focus:border-brand transition text-sm"
             />
-            <p className="text-[11px] text-faint mt-1">
+            <p className="text-xs text-faint mt-1">
               Если нода недоступна из этой страны, а у ноды есть мост в ней, подписка выдаст адрес моста (раздел «Мосты»).
             </p>
           </div>
@@ -206,7 +208,7 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
                 <span>Доступные ноды (серверы):</span>
               </label>
 
-              <div className="flex items-center gap-2 text-[11px]">
+              <div className="flex items-center gap-2 text-xs">
                 <button
                   type="button"
                   onClick={selectAll}
@@ -256,18 +258,18 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
                             <span className="text-xs font-semibold text-ink">{s.name}</span>
                             <span
                               className={`w-1.5 h-1.5 rounded-full ${
-                                isOnline ? 'bg-mint' : 'bg-faint'
+                                isOnline ? 'bg-ok' : 'bg-faint'
                               }`}
                             />
                           </div>
-                          <p className="text-[11px] font-mono text-faint">
+                          <p className="text-xs font-mono text-faint">
                             {s.host}:{s.awg_port}
                             {s.remote_panel_name && <span className="font-sans text-warn"> · партнёр: {s.remote_panel_name}</span>}
                           </p>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1.5 text-[10px] font-mono text-faint">
+                      <div className="flex items-center gap-1.5 text-xs font-mono text-faint">
                         <Shield className="w-3 h-3 text-ok" />
                         <span>AWG</span>
                       </div>
@@ -276,7 +278,7 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
                 })}
               </div>
             )}
-            <p className="text-[11px] text-faint mt-2">
+            <p className="text-xs text-faint mt-2">
               * Пользователь получит единую ссылку подписки. Все выбранные ноды появятся у него в Incy автоматически.
             </p>
           </div>
@@ -293,13 +295,13 @@ export const AddSubscriberModal: React.FC<AddSubscriberModalProps> = ({
             <button
               type="submit"
               disabled={loading}
-              className="bg-mint hover:bg-mint disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2.5 rounded-full transition btn-press hover:text-on-accent"
+              className="bg-brand hover:bg-brand disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2.5 rounded-full transition btn-press hover:text-on-accent"
             >
               {loading ? 'Сохранение...' : editingSubscriber ? 'Обновить доступ' : 'Создать подписку'}
             </button>
           </div>
         </form>
       </div>
-    </div>
+    </ModalShell>
   );
 };

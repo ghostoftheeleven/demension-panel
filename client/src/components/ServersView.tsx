@@ -1,0 +1,253 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { Map as MapIcon, List } from 'lucide-react';
+import type { Bridge, Client, Server, Subscriber } from '../types';
+import { nodeKey, type Selection } from '../topology/model';
+import { TopologyMap } from './TopologyMap';
+import { NodeDetails } from './NodeDetails';
+import { NetworkOverview } from './NetworkOverview';
+import { BridgeInspector, CountryInspector } from './TopologyInspectors';
+import { ClientList } from './ClientList';
+import { ProbesCard } from './ProbesCard';
+import { ProbeBadges } from './ProbeBadges';
+
+type ViewMode = 'map' | 'list';
+const VIEW_KEY = 'dementia.servers.view.v1';
+
+function readMode(): ViewMode {
+  try {
+    return window.localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'map';
+  } catch {
+    return 'map';
+  }
+}
+
+interface ServersViewProps {
+  servers: Server[];
+  bridges: Bridge[];
+  subscribers: Subscriber[];
+  clients: Client[];
+  selectedServerId: number | null;
+  onSelectServer: (id: number | null) => void;
+  onInstallServer: (server: Server) => void;
+  onEditParams: (server: Server) => void;
+  onServerDeleted: (id: number) => void;
+  onEditServer: (server: Server) => void;
+  onServerChanged: () => void;
+  onAddClient: () => void;
+  onShowQr: (clientId: number) => void;
+  onClientUpdated: (client: Client) => void;
+  onClientDeleted: (clientId: number) => void;
+  onOpenBridges: () => void;
+}
+
+/**
+ * Раздел «Серверы»: интерактивная карта сети и инспектор справа (нода с клиентами, мост, страна или сводка сети).
+ * Режим «Список» оставляет прежнее представление — переключатель нод и карточка с таблицей клиентов: удобно с телефона,
+ * для десятков нод и тем, кому карта не нужна.
+ */
+export const ServersView: React.FC<ServersViewProps> = (props) => {
+  const { servers, bridges, subscribers, clients, selectedServerId, onSelectServer } = props;
+  const [mode, setMode] = useState<ViewMode>(readMode);
+  const [selection, setSelection] = useState<Selection | null>(null);
+  const inspectorRef = useRef<HTMLDivElement>(null);
+
+  const changeMode = (next: ViewMode) => {
+    setMode(next);
+    try {
+      window.localStorage.setItem(VIEW_KEY, next);
+    } catch {
+      // без запоминания режима панель работает так же
+    }
+  };
+
+  // Выбранный на карте объект мог исчезнуть (нода удалена, мост снят): тогда показываем сводку
+  const valid =
+    selection &&
+    (selection.kind === 'server'
+      ? servers.some((s) => s.id === selection.id)
+      : selection.kind === 'bridge'
+        ? bridges.some((b) => b.id === selection.id)
+        : true)
+      ? selection
+      : null;
+
+  const select = (next: Selection | null) => {
+    setSelection(next);
+    if (next?.kind === 'server') onSelectServer(next.id as number);
+    // На узком экране инспектор лежит под картой: прокручиваем к нему
+    if (next && window.matchMedia('(max-width: 1023px)').matches) {
+      requestAnimationFrame(() => inspectorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    }
+  };
+
+  // Esc снимает выделение, пока не открыто модальное окно
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !document.querySelector('[role="dialog"]')) setSelection(null);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
+  const selectedServer = valid?.kind === 'server' ? servers.find((s) => s.id === valid.id) ?? null : null;
+  const listServer = servers.find((s) => s.id === selectedServerId) ?? servers[0] ?? null;
+
+  const toggle = (
+    <div className="inline-flex rounded-lg bg-card border border-line p-0.5" role="group" aria-label="Режим раздела" data-guest-ok>
+      {(
+        [
+          ['map', 'Карта', MapIcon],
+          ['list', 'Список', List],
+        ] as const
+      ).map(([id, label, Icon]) => (
+        <button
+          key={id}
+          onClick={() => changeMode(id)}
+          aria-pressed={mode === id}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition ${mode === id ? 'bg-soft-2 text-brand' : 'text-muted hover:text-ink'}`}
+        >
+          <Icon className="w-3.5 h-3.5" />
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (mode === 'list') {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          {toggle}
+        </div>
+        <div className="bg-card border border-line rounded-2xl p-5">
+          <NetworkOverview
+            servers={servers}
+            bridges={bridges}
+            showMapHint={false}
+            onSelect={(s) => s.kind === 'server' && onSelectServer(s.id as number)}
+          />
+        </div>
+        <ProbesCard onChanged={props.onServerChanged} />
+
+        {/* Переключатель нод */}
+        <div data-guest-ok className="flex items-center gap-2 overflow-x-auto pb-1">
+          {servers.map((s) => {
+            const isSelected = s.id === listServer?.id;
+            return (
+              <button
+                key={s.id}
+                onClick={() => onSelectServer(s.id)}
+                aria-pressed={isSelected}
+                className={`flex items-center gap-2.5 px-4 py-2.5 rounded-lg border text-xs font-medium transition flex-shrink-0 ${
+                  isSelected ? 'bg-soft-2 border-brand/40 text-ink' : 'bg-card border-line text-muted hover:text-ink hover:bg-soft'
+                }`}
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    s.status === 'online' ? 'bg-ok' : s.status === 'installing' ? 'bg-warn animate-ping' : s.status === 'error' ? 'bg-danger' : s.status === 'offline' ? 'bg-orange' : 'bg-faint'
+                  }`}
+                />
+                <span className="font-semibold">{s.name}</span>
+                <span className="text-xs font-mono text-faint">{s.host}</span>
+                <ProbeBadges probes={s.probes} />
+              </button>
+            );
+          })}
+        </div>
+
+        {listServer && (
+          <>
+            <div className="bg-card border border-line rounded-2xl p-5 shadow-pop">
+              <NodeDetails
+                server={listServer}
+                onInstallServer={props.onInstallServer}
+                onEditParams={props.onEditParams}
+                onServerDeleted={props.onServerDeleted}
+                onEditServer={props.onEditServer}
+                onServerChanged={props.onServerChanged}
+              />
+            </div>
+            <ClientList
+              clients={clients}
+              serverName={listServer.name}
+              serverOnline={listServer.status === 'online'}
+              onAddClient={props.onAddClient}
+              onShowQr={props.onShowQr}
+              onClientUpdated={props.onClientUpdated}
+              onClientDeleted={props.onClientDeleted}
+            />
+          </>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap">{toggle}</div>
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_440px] gap-4 items-start">
+        <TopologyMap
+          servers={servers}
+          bridges={bridges}
+          subscribers={subscribers}
+          selected={valid}
+          onSelect={select}
+          className="h-[58vh] min-h-[380px] lg:h-[calc(100vh-11.5rem)] lg:min-h-[520px] rounded-2xl border border-line bg-page/60"
+        />
+
+        <div
+          ref={inspectorRef}
+          className="lg:h-[calc(100vh-11.5rem)] lg:min-h-[520px] lg:overflow-y-auto rounded-2xl border border-line bg-card/90 p-5 space-y-5 scroll-mt-32"
+          aria-live="polite"
+          data-testid="inspector"
+        >
+          {valid?.kind === 'server' && selectedServer ? (
+            <>
+              <NodeDetails
+                key={selectedServer.id}
+                server={selectedServer}
+                onInstallServer={props.onInstallServer}
+                onEditParams={props.onEditParams}
+                onServerDeleted={(id) => {
+                  setSelection(null);
+                  props.onServerDeleted(id);
+                }}
+                onEditServer={props.onEditServer}
+                onServerChanged={props.onServerChanged}
+              />
+              <ClientList
+                clients={clients}
+                serverName={selectedServer.name}
+                serverOnline={selectedServer.status === 'online'}
+                layout="cards"
+                onAddClient={props.onAddClient}
+                onShowQr={props.onShowQr}
+                onClientUpdated={props.onClientUpdated}
+                onClientDeleted={props.onClientDeleted}
+              />
+            </>
+          ) : valid?.kind === 'bridge' ? (
+            <BridgeInspector bridge={bridges.find((b) => b.id === valid.id)!} servers={servers} onOpenBridges={props.onOpenBridges} />
+          ) : valid?.kind === 'country' ? (
+            <CountryInspector code={String(valid.id)} servers={servers} bridges={bridges} subscribers={subscribers} />
+          ) : (
+            <>
+              <NetworkOverview servers={servers} bridges={bridges} onSelect={select} />
+              <ProbesCard onChanged={props.onServerChanged} />
+            </>
+          )}
+          {valid && (
+            <button
+              data-guest-ok
+              onClick={() => setSelection(null)}
+              className="text-xs text-muted hover:text-ink transition"
+              data-key={nodeKey(valid.kind, valid.id)}
+            >
+              ← К сводке сети
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};

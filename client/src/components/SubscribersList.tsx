@@ -15,6 +15,7 @@ import {
 import type { Subscriber } from '../types';
 import { api } from '../api';
 import { countryFlag, countryName, formatBytes } from '../utils';
+import { useFeedback } from './ui/Feedback';
 
 interface SubscribersListProps {
   subscribers: Subscriber[];
@@ -33,6 +34,7 @@ export const SubscribersList: React.FC<SubscribersListProps> = ({
   onSubscriberUpdated,
   onSubscriberDeleted,
 }) => {
+  const { toast, confirm } = useFeedback();
   const [search, setSearch] = useState('');
 
   const handleToggle = async (sub: Subscriber) => {
@@ -42,26 +44,26 @@ export const SubscribersList: React.FC<SubscribersListProps> = ({
       });
       onSubscriberUpdated(updated);
     } catch (err: any) {
-      alert(err.message);
+      toast(err.message, 'error');
     }
   };
 
   const handleResetTraffic = async (sub: Subscriber) => {
-    if (!confirm(`Обнулить счётчик трафика пользователя "${sub.name}"?`)) return;
+    if (!(await confirm(`Обнулить счётчик трафика пользователя "${sub.name}"?`))) return;
     try {
       onSubscriberUpdated(await api.resetSubscriberTraffic(sub.id));
     } catch (err: any) {
-      alert(err.message);
+      toast(err.message, 'error');
     }
   };
 
   const handleDelete = async (sub: Subscriber) => {
-    if (!confirm(`Удалить пользователя "${sub.name}" и все его конфигурации на серверах?`)) return;
+    if (!(await confirm({ message: `Удалить пользователя "${sub.name}" и все его конфигурации на серверах?`, danger: true, confirmLabel: 'Удалить' }))) return;
     try {
       await api.deleteSubscriber(sub.id);
       onSubscriberDeleted(sub.id);
     } catch (err: any) {
-      alert(err.message);
+      toast(err.message, 'error');
     }
   };
 
@@ -93,14 +95,14 @@ export const SubscribersList: React.FC<SubscribersListProps> = ({
               placeholder="Поиск по имени..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="bg-paper border border-line rounded-xl pl-8 pr-3 py-1.5 text-xs text-ink placeholder-faint focus:outline-none focus:border-mint w-48 sm:w-60 transition"
+              className="bg-paper border border-line rounded-xl pl-8 pr-3 py-1.5 text-xs text-ink placeholder-faint focus:outline-none focus:border-brand w-48 sm:w-60 transition"
             />
             <Search className="w-3.5 h-3.5 text-faint absolute left-2.5 top-2" />
           </div>
 
           <button
             onClick={onAddSubscriber}
-            className="flex items-center gap-1.5 bg-mint text-on-accent font-bold text-xs px-3.5 py-1.5 rounded-full transition btn-press"
+            className="flex items-center gap-1.5 bg-brand text-on-accent font-bold text-xs px-3.5 py-1.5 rounded-full transition btn-press"
           >
             <Plus className="w-4 h-4" />
             <span>Новый пользователь</span>
@@ -137,7 +139,7 @@ export const SubscribersList: React.FC<SubscribersListProps> = ({
                   <tr key={sub.id} className="hover:bg-soft transition">
                     {/* Name */}
                     <td className="py-3 font-medium text-ink flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-mint flex-shrink-0" />
+                      <span className="w-2 h-2 rounded-full bg-ok flex-shrink-0" />
                       <span>{sub.name}</span>
                       {sub.country && (
                         <span title={`Страна: ${countryName(sub.country)}`} className="text-sm leading-none">
@@ -153,14 +155,14 @@ export const SubscribersList: React.FC<SubscribersListProps> = ({
                           sub.servers.map((s) => (
                             <span
                               key={s.id}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] bg-paper border border-line text-ink"
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs bg-paper border border-line text-ink"
                             >
                               <ServerIcon className="w-3 h-3 text-ok" />
                               <span>{s.name}</span>
                             </span>
                           ))
                         ) : (
-                          <span className="text-[11px] text-faint italic">Нет доступа к нодам</span>
+                          <span className="text-xs text-faint italic">Нет доступа к нодам</span>
                         )}
                       </div>
                     </td>
@@ -168,16 +170,16 @@ export const SubscribersList: React.FC<SubscribersListProps> = ({
                     {/* Status Badge */}
                     <td className="py-3">
                       {disabled ? (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-soft text-muted border border-line">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-soft text-muted border border-line">
                           Отключен
                         </span>
                       ) : sub.suspended ? (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-warn-soft text-warn border border-line">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-warn-soft text-warn border border-line">
                           {sub.expired ? 'Срок истёк' : 'Лимит исчерпан'}
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-ok-soft text-ok border border-line">
-                          <span className="w-1.5 h-1.5 rounded-full bg-mint animate-pulse" />
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-ok-soft text-ok border border-line">
+                          <span className="w-1.5 h-1.5 rounded-full bg-ok animate-pulse" />
                           Активен
                         </span>
                       )}
@@ -196,7 +198,7 @@ export const SubscribersList: React.FC<SubscribersListProps> = ({
                         </span>
                       </div>
                       {(sub.traffic_limit > 0 || sub.expire_at) && (
-                        <div className="text-[10px] text-faint mt-1 space-x-2">
+                        <div className="text-xs text-faint mt-1 space-x-2">
                           {sub.traffic_limit > 0 && (
                             <span>{formatBytes(sub.traffic_used)} из {formatBytes(sub.traffic_limit)}</span>
                           )}

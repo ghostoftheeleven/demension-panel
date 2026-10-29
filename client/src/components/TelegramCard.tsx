@@ -105,7 +105,7 @@ export const TelegramCard: React.FC = () => {
             placeholder={form.bot_token_saved ? 'Сохранён — введите новый для замены' : '123456:…'}
             className="w-full bg-paper border border-line rounded-xl px-3 py-2 text-sm text-ink"
           />
-          <p className="text-[11px] text-faint mt-1">
+          <p className="text-xs text-faint mt-1">
             Токен от @BotFather (например, 123456789:ABC...)
           </p>
         </div>
@@ -131,7 +131,7 @@ export const TelegramCard: React.FC = () => {
             placeholder="12345 или -100… или @channel"
             className="w-full bg-paper border border-line rounded-xl px-3 py-2 text-sm text-ink"
           />
-          <p className="text-[11px] text-faint mt-1">
+          <p className="text-xs text-faint mt-1">
             Числовой ID (из @userinfobot) или @канал. Обязательно напишите боту команду /start перед проверкой.
           </p>
         </div>
@@ -164,7 +164,7 @@ export const TelegramCard: React.FC = () => {
           type="button"
           disabled={busy}
           onClick={() => void save()}
-          className="flex items-center gap-2 px-4 py-2 rounded-full bg-mint text-on-accent text-sm font-bold btn-press disabled:opacity-50 cursor-pointer"
+          className="flex items-center gap-2 px-4 py-2 rounded-full bg-brand text-on-accent text-sm font-bold btn-press disabled:opacity-50 cursor-pointer"
         >
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           Сохранить

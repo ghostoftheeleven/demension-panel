@@ -4,6 +4,7 @@ import { api } from '../api';
 import type { AdminUser } from '../types';
 import { TwoFactorCard } from './TwoFactorCard';
 import { SessionsCard } from './SessionsCard';
+import { ModalShell } from './ui/Modal';
 
 interface AccountModalProps {
   isOpen: boolean;
@@ -15,7 +16,7 @@ interface AccountModalProps {
 type AccountTab = 'password' | 'username' | 'security';
 
 const inputClass =
-  'w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink focus:outline-none focus:border-mint text-sm';
+  'w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink focus:outline-none focus:border-brand text-sm';
 const labelClass = 'block text-xs font-medium text-muted mb-1';
 
 export const AccountModal: React.FC<AccountModalProps> = ({ isOpen, user, onClose, onUsernameChanged }) => {
@@ -103,7 +104,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({ isOpen, user, onClos
     }`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 animate-in fade-in duration-200">
+    <ModalShell label="Учётная запись" onClose={onClose}>
       <div className="bg-card border border-line rounded-2xl w-full max-w-md shadow-pop overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-line bg-card">
@@ -113,6 +114,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({ isOpen, user, onClos
           </div>
           <button
             onClick={onClose}
+            aria-label="Закрыть"
             className="text-muted hover:text-ink transition p-1 rounded-lg hover:bg-soft border border-line"
           >
             <X className="w-5 h-5" />
@@ -194,7 +196,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({ isOpen, user, onClos
               <button
                 type="submit"
                 disabled={loading || !!success}
-                className="bg-mint hover:bg-mint disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2 rounded-full transition btn-press hover:text-on-accent"
+                className="bg-brand hover:bg-brand disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2 rounded-full transition btn-press hover:text-on-accent"
               >
                 {loading ? 'Сохранение...' : 'Обновить пароль'}
               </button>
@@ -232,7 +234,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({ isOpen, user, onClos
               />
             </div>
 
-            <p className="text-[11px] text-faint">
+            <p className="text-xs text-faint">
               Остальные сессии администратора будут завершены, в этой вы останетесь авторизованы.
             </p>
 
@@ -243,7 +245,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({ isOpen, user, onClos
               <button
                 type="submit"
                 disabled={loading || !!success}
-                className="bg-mint hover:bg-mint disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2 rounded-full transition btn-press hover:text-on-accent"
+                className="bg-brand hover:bg-brand disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2 rounded-full transition btn-press hover:text-on-accent"
               >
                 {loading ? 'Сохранение...' : 'Сменить логин'}
               </button>
@@ -256,6 +258,6 @@ export const AccountModal: React.FC<AccountModalProps> = ({ isOpen, user, onClos
           </div>
         )}
       </div>
-    </div>
+    </ModalShell>
   );
 };

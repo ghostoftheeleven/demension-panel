@@ -4,6 +4,7 @@ import type { Bridge, BridgeLinkMode, Server } from '../types';
 import { api } from '../api';
 import { countryFlag, countryName } from '../utils';
 import { BridgeModal } from './BridgeModal';
+import { useFeedback } from './ui/Feedback';
 
 const STATUS: Record<Bridge['status'], { label: string; className: string }> = {
   online: { label: 'работает', className: 'bg-ok-soft text-ok' },
@@ -19,7 +20,7 @@ const MODES: { value: BridgeLinkMode; label: string }[] = [
   { value: 'off', label: 'Не использовать' },
 ];
 
-const selectClass = 'bg-paper border border-line rounded-xl px-2.5 py-1.5 text-ink focus:outline-none focus:border-mint transition text-xs';
+const selectClass = 'bg-paper border border-line rounded-xl px-2.5 py-1.5 text-ink focus:outline-none focus:border-brand transition text-xs';
 
 /**
  * Привязка нод к мосту: какие ноды и в каком режиме. Изменения применяются на мосту одной кнопкой.
@@ -89,7 +90,7 @@ const BridgeLinks: React.FC<{ bridge: Bridge; servers: Server[]; onChanged: () =
                       />
                       <span className="text-ink font-medium">{s.name}</span>
                     </label>
-                    <div className="text-[10px] font-mono text-faint pl-6">{s.host}:{s.awg_port}</div>
+                    <div className="text-xs font-mono text-faint pl-6">{s.host}:{s.awg_port}</div>
                   </td>
                   <td className="p-2.5 font-mono text-muted">{link ? link.listen_port : mode ? 'будет выбран' : '—'}</td>
                   <td className="p-2.5">
@@ -133,7 +134,7 @@ const BridgeLinks: React.FC<{ bridge: Bridge; servers: Server[]; onChanged: () =
             type="button"
             onClick={save}
             disabled={saving}
-            className="flex items-center gap-2 bg-mint disabled:opacity-50 text-on-accent font-bold text-xs px-4 py-2 rounded-full btn-press"
+            className="flex items-center gap-2 bg-brand disabled:opacity-50 text-on-accent font-bold text-xs px-4 py-2 rounded-full btn-press"
           >
             {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
             Применить на мосту
@@ -171,7 +172,7 @@ const LinkState: React.FC<{ bridge: Bridge; link: Bridge['links'][number] }> = (
         </span>
       )}
       {link.check_ok === true && link.checked_at && (
-        <div className="text-[10px] text-faint">пересылка проверена {new Date(link.checked_at).toLocaleString()}</div>
+        <div className="text-xs text-faint">пересылка проверена {new Date(link.checked_at).toLocaleString()}</div>
       )}
     </div>
   );
@@ -181,6 +182,7 @@ const LinkState: React.FC<{ bridge: Bridge; link: Bridge['links'][number] }> = (
  * Раздел «Мосты» (docs/bridges.md): серверы в странах пользователей, через которые подписка выдаёт ноды, недоступные напрямую.
  */
 export const BridgesView: React.FC<{ servers: Server[] }> = ({ servers }) => {
+  const { confirm } = useFeedback();
   const [bridges, setBridges] = useState<Bridge[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState<{ open: boolean; bridge: Bridge | null }>({ open: false, bridge: null });
@@ -227,14 +229,14 @@ export const BridgesView: React.FC<{ servers: Server[] }> = ({ servers }) => {
       setNotice({ type: result.success ? 'success' : 'error', text: result.success ? `SSH-подключение к «${b.name}» работает.` : result.message ?? 'SSH недоступен' });
     });
 
-  const handleDelete = (b: Bridge) => {
-    if (!confirm(`Удалить мост «${b.name}»? Пользователи, получавшие ноды через него, получат прямые адреса при обновлении подписки.`)) return;
-    const teardown = b.status !== 'uninstalled' && confirm('Убрать правила пересылки с сервера моста? (Отмена — удалить только из панели)');
+  const handleDelete = async (b: Bridge) => {
+    if (!(await confirm({ message: `Удалить мост «${b.name}»? Пользователи, получавшие ноды через него, получат прямые адреса при обновлении подписки.`, danger: true, confirmLabel: 'Удалить' }))) return;
+    const teardown = b.status !== 'uninstalled' && (await confirm({ title: 'Убрать правила пересылки?', message: 'Убрать правила пересылки с сервера моста? «Не убирать» — удалить только из панели.', confirmLabel: 'Убрать правила', cancelLabel: 'Не убирать' }));
     act(b.id, async () => {
       try {
         await api.deleteBridge(b.id, { teardown });
       } catch (err: any) {
-        if (!teardown || !confirm(`${err.message}\n\nУдалить мост из панели всё равно?`)) throw err;
+        if (!teardown || !(await confirm({ message: `${err.message}\n\nУдалить мост из панели всё равно?`, danger: true, confirmLabel: 'Удалить' }))) throw err;
         await api.deleteBridge(b.id, { teardown, force: true });
       }
     });
@@ -254,7 +256,7 @@ export const BridgesView: React.FC<{ servers: Server[] }> = ({ servers }) => {
         </div>
         <button
           onClick={() => setModal({ open: true, bridge: null })}
-          className="flex items-center gap-1.5 bg-mint text-on-accent font-bold text-sm px-4 py-2 rounded-full btn-press"
+          className="flex items-center gap-1.5 bg-brand text-on-accent font-bold text-sm px-4 py-2 rounded-full btn-press"
         >
           <Plus className="w-4 h-4" /> Мост
         </button>
@@ -263,7 +265,7 @@ export const BridgesView: React.FC<{ servers: Server[] }> = ({ servers }) => {
       {notice && (
         <div className={`p-3 rounded-xl border border-line text-xs ${notice.type === 'success' ? 'bg-ok-soft text-ok' : 'bg-bad-soft text-bad'}`}>
           {notice.text}
-          {notice.log && <pre className="mt-2 max-h-40 overflow-auto text-[11px] text-muted whitespace-pre-wrap">{notice.log}</pre>}
+          {notice.log && <pre className="mt-2 max-h-40 overflow-auto text-xs text-muted whitespace-pre-wrap">{notice.log}</pre>}
         </div>
       )}
       {error && <div className="p-3 rounded-xl border border-line bg-bad-soft text-bad text-xs">{error}</div>}
@@ -294,7 +296,7 @@ export const BridgesView: React.FC<{ servers: Server[] }> = ({ servers }) => {
                         {countryFlag(b.country)}
                       </span>
                       <h3 className="font-display text-lg font-bold text-ink">{b.name}</h3>
-                      <span className={`text-[11px] font-semibold rounded-full px-2.5 py-0.5 ${status.className}`}>{b.installing ? STATUS.installing.label : status.label}</span>
+                      <span className={`text-xs font-semibold rounded-full px-2.5 py-0.5 ${status.className}`}>{b.installing ? STATUS.installing.label : status.label}</span>
                     </div>
                     <div className="text-xs font-mono text-faint">
                       {b.ssh_user}@{b.host}:{b.ssh_port} · {countryName(b.country)}
@@ -328,7 +330,7 @@ export const BridgesView: React.FC<{ servers: Server[] }> = ({ servers }) => {
         </div>
       )}
 
-      <p className="text-[11px] text-faint max-w-4xl">
+      <p className="text-xs text-faint max-w-4xl">
         «Авто»: мост выдаётся пользователям страны моста, если две проверки подряд показали, что из этой страны нода недоступна, или если у
         нескольких клиентов этой страны одновременно оборвались подключения, а у остальных нет. Возврат на прямой адрес — после трёх
         удачных проверок и не раньше чем через 12 часов. «Всегда через мост» — для случаев, которые проверки не видят (например, нестабильный

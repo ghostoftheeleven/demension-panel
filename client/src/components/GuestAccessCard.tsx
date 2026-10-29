@@ -4,7 +4,7 @@ import type { GuestAccess } from '../types';
 import { api } from '../api';
 
 const inputClass =
-  'w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-mint transition text-sm';
+  'w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-brand transition text-sm';
 
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
 
@@ -73,7 +73,7 @@ export const GuestAccessCard: React.FC = () => {
       <div className="flex items-center gap-2">
         <Eye className="w-5 h-5 text-info" />
         <h3 className="text-base font-semibold text-ink">Гостевой доступ</h3>
-        {saved.enabled && <span className="text-[11px] px-2 py-0.5 rounded-full bg-ok-soft text-ok">включён</span>}
+        {saved.enabled && <span className="text-xs px-2 py-0.5 rounded-full bg-ok-soft text-ok">включён</span>}
       </div>
       <p className="text-xs text-muted">
         Отдельные логин и пароль для постороннего человека: он видит панель изнутри, но ничего не может изменить. Ссылки подписок,
@@ -136,7 +136,7 @@ export const GuestAccessCard: React.FC = () => {
         <button
           type="submit"
           disabled={saving}
-          className="flex items-center gap-2 bg-mint disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2 rounded-full transition btn-press"
+          className="flex items-center gap-2 bg-brand disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2 rounded-full transition btn-press"
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           <span>Сохранить</span>

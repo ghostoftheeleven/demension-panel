@@ -4,12 +4,13 @@ import type { Subscriber, SubscriptionServer, SubscriptionSettings } from '../ty
 import { api } from '../api';
 import { copyToClipboard } from '../utils';
 import { AwgClientsGuide } from './AwgClientsGuide';
+import { useFeedback } from './ui/Feedback';
 
 const TITLE_MAX = 25;
 const ANNOUNCE_MAX = 200;
 
 const inputClass =
-  'w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-mint transition text-sm';
+  'w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-brand transition text-sm';
 const labelClass = 'block text-xs font-medium text-muted mb-1';
 const cardClass = 'bg-card border border-line rounded-2xl p-6 shadow-pop space-y-4';
 
@@ -23,6 +24,7 @@ export const SubscriptionSettingsView: React.FC<{ subscribers: Subscriber[]; pub
   subscribers,
   publicUrl,
 }) => {
+  const { alert: showAlert } = useFeedback();
   const [settings, setSettings] = useState<SubscriptionSettings | null>(null);
   const [servers, setServers] = useState<SubscriptionServer[]>([]);
   const [saving, setSaving] = useState(false);
@@ -119,7 +121,7 @@ export const SubscriptionSettingsView: React.FC<{ subscribers: Subscriber[]; pub
         <button
           type="submit"
           disabled={saving}
-          className="flex items-center justify-center gap-2 bg-mint hover:bg-mint disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2.5 rounded-full transition btn-press hover:text-on-accent"
+          className="flex items-center justify-center gap-2 bg-brand hover:bg-brand disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2.5 rounded-full transition btn-press hover:text-on-accent"
         >
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           <span>Сохранить</span>
@@ -149,7 +151,7 @@ export const SubscriptionSettingsView: React.FC<{ subscribers: Subscriber[]; pub
                 Название подписки <span className="text-faint">({titleLength}/{TITLE_MAX}, без учёта {'{user}'})</span>
               </label>
               <input value={settings.title} onChange={(e) => update('title', e.target.value)} className={inputClass} placeholder="{user}" />
-              <p className="text-[11px] text-faint mt-1">
+              <p className="text-xs text-faint mt-1">
                 <code className="text-muted">{'{user}'}</code> заменяется именем пользователя. Длинные названия обрезаются до 25 символов.
               </p>
             </div>
@@ -238,7 +240,7 @@ export const SubscriptionSettingsView: React.FC<{ subscribers: Subscriber[]; pub
           <div className={cardClass}>
             <div>
               <h3 className="text-sm font-semibold text-ink">Серверы в подписке</h3>
-              <p className="text-[11px] text-faint mt-0.5">
+              <p className="text-xs text-faint mt-0.5">
                 Имя, которое увидит пользователь (можно с эмодзи флага), и порядок в списке. Пустое поле — имя сервера в панели.
               </p>
             </div>
@@ -258,7 +260,7 @@ export const SubscriptionSettingsView: React.FC<{ subscribers: Subscriber[]; pub
                     </div>
                     <div className="w-40 flex-shrink-0 min-w-0">
                       <p className="text-xs font-medium text-ink truncate">{s.name}</p>
-                      <p className="text-[10px] font-mono text-faint truncate">{s.host}</p>
+                      <p className="text-xs font-mono text-faint truncate">{s.host}</p>
                     </div>
                     <input
                       value={s.sub_name || ''}
@@ -307,7 +309,7 @@ export const SubscriptionSettingsView: React.FC<{ subscribers: Subscriber[]; pub
               )}
               <div className="space-y-1">
                 {previewServers.length === 0 ? (
-                  <p className="text-[11px] text-faint">Нет серверов</p>
+                  <p className="text-xs text-faint">Нет серверов</p>
                 ) : (
                   previewServers.map((s) => (
                     <div key={s.id} className="flex items-center gap-2 text-xs text-ink bg-card rounded-lg px-2.5 py-1.5">
@@ -325,8 +327,10 @@ export const SubscriptionSettingsView: React.FC<{ subscribers: Subscriber[]; pub
                   <button
                     key={link.label}
                     type="button"
-                    onClick={() => copyToClipboard(link.url).then((ok) => !ok && alert(link.url))}
-                    className="w-full flex items-center gap-2 text-left text-[11px] bg-paper border border-line hover:border-faint rounded-lg px-2.5 py-2 transition"
+                    onClick={() => copyToClipboard(link.url).then((ok) => {
+                      if (!ok) void showAlert(link.url, 'Скопируйте ссылку вручную');
+                    })}
+                    className="w-full flex items-center gap-2 text-left text-xs bg-paper border border-line hover:border-faint rounded-lg px-2.5 py-2 transition"
                     title="Скопировать ссылку"
                   >
                     <Link2 className="w-3.5 h-3.5 text-ok flex-shrink-0" />

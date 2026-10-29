@@ -3,9 +3,10 @@ import { X, Waypoints, Lock, Key, CheckSquare, Square, Loader2 } from 'lucide-re
 import type { Bridge, BridgeInput, Server } from '../types';
 import { api } from '../api';
 import { CountrySelect } from './CountrySelect';
+import { ModalShell } from './ui/Modal';
 
 const inputClass =
-  'w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-mint transition text-sm';
+  'w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-brand transition text-sm';
 
 interface BridgeModalProps {
   isOpen: boolean;
@@ -88,21 +89,21 @@ export const BridgeModal: React.FC<BridgeModalProps> = ({ isOpen, bridge, server
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 animate-in fade-in duration-200">
+    <ModalShell label="Мост" onClose={onClose}>
       <div className="bg-card border border-line rounded-2xl w-full max-w-lg shadow-pop overflow-hidden flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between px-6 py-4 border-b border-line bg-card">
           <div className="flex items-center gap-2">
             <Waypoints className="w-5 h-5 text-ok" />
             <h2 className="text-lg font-semibold text-ink">{bridge ? 'Настройки моста' : 'Добавить мост'}</h2>
           </div>
-          <button onClick={onClose} className="text-muted hover:text-ink transition p-1 rounded-lg hover:bg-soft border border-line">
+          <button onClick={onClose} aria-label="Закрыть" className="text-muted hover:text-ink transition p-1 rounded-lg hover:bg-soft border border-line">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4 overflow-y-auto">
           {error && <div className="p-3 bg-bad-soft border border-line rounded-xl text-bad text-sm">{error}</div>}
-          {log && <pre className="max-h-40 overflow-auto p-3 bg-paper border border-line rounded-xl text-[11px] text-muted whitespace-pre-wrap">{log}</pre>}
+          {log && <pre className="max-h-40 overflow-auto p-3 bg-paper border border-line rounded-xl text-xs text-muted whitespace-pre-wrap">{log}</pre>}
 
           {!bridge && (
             <p className="text-xs text-muted">
@@ -171,7 +172,7 @@ export const BridgeModal: React.FC<BridgeModalProps> = ({ isOpen, bridge, server
                 className={`${inputClass} font-mono text-xs`}
               />
             )}
-            {sshUser !== 'root' && <p className="text-[11px] text-warn mt-2">* Для пользователя, отличного от root, нужен sudo без пароля (NOPASSWD).</p>}
+            {sshUser !== 'root' && <p className="text-xs text-warn mt-2">* Для пользователя, отличного от root, нужен sudo без пароля (NOPASSWD).</p>}
           </div>
 
           {!bridge && (
@@ -191,7 +192,7 @@ export const BridgeModal: React.FC<BridgeModalProps> = ({ isOpen, bridge, server
                       >
                         {checked ? <CheckSquare className="w-4 h-4 text-ok" /> : <Square className="w-4 h-4 text-faint" />}
                         <span className="text-sm">{s.name}</span>
-                        <span className="ml-auto text-[11px] font-mono text-faint">{s.host}</span>
+                        <span className="ml-auto text-xs font-mono text-faint">{s.host}</span>
                       </div>
                     );
                   })}
@@ -207,7 +208,7 @@ export const BridgeModal: React.FC<BridgeModalProps> = ({ isOpen, bridge, server
             <button
               type="submit"
               disabled={loading}
-              className="flex items-center gap-2 bg-mint disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2 rounded-full transition btn-press"
+              className="flex items-center gap-2 bg-brand disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2 rounded-full transition btn-press"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               {loading ? (bridge ? 'Сохранение...' : 'Установка...') : bridge ? 'Сохранить' : 'Добавить и установить'}
@@ -215,6 +216,6 @@ export const BridgeModal: React.FC<BridgeModalProps> = ({ isOpen, bridge, server
           </div>
         </form>
       </div>
-    </div>
+    </ModalShell>
   );
 };

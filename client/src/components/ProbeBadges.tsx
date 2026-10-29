@@ -36,7 +36,7 @@ export const ProbeBadges: React.FC<{ probes?: ProbeResult[]; showRtt?: boolean }
           <span
             key={p.country}
             title={`${countryName(p.country)}: ${mark.label} (${details(p)}); проверено ${new Date(p.checked_at).toLocaleString()}`}
-            className="inline-flex items-center gap-0.5 text-[11px] bg-paper border border-line rounded-md px-1.5 py-0.5"
+            className="inline-flex items-center gap-0.5 text-xs bg-paper border border-line rounded-md px-1.5 py-0.5"
           >
             <span>{countryFlag(p.country)}</span>
             <span className={`font-bold ${mark.className}`}>{mark.symbol}</span>

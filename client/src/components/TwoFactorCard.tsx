@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { api } from '../api';
 
-const inputClass = 'w-full bg-paper border border-line rounded-xl px-3 py-2 text-sm text-ink focus:outline-none focus:border-mint';
+const inputClass = 'w-full bg-paper border border-line rounded-xl px-3 py-2 text-sm text-ink focus:outline-none focus:border-brand';
 
 export const TwoFactorCard: React.FC = () => {
   const [setup, setSetup] = useState<{ secret: string; uri: string } | null>(null);
@@ -30,17 +30,17 @@ export const TwoFactorCard: React.FC = () => {
         </div>
       )}
       {!setup ? (
-        <button type="button" disabled={loading} onClick={() => run(async () => setSetup(await api.setupTotp()))} className="bg-mint text-on-accent px-4 py-2 rounded-full text-sm font-bold btn-press disabled:opacity-50">Настроить 2FA</button>
+        <button type="button" disabled={loading} onClick={() => run(async () => setSetup(await api.setupTotp()))} className="bg-brand text-on-accent px-4 py-2 rounded-full text-sm font-bold btn-press disabled:opacity-50">Настроить 2FA</button>
       ) : (
         <form onSubmit={(e) => { e.preventDefault(); void run(async () => { const result = await api.enableTotp(setup.secret, code, password); setRecoveryCodes(result.recovery_codes); setSetup(null); setCode(''); }); }} className="space-y-3">
           <div className="p-3 bg-paper border border-line rounded-xl break-all">
             <p className="text-xs text-muted mb-1">Добавьте этот секрет в приложение-аутентификатор:</p>
             <code className="text-sm text-ink">{setup.secret}</code>
-            <p className="text-[11px] text-faint mt-2">{setup.uri}</p>
+            <p className="text-xs text-faint mt-2">{setup.uri}</p>
           </div>
           <input aria-label="Код из приложения" required inputMode="numeric" maxLength={6} value={code} onChange={(e) => setCode(e.target.value)} className={inputClass} placeholder="Код из приложения" />
           <input aria-label="Пароль для включения 2FA" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass} placeholder="Текущий пароль" />
-          <button disabled={loading} className="bg-mint text-on-accent px-4 py-2 rounded-full text-sm font-bold btn-press disabled:opacity-50">Включить 2FA</button>
+          <button disabled={loading} className="bg-brand text-on-accent px-4 py-2 rounded-full text-sm font-bold btn-press disabled:opacity-50">Включить 2FA</button>
         </form>
       )}
       <form onSubmit={(e) => { e.preventDefault(); void run(async () => { await api.disableTotp(password); setPassword(''); setRecoveryCodes([]); }); }} className="pt-3 border-t border-line space-y-2">

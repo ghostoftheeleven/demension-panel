@@ -34,7 +34,7 @@ export const AwgClientsGuide: React.FC<{ compact?: boolean }> = ({ compact = fal
             type="button"
             onClick={() => setPlatform(p.id)}
             className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition ${
-              platform === p.id ? 'bg-yellow text-on-accent' : 'bg-soft text-muted hover:text-ink hover:bg-soft-2'
+              platform === p.id ? 'bg-brand text-on-accent' : 'bg-soft text-muted hover:text-ink hover:bg-soft-2'
             }`}
           >
             {p.label}
@@ -51,7 +51,7 @@ export const AwgClientsGuide: React.FC<{ compact?: boolean }> = ({ compact = fal
                 <Icon className={`w-3.5 h-3.5 ${mode === 'subscription' ? 'text-ok' : 'text-info'}`} />
                 {title}
               </span>
-              {!compact && <span className="text-[11px] text-faint">{hint}</span>}
+              {!compact && <span className="text-xs text-faint">{hint}</span>}
             </div>
             {list.length === 0 ? (
               <p className="text-xs text-warn bg-warn-soft rounded-xl px-3 py-2">
@@ -72,7 +72,7 @@ export const AwgClientsGuide: React.FC<{ compact?: boolean }> = ({ compact = fal
                         <ExternalLink className="w-3 h-3 text-faint" />
                       </a>
                       <span
-                        className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full ${
+                        className={`shrink-0 text-xs px-2 py-0.5 rounded-full ${
                           c.awg3.startsWith('да') ? 'bg-ok-soft text-ok' : c.awg3 === 'не указано' ? 'bg-soft text-faint' : 'bg-warn-soft text-warn'
                         }`}
                         title="Поддержка AmneziaWG 3.x: новые ноды панели устанавливаются с параметрами 3.x"
@@ -98,7 +98,7 @@ export const AwgClientsGuide: React.FC<{ compact?: boolean }> = ({ compact = fal
           </span>
           <div className="flex flex-wrap gap-1.5">
             {AWG_UNSUPPORTED.map((u) => (
-              <span key={u.name} className="text-[11px] px-2.5 py-1 rounded-full bg-soft text-muted" title={u.reason}>
+              <span key={u.name} className="text-xs px-2.5 py-1 rounded-full bg-soft text-muted" title={u.reason}>
                 <span className="text-ink">{u.name}</span> — {u.reason}
               </span>
             ))}
@@ -106,7 +106,7 @@ export const AwgClientsGuide: React.FC<{ compact?: boolean }> = ({ compact = fal
         </div>
       )}
 
-      <p className="text-[11px] text-faint">
+      <p className="text-xs text-faint">
         Ноды на AmneziaWG 1.x подключаются в любом из этих приложений; для нод 3.x нужна поддержка 3.x. Клиенты mihomo узнаются по
         User-Agent и получают свой формат по основной ссылке. Список проверен в октябре 2026.
       </p>

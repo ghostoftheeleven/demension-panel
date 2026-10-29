@@ -3,25 +3,27 @@ import { ArrowRightLeft, Copy, Download, Loader2, KeyRound, XCircle, AlertTriang
 import type { MigrationStatus } from '../types';
 import { api } from '../api';
 import { copyToClipboard } from '../utils';
+import { useFeedback } from './ui/Feedback';
 
 const INSTALL_COMMAND = 'curl -sSL https://raw.githubusercontent.com/ghostoftheeleven/dementia-panel/main/install.sh | sudo bash';
 
 const inputClass =
-  'w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-mint transition text-sm';
+  'w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-brand transition text-sm';
 
 const CopyRow: React.FC<{ label: string; value: string; secret?: boolean }> = ({ label, value, secret }) => {
+  const { alert: showAlert } = useFeedback();
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     if (await copyToClipboard(value)) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } else {
-      alert(value);
+      void showAlert(value, 'Скопируйте вручную');
     }
   };
   return (
     <div className="space-y-1">
-      <span className="text-[11px] text-faint">{label}</span>
+      <span className="text-xs text-faint">{label}</span>
       <button
         type="button"
         onClick={copy}
@@ -39,6 +41,7 @@ const CopyRow: React.FC<{ label: string; value: string; secret?: boolean }> = ({
  * Перенос панели на другой сервер (docs/migration.md): код переноса, команда для нового сервера, архив файлом, отмена.
  */
 export const MigrationCard: React.FC<{ publicUrl: string | null; onStateChange?: () => void }> = ({ publicUrl, onStateChange }) => {
+  const { confirm } = useFeedback();
   const [status, setStatus] = useState<MigrationStatus | null>(null);
   const [asking, setAsking] = useState(false);
   const [password, setPassword] = useState('');
@@ -84,7 +87,7 @@ export const MigrationCard: React.FC<{ publicUrl: string | null; onStateChange?:
     const text = exporting
       ? 'Архив уже передан на новый сервер. Отмена вернёт эту панель в обычный режим; если новая панель уже запущена, обе будут управлять одними нодами. Отменить перенос?'
       : 'Отменить перенос? Выданный код перестанет действовать.';
-    if (!window.confirm(text)) return;
+    if (!(await confirm(text))) return;
     setBusy(true);
     try {
       await api.cancelMigration();
@@ -244,7 +247,7 @@ export const MigrationCard: React.FC<{ publicUrl: string | null; onStateChange?:
           <CopyRow label="Адрес этой панели (укажите его на новом сервере)" value={panelAddress} />
           <CopyRow label="Команда для нового сервера (выберите «2) Перенос панели»)" value={INSTALL_COMMAND} />
 
-          <div className="p-3 rounded-xl bg-paper border border-line text-[11px] text-muted space-y-1">
+          <div className="p-3 rounded-xl bg-paper border border-line text-xs text-muted space-y-1">
             <p>
               <b className="text-ink">Если новый сервер не достучится до этой панели</b> — скачайте архив файлом, скопируйте на новый сервер
               (например, scp) и в установщике укажите путь к файлу вместо адреса.

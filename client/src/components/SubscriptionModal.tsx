@@ -5,6 +5,8 @@ import type { Subscriber } from '../types';
 import { api } from '../api';
 import { AwgClientsGuide } from './AwgClientsGuide';
 import { copyToClipboard } from '../utils';
+import { useFeedback } from './ui/Feedback';
+import { ModalShell } from './ui/Modal';
 
 interface SubscriptionModalProps {
   isOpen: boolean;
@@ -22,6 +24,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   onTokenReset,
   publicUrl,
 }) => {
+  const { toast, confirm } = useFeedback();
   const [copied, setCopied] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
@@ -51,25 +54,25 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } else {
-      alert('Не удалось скопировать — выделите ссылку вручную');
+      toast('Не удалось скопировать — выделите ссылку вручную', 'info');
     }
   };
 
   const handleResetToken = async () => {
-    if (!confirm('Сбросить ссылку подписки? Старая ссылка перестанет работать, а ключи пользователя будут перевыпущены — на всех устройствах нужно будет добавить новую подписку.')) return;
+    if (!(await confirm({ message: 'Сбросить ссылку подписки? Старая ссылка перестанет работать, а ключи пользователя будут перевыпущены — на всех устройствах нужно будет добавить новую подписку.', danger: true, confirmLabel: 'Сбросить' }))) return;
     setResetting(true);
     try {
       const res = await api.resetSubscriberToken(subscriber.id);
       onTokenReset({ ...subscriber, token: res.token });
     } catch (err: any) {
-      alert(err.message);
+      toast(err.message, 'error');
     } finally {
       setResetting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 animate-in fade-in duration-200">
+    <ModalShell label="Подписка пользователя" onClose={onClose}>
       <div className="bg-card border border-line rounded-2xl w-full max-w-lg shadow-pop overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-line bg-card">
@@ -82,6 +85,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
           </div>
           <button
             onClick={onClose}
+            aria-label="Закрыть"
             className="text-muted hover:text-ink transition p-1 rounded-lg hover:bg-soft border border-line"
           >
             <X className="w-5 h-5" />
@@ -123,7 +127,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
               <button
                 onClick={handleResetToken}
                 disabled={resetting}
-                className="text-[11px] text-faint hover:text-warn transition flex items-center gap-1"
+                className="text-xs text-faint hover:text-warn transition flex items-center gap-1"
                 title="Сгенерировать новый секретный токен"
               >
                 <RefreshCw className={`w-3 h-3 ${resetting ? 'animate-spin' : ''}`} />
@@ -140,7 +144,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
               />
               <button
                 onClick={handleCopy}
-                className="flex items-center gap-1.5 bg-mint hover:bg-mint text-on-accent font-bold text-xs px-4 py-2.5 rounded-full transition flex-shrink-0 btn-press hover:text-on-accent"
+                className="flex items-center gap-1.5 bg-brand hover:bg-brand text-on-accent font-bold text-xs px-4 py-2.5 rounded-full transition flex-shrink-0 btn-press hover:text-on-accent"
               >
                 {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                 <span>{copied ? 'Скопировано!' : 'Копировать'}</span>
@@ -186,6 +190,6 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </ModalShell>
   );
 };

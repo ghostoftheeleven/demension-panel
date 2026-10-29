@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Terminal, CheckCircle2, AlertCircle, X, Loader2 } from 'lucide-react';
 import type { Server } from '../types';
 import { getToken } from '../api';
+import { ModalShell } from './ui/Modal';
 
 interface InstallLogsModalProps {
   isOpen: boolean;
@@ -103,7 +104,7 @@ export const InstallLogsModal: React.FC<InstallLogsModalProps> = ({
   if (!isOpen || !server) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 animate-in fade-in duration-200">
+    <ModalShell label="Установка AmneziaWG" onClose={onClose}>
       <div className="bg-paper border border-line rounded-2xl w-full max-w-3xl shadow-pop flex flex-col h-[75vh] overflow-hidden">
         {/* Terminal Header */}
         <div className="flex items-center justify-between px-6 py-3.5 border-b border-line bg-card">
@@ -139,6 +140,7 @@ export const InstallLogsModal: React.FC<InstallLogsModalProps> = ({
 
             <button
               onClick={onClose}
+              aria-label="Закрыть"
               className="text-muted hover:text-ink transition p-1 rounded-lg hover:bg-soft border border-line"
             >
               <X className="w-5 h-5" />
@@ -196,6 +198,6 @@ export const InstallLogsModal: React.FC<InstallLogsModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </ModalShell>
   );
 };

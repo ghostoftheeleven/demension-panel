@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, UserPlus, Smartphone } from 'lucide-react';
 import { api } from '../api';
 import type { Client } from '../types';
+import { ModalShell } from './ui/Modal';
 
 interface AddClientModalProps {
   isOpen: boolean;
@@ -44,7 +45,7 @@ export const AddClientModal: React.FC<AddClientModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 animate-in fade-in duration-200">
+    <ModalShell label="Новый клиент" onClose={onClose}>
       <div className="bg-card border border-line rounded-2xl w-full max-w-md shadow-pop overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-line bg-card">
@@ -57,6 +58,7 @@ export const AddClientModal: React.FC<AddClientModalProps> = ({
           </div>
           <button
             onClick={onClose}
+            aria-label="Закрыть"
             className="text-muted hover:text-ink transition p-1 rounded-lg hover:bg-soft border border-line"
           >
             <X className="w-5 h-5" />
@@ -83,11 +85,11 @@ export const AddClientModal: React.FC<AddClientModalProps> = ({
                 placeholder="например: iPhone-Alex, Home-PC"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full bg-paper border border-line rounded-xl pl-9 pr-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-mint transition text-sm"
+                className="w-full bg-paper border border-line rounded-xl pl-9 pr-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-brand transition text-sm"
               />
               <Smartphone className="w-4 h-4 text-faint absolute left-3 top-2.5" />
             </div>
-            <p className="text-[11px] text-faint mt-2">
+            <p className="text-xs text-faint mt-2">
               Ключи Curve25519 и свободный IP-адрес из подсети сервера будут назначены автоматически.
             </p>
           </div>
@@ -103,13 +105,13 @@ export const AddClientModal: React.FC<AddClientModalProps> = ({
             <button
               type="submit"
               disabled={loading}
-              className="bg-mint hover:bg-mint disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2 rounded-full transition btn-press hover:text-on-accent"
+              className="bg-brand hover:bg-brand disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2 rounded-full transition btn-press hover:text-on-accent"
             >
               {loading ? 'Создание...' : 'Создать клиента'}
             </button>
           </div>
         </form>
       </div>
-    </div>
+    </ModalShell>
   );
 };

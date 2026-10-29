@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { X, Dna, Shuffle, Save, Info, KeyRound, ArrowUpCircle } from 'lucide-react';
 import { api } from '../api';
 import type { Server, ServerUpdate } from '../types';
+import { useFeedback } from './ui/Feedback';
+import { ModalShell } from './ui/Modal';
 
 interface AwgParamsModalProps {
   isOpen: boolean;
@@ -99,6 +101,7 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
   onClose,
   onUpdated,
 }) => {
+  const { toast, confirm } = useFeedback();
   const installed = server.status !== 'uninstalled';
   const modern = server.awg_version >= 3;
   const outdated = server.awg_version < server.latest_awg_version;
@@ -108,14 +111,14 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
   const set = (key: keyof FormState) => (value: string) => setForm((prev) => ({ ...prev, [key]: value }));
 
   const handleRandomize = async () => {
-    if (installed && !confirm(CHANGE_WARNING)) return;
+    if (installed && !(await confirm(CHANGE_WARNING))) return;
     try {
       setLoading(true);
       const updated = await api.randomizeParams(server.id);
       setForm(toForm(updated));
       onUpdated(updated);
     } catch (err: any) {
-      alert(err.message);
+      toast(err.message, 'error');
     } finally {
       setLoading(false);
     }
@@ -127,15 +130,15 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
       'Будут сгенерированы параметры актуальной версии (S3, S4, диапазоны H1–H4, защита заголовков), ' +
       (installed ? 'а AmneziaWG переустановлен с последним образом. ' : '') +
       'Все клиенты должны обновить подписку или конфигурацию, приложения должны поддерживать AmneziaWG 3.x.';
-    if (!confirm(message)) return;
+    if (!(await confirm(message))) return;
     try {
       setLoading(true);
       const res = await api.upgradeProtocol(server.id);
       onUpdated(res.server);
-      if (!res.success) alert(`Переустановка не удалась: ${res.error}`);
+      if (!res.success) toast(`Переустановка не удалась: ${res.error}`, 'error');
       onClose();
     } catch (err: any) {
-      alert(err.message);
+      toast(err.message, 'error');
     } finally {
       setLoading(false);
     }
@@ -143,7 +146,7 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (installed && !confirm(CHANGE_WARNING)) return;
+    if (installed && !(await confirm(CHANGE_WARNING))) return;
     const update: ServerUpdate = {
       jc: Number(form.jc),
       jmin: Number(form.jmin),
@@ -171,7 +174,7 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
       onUpdated(updated);
       onClose();
     } catch (err: any) {
-      alert(err.message);
+      toast(err.message, 'error');
     } finally {
       setLoading(false);
     }
@@ -180,7 +183,7 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
   const extras = Object.entries(server.extra_params || {});
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 animate-in fade-in duration-200">
+    <ModalShell label="Параметры AmneziaWG" onClose={onClose}>
       <div className="bg-card border border-line rounded-2xl w-full max-w-2xl shadow-pop overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-line bg-card">
@@ -193,7 +196,7 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
               <p className="text-xs text-muted">{server.name} ({server.host})</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-muted hover:text-ink transition p-1 rounded-lg hover:bg-soft border border-line">
+          <button onClick={onClose} aria-label="Закрыть" className="text-muted hover:text-ink transition p-1 rounded-lg hover:bg-soft border border-line">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -228,19 +231,19 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
           <div className="space-y-3">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-ok">Мусорные пакеты</h3>
             <div className="grid grid-cols-3 gap-3">
-              <Field label="Jc (кол-во)" value={form.jc} onChange={set('jc')} accent="focus:border-mint" numeric />
-              <Field label="Jmin (байт)" value={form.jmin} onChange={set('jmin')} accent="focus:border-mint" numeric />
-              <Field label="Jmax (байт)" value={form.jmax} onChange={set('jmax')} accent="focus:border-mint" numeric />
+              <Field label="Jc (кол-во)" value={form.jc} onChange={set('jc')} accent="focus:border-brand" numeric />
+              <Field label="Jmin (байт)" value={form.jmin} onChange={set('jmin')} accent="focus:border-brand" numeric />
+              <Field label="Jmax (байт)" value={form.jmax} onChange={set('jmax')} accent="focus:border-brand" numeric />
             </div>
           </div>
 
           <div className="space-y-3">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-info">Дополнение пакетов (padding)</h3>
             <div className={`grid gap-3 ${modern ? 'grid-cols-4' : 'grid-cols-2'}`}>
-              <Field label="S1 (init)" value={form.s1} onChange={set('s1')} accent="focus:border-mint" numeric />
-              <Field label="S2 (response)" value={form.s2} onChange={set('s2')} accent="focus:border-mint" numeric />
-              {modern && <Field label="S3 (cookie)" value={form.s3} onChange={set('s3')} accent="focus:border-mint" numeric />}
-              {modern && <Field label="S4 (transport, ≤32)" value={form.s4} onChange={set('s4')} accent="focus:border-mint" numeric />}
+              <Field label="S1 (init)" value={form.s1} onChange={set('s1')} accent="focus:border-brand" numeric />
+              <Field label="S2 (response)" value={form.s2} onChange={set('s2')} accent="focus:border-brand" numeric />
+              {modern && <Field label="S3 (cookie)" value={form.s3} onChange={set('s3')} accent="focus:border-brand" numeric />}
+              {modern && <Field label="S4 (transport, ≤32)" value={form.s4} onChange={set('s4')} accent="focus:border-brand" numeric />}
             </div>
           </div>
 
@@ -249,10 +252,10 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
               Заголовки {modern ? '(диапазоны без пересечений, например 100000-200000)' : ''}
             </h3>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="H1 (initiation)" value={form.h1} onChange={set('h1')} accent="focus:border-mint" />
-              <Field label="H2 (response)" value={form.h2} onChange={set('h2')} accent="focus:border-mint" />
-              <Field label="H3 (cookie reply)" value={form.h3} onChange={set('h3')} accent="focus:border-mint" />
-              <Field label="H4 (transport)" value={form.h4} onChange={set('h4')} accent="focus:border-mint" />
+              <Field label="H1 (initiation)" value={form.h1} onChange={set('h1')} accent="focus:border-brand" />
+              <Field label="H2 (response)" value={form.h2} onChange={set('h2')} accent="focus:border-brand" />
+              <Field label="H3 (cookie reply)" value={form.h3} onChange={set('h3')} accent="focus:border-brand" />
+              <Field label="H4 (transport)" value={form.h4} onChange={set('h4')} accent="focus:border-brand" />
             </div>
           </div>
 
@@ -264,7 +267,7 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
                   value={form.header_protection_key}
                   onChange={(e) => set('header_protection_key')(e.target.value)}
                   placeholder="выключена"
-                  className={`${inputBase} focus:border-mint text-xs`}
+                  className={`${inputBase} focus:border-brand text-xs`}
                 />
                 <button
                   type="button"
@@ -276,13 +279,13 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
                   <span>Новый</span>
                 </button>
               </div>
-              <p className="text-[11px] text-faint">HeaderProtectionKey шифрует заголовки пакетов. Требует S1–S4 не меньше 12.</p>
+              <p className="text-xs text-faint">HeaderProtectionKey шифрует заголовки пакетов. Требует S1–S4 не меньше 12.</p>
             </div>
           )}
 
           <div className="space-y-2">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-ink">Сигнатурные пакеты I1–I5 (необязательно)</h3>
-            <p className="text-[11px] text-faint">
+            <p className="text-xs text-faint">
               Отправляются клиентом перед рукопожатием. Теги: <code>&lt;b 0x…&gt;</code>, <code>&lt;r N&gt;</code>, <code>&lt;rd N&gt;</code>,{' '}
               <code>&lt;rc N&gt;</code>, <code>&lt;t&gt;</code>.
             </p>
@@ -292,13 +295,13 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
                 value={form[key]}
                 onChange={(e) => set(key)(e.target.value)}
                 placeholder={key.toUpperCase()}
-                className={`${inputBase} focus:border-mint text-xs`}
+                className={`${inputBase} focus:border-brand text-xs`}
               />
             ))}
           </div>
 
           {extras.length > 0 && (
-            <div className="text-[11px] text-faint space-y-1">
+            <div className="text-xs text-faint space-y-1">
               <p className="font-medium text-muted">Дополнительные параметры (импортированы, сохраняются как есть):</p>
               {extras.map(([key, value]) => (
                 <p key={key} className="font-mono">
@@ -327,7 +330,7 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
               <button
                 type="submit"
                 disabled={loading}
-                className="flex items-center gap-2 bg-mint hover:bg-mint disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2 rounded-full transition btn-press hover:text-on-accent"
+                className="flex items-center gap-2 bg-brand hover:bg-brand disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2 rounded-full transition btn-press hover:text-on-accent"
               >
                 <Save className="w-4 h-4" />
                 <span>Сохранить</span>
@@ -336,6 +339,6 @@ const AwgParamsForm: React.FC<{ server: Server; onClose: () => void; onUpdated: 
           </div>
         </form>
       </div>
-    </div>
+    </ModalShell>
   );
 };

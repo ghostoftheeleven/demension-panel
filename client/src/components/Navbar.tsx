@@ -1,17 +1,24 @@
 import React from 'react';
-import { Plus, Server as ServerIcon, Users, Activity, LogOut, KeyRound, Lock, Palette, Handshake, Waypoints, ScrollText, Eye } from 'lucide-react';
+import { Plus, Server as ServerIcon, Users, LogOut, KeyRound, Lock, Palette, Handshake, Waypoints, ScrollText, Eye } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import type { Server, AdminUser } from '../types';
+import type { Server, Bridge, Subscriber, AdminUser } from '../types';
 import { PanelVersion } from './PanelVersion';
 import { BrandMark } from './BrandMark';
+import { formatBytes } from '../utils';
 
 export type AppTab = 'servers' | 'bridges' | 'subscribers' | 'subscription' | 'partners' | 'events' | 'security';
 
+/** ws — статусы приходят по WebSocket, poll — панель опрашивает сервер раз в 15 секунд */
+export type LiveMode = 'ws' | 'poll';
+
 interface NavbarProps {
   servers: Server[];
+  bridges: Bridge[];
+  subscribers: Subscriber[];
   user: AdminUser | null;
   /** Гостевой режим: без кнопок добавления, учётной записи и разделов настройки */
   readOnly?: boolean;
+  live: LiveMode;
   activeTab: AppTab;
   onSelectTab: (tab: AppTab) => void;
   onAddServer: () => void;
@@ -33,10 +40,20 @@ const TABS: { id: AppTab; label: string; icon: LucideIcon }[] = [
 /** Разделы, доступные гостю (настройки подписки и безопасности скрыты) */
 const GUEST_TABS: AppTab[] = ['servers', 'bridges', 'subscribers', 'partners', 'events'];
 
+const Kpi: React.FC<{ label: string; value: React.ReactNode }> = ({ label, value }) => (
+  <div className="text-right">
+    <div className="text-xs font-mono uppercase tracking-wide text-faint">{label}</div>
+    <div className="font-mono font-semibold text-lg leading-tight text-ink">{value}</div>
+  </div>
+);
+
 export const Navbar: React.FC<NavbarProps> = ({
   servers,
+  bridges,
+  subscribers,
   user,
   readOnly = false,
+  live,
   activeTab,
   onSelectTab,
   onAddServer,
@@ -46,35 +63,39 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   const onlineCount = servers.filter((s) => s.status === 'online').length;
   const activeClients = servers.reduce((acc, s) => acc + (s.active_client_count || 0), 0);
+  const bridgesOnline = bridges.filter((b) => b.status === 'online').length;
+  const traffic = subscribers.reduce((acc, s) => acc + (s.traffic_used || 0), 0);
 
   return (
-    <header className="bg-page/90 backdrop-blur-md sticky top-0 z-30 border-b border-line">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 flex items-center gap-4">
+    <header className="bg-page/85 backdrop-blur-md sticky top-0 z-30 border-b border-line">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 pt-3 flex items-center gap-4">
         {/* Логотип и версия */}
         <div className="flex items-center gap-3 min-w-0">
-          <BrandMark />
+          <BrandMark className="w-8 h-8" />
           <div className="min-w-0">
-            <div className="font-display font-extrabold text-xl text-ink tracking-tight leading-none">dementia</div>
+            <div className="font-bold text-lg text-ink tracking-tight leading-none">
+              dementia<span className="text-brand">/</span>
+            </div>
             {user && <PanelVersion canUpdate={!readOnly} />}
           </div>
+        </div>
+
+        <div
+          className="hidden sm:flex items-center gap-1.5 text-xs font-mono text-ok"
+          title={live === 'ws' ? 'Статусы приходят по WebSocket мгновенно' : 'Статусы обновляются опросом раз в 15 секунд'}
+        >
+          <span className="w-2 h-2 rounded-full bg-ok animate-pulse" />
+          {live === 'ws' ? 'LIVE' : 'LIVE · 15 с'}
         </div>
 
         <div className="flex-1" />
 
         {/* Сводка */}
-        <div className="hidden lg:flex items-center gap-2 text-xs">
-          <div className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-card">
-            <span className={`w-2 h-2 rounded-full ${onlineCount > 0 ? 'bg-mint' : 'bg-faint'}`} />
-            <span className="text-muted">Онлайн</span>
-            <strong className="text-ink">
-              {onlineCount}/{servers.length}
-            </strong>
-          </div>
-          <div className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-card">
-            <Activity className="w-3.5 h-3.5 text-info" />
-            <span className="text-muted">Активных пиров</span>
-            <strong className="text-ink">{activeClients}</strong>
-          </div>
+        <div className="hidden xl:flex items-center gap-6">
+          <Kpi label="Ноды" value={`${onlineCount}/${servers.length}`} />
+          <Kpi label="Пиры онлайн" value={activeClients} />
+          <Kpi label="Мосты" value={`${bridgesOnline}/${bridges.length}`} />
+          <Kpi label="Трафик" value={formatBytes(traffic)} />
         </div>
 
         {/* Действия и учётная запись */}
@@ -82,7 +103,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {!readOnly && activeTab === 'servers' && (
             <button
               onClick={onAddServer}
-              className="flex items-center gap-1.5 bg-mint text-on-accent font-bold text-sm px-4 py-2 rounded-full btn-press"
+              className="flex items-center gap-1.5 bg-brand text-on-accent font-bold text-sm px-4 py-2 rounded-lg btn-press"
             >
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Нода</span>
@@ -92,7 +113,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {!readOnly && activeTab === 'subscribers' && (
             <button
               onClick={onAddSubscriber}
-              className="flex items-center gap-1.5 bg-mint text-on-accent font-bold text-sm px-4 py-2 rounded-full btn-press"
+              className="flex items-center gap-1.5 bg-brand text-on-accent font-bold text-sm px-4 py-2 rounded-lg btn-press"
             >
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Пользователь</span>
@@ -102,25 +123,26 @@ export const Navbar: React.FC<NavbarProps> = ({
           {user && (
             <>
               {readOnly ? (
-                <span title="Гостевой доступ: только просмотр" className="flex items-center gap-1.5 px-3 py-2 text-info bg-info-soft rounded-full text-xs font-semibold">
+                <span title="Гостевой доступ: только просмотр" className="flex items-center gap-1.5 px-3 py-2 text-info bg-info-soft rounded-lg text-xs font-semibold">
                   <Eye className="w-4 h-4" />
                   <span className="hidden md:inline">Гость</span>
                 </span>
               ) : (
-              <button
-                onClick={onOpenAccount}
-                title={`Учётная запись «${user.username}»: сменить логин или пароль`}
-                className="flex items-center gap-1.5 px-3 py-2 text-ink bg-card rounded-full hover:bg-soft transition"
-              >
-                <KeyRound className="w-4 h-4" />
-                <span className="hidden md:inline max-w-28 truncate text-xs font-mono">{user.username}</span>
-              </button>
+                <button
+                  onClick={onOpenAccount}
+                  title={`Учётная запись «${user.username}»: сменить логин или пароль`}
+                  className="flex items-center gap-1.5 px-3 py-2 text-ink bg-card border border-line rounded-lg hover:bg-soft transition"
+                >
+                  <KeyRound className="w-4 h-4" />
+                  <span className="hidden md:inline max-w-28 truncate text-xs font-mono">{user.username}</span>
+                </button>
               )}
 
               <button
                 onClick={onLogout}
+                aria-label="Выйти из панели"
                 title="Выйти из панели"
-                className="p-2 text-ink bg-card rounded-full hover:bg-pink hover:text-on-accent transition"
+                className="p-2 text-ink bg-card border border-line rounded-lg hover:bg-pink hover:text-on-accent transition"
               >
                 <LogOut className="w-4 h-4" />
               </button>
@@ -130,7 +152,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
 
       {/* Разделы: на узком экране прокручиваются по горизонтали */}
-      <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center gap-1.5 overflow-x-auto">
+      <nav aria-label="Разделы панели" className="max-w-[1600px] mx-auto px-4 sm:px-6 py-2.5 flex items-center gap-1 overflow-x-auto">
         {TABS.filter(({ id }) => !readOnly || GUEST_TABS.includes(id)).map(({ id, label, icon: Icon }) => {
           const active = activeTab === id;
           return (
@@ -138,8 +160,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               key={id}
               onClick={() => onSelectTab(id)}
               aria-current={active ? 'page' : undefined}
-              className={`shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition whitespace-nowrap ${
-                active ? 'bg-yellow text-on-accent' : 'bg-card text-muted hover:text-ink hover:bg-soft'
+              className={`shrink-0 flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${
+                active ? 'bg-soft-2 text-brand' : 'text-muted hover:text-ink hover:bg-soft'
               }`}
             >
               <Icon className="w-4 h-4" />

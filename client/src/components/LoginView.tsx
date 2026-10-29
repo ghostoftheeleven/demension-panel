@@ -71,7 +71,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 placeholder="admin"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                className="w-full bg-paper border border-line rounded-xl pl-10 pr-4 py-2.5 text-ink placeholder-faint focus:outline-none focus:border-mint transition text-sm font-sans"
+                className="w-full bg-paper border border-line rounded-xl pl-10 pr-4 py-2.5 text-ink placeholder-faint focus:outline-none focus:border-brand transition text-sm font-sans"
               />
               <User className="w-4 h-4 text-faint absolute left-3.5 top-3" />
             </div>
@@ -88,7 +88,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-paper border border-line rounded-xl pl-10 pr-4 py-2.5 text-ink placeholder-faint focus:outline-none focus:border-mint transition text-sm font-sans"
+                className="w-full bg-paper border border-line rounded-xl pl-10 pr-4 py-2.5 text-ink placeholder-faint focus:outline-none focus:border-brand transition text-sm font-sans"
               />
               <Lock className="w-4 h-4 text-faint absolute left-3.5 top-3" />
             </div>
@@ -109,7 +109,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 maxLength={useRecovery ? 8 : 6}
                 value={code}
                 onChange={(e) => setCode(e.target.value.trim())}
-                className="w-full bg-paper border border-line rounded-xl px-4 py-2.5 text-ink focus:outline-none focus:border-mint text-sm text-center tracking-widest font-mono"
+                className="w-full bg-paper border border-line rounded-xl px-4 py-2.5 text-ink focus:outline-none focus:border-brand text-sm text-center tracking-widest font-mono"
               />
               <button
                 type="button"
@@ -124,7 +124,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full mt-2 flex items-center justify-center gap-2 bg-mint disabled:opacity-50 text-on-accent font-bold text-sm py-2.5 rounded-full transition btn-press"
+            className="w-full mt-2 flex items-center justify-center gap-2 bg-brand disabled:opacity-50 text-on-accent font-bold text-sm py-2.5 rounded-full transition btn-press"
           >
             {loading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -137,7 +137,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           </button>
         </form>
 
-        <p className="text-[11px] text-faint text-center mt-6">
+        <p className="text-xs text-faint text-center mt-6">
           Dementia Panel &bull; Изолированное управление AmneziaWG
         </p>
       </div>

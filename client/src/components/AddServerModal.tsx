@@ -3,6 +3,8 @@ import { X, Server, Key, Lock, Shield } from 'lucide-react';
 import { api } from '../api';
 import { AmneziaImportPanel } from './AmneziaImportPanel';
 import type { Server as ServerType, ServerUpdate } from '../types';
+import { useFeedback } from './ui/Feedback';
+import { ModalShell } from './ui/Modal';
 
 interface AddServerModalProps {
   isOpen: boolean;
@@ -23,6 +25,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
   onServerUpdated,
   onImported,
 }) => {
+  const { confirm } = useFeedback();
   const [mode, setMode] = useState<'manual' | 'amnezia'>('manual');
   const [name, setName] = useState('');
   const [host, setHost] = useState('');
@@ -85,7 +88,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
         }
         if (resetHostKey) update.reset_host_key = true;
         if (update.awg_port !== editingServer.awg_port && editingServer.status !== 'uninstalled') {
-          if (!confirm('Смена порта пересоздаст контейнер AmneziaWG на сервере, а клиентам потребуется обновить конфигурацию. Продолжить?')) {
+          if (!(await confirm('Смена порта пересоздаст контейнер AmneziaWG на сервере, а клиентам потребуется обновить конфигурацию. Продолжить?'))) {
             setLoading(false);
             return;
           }
@@ -117,7 +120,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 animate-in fade-in duration-200">
+    <ModalShell label="Сервер" onClose={onClose}>
       <div className="bg-card border border-line rounded-2xl w-full max-w-lg shadow-pop overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-line bg-card">
@@ -127,6 +130,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
           </div>
           <button
             onClick={onClose}
+            aria-label="Закрыть"
             className="text-muted hover:text-ink transition p-1 rounded-lg hover:bg-soft border border-line"
           >
             <X className="w-5 h-5" />
@@ -171,7 +175,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
               placeholder="например: Frankfurt-01"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-mint transition text-sm"
+              className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-brand transition text-sm"
             />
           </div>
 
@@ -186,7 +190,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
                 placeholder="194.87.12.34"
                 value={host}
                 onChange={(e) => setHost(e.target.value)}
-                className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-mint transition text-sm"
+                className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-brand transition text-sm"
               />
             </div>
             <div>
@@ -197,7 +201,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
                 type="number"
                 value={sshPort}
                 onChange={(e) => setSshPort(e.target.value)}
-                className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink focus:outline-none focus:border-mint transition text-sm"
+                className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink focus:outline-none focus:border-brand transition text-sm"
               />
             </div>
           </div>
@@ -210,7 +214,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
               type="text"
               value={sshUser}
               onChange={(e) => setSshUser(e.target.value)}
-              className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink focus:outline-none focus:border-mint transition text-sm"
+              className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink focus:outline-none focus:border-brand transition text-sm"
             />
           </div>
 
@@ -252,7 +256,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
                 placeholder={editing && editingServer?.has_ssh_password ? 'Оставьте пустым, чтобы не менять' : 'Введите пароль SSH'}
                 value={sshPassword}
                 onChange={(e) => setSshPassword(e.target.value)}
-                className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-mint transition text-sm"
+                className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-brand transition text-sm"
               />
             ) : (
               <textarea
@@ -260,7 +264,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
                 placeholder={editing && editingServer?.has_ssh_key ? 'Оставьте пустым, чтобы не менять ключ' : 'Вставьте приватный ключ (-----BEGIN OPENSSH PRIVATE KEY-----)'}
                 value={sshKey}
                 onChange={(e) => setSshKey(e.target.value)}
-                className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-mint transition font-mono text-xs"
+                className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-brand transition font-mono text-xs"
               />
             )}
           </div>
@@ -280,7 +284,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
                   type="number"
                   value={awgPort}
                   onChange={(e) => setAwgPort(e.target.value)}
-                  className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink focus:outline-none focus:border-mint transition text-sm"
+                  className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink focus:outline-none focus:border-brand transition text-sm"
                 />
               </div>
               <div>
@@ -293,17 +297,17 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
                   disabled={editing && hasClients}
                   title={editing && hasClients ? 'Подсеть нельзя менять, пока на сервере есть клиенты' : undefined}
                   onChange={(e) => setSubnet(e.target.value)}
-                  className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink focus:outline-none focus:border-mint transition text-sm"
+                  className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink focus:outline-none focus:border-brand transition text-sm"
                 />
               </div>
             </div>
             {!editing && (
-              <p className="text-[11px] text-faint mt-2">
+              <p className="text-xs text-faint mt-2">
                 * Заголовки обфускации (H1-H4, Jc, S1, S2) будут сгенерированы автоматически случайным образом.
               </p>
             )}
             {sshUser !== 'root' && (
-              <p className="text-[11px] text-warn mt-2">
+              <p className="text-xs text-warn mt-2">
                 * Для пользователя, отличного от root, нужен sudo без пароля (NOPASSWD).
               </p>
             )}
@@ -335,7 +339,7 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
             <button
               type="submit"
               disabled={loading}
-              className="bg-mint hover:bg-mint disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2 rounded-full transition btn-press hover:text-on-accent"
+              className="bg-brand hover:bg-brand disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2 rounded-full transition btn-press hover:text-on-accent"
             >
               {loading ? 'Сохранение...' : 'Сохранить сервер'}
             </button>
@@ -343,6 +347,6 @@ export const AddServerModal: React.FC<AddServerModalProps> = ({
         </form>
         )}
       </div>
-    </div>
+    </ModalShell>
   );
 };

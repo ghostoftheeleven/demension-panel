@@ -54,7 +54,7 @@ export const AmneziaImportPanel: React.FC<{ onImported: () => void; onClose: () 
             );
           })}
         </div>
-        <p className="text-[11px] text-faint">
+        <p className="text-xs text-faint">
           Клиенты, созданные в AmneziaVPN, продолжают работать и видны в панели с пометкой «импорт», но их конфигурации панель выдать не может.
           Новых клиентов создавайте в панели. Не меняйте клиентов этих серверов в приложении AmneziaVPN — панель перезапишет конфигурацию.
         </p>
@@ -89,9 +89,9 @@ export const AmneziaImportPanel: React.FC<{ onImported: () => void; onClose: () 
         value={keys}
         onChange={(e) => setKeys(e.target.value)}
         placeholder="vpn://AAAB..."
-        className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-mint transition font-mono text-xs"
+        className="w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-brand transition font-mono text-xs"
       />
-      <p className="text-[11px] text-warn">
+      <p className="text-xs text-warn">
         Ключ полного доступа содержит пароль или SSH-ключ сервера. В панели он хранится зашифрованным, сам ключ не сохраняется.
       </p>
       <div className="flex items-center justify-end gap-3">
@@ -101,7 +101,7 @@ export const AmneziaImportPanel: React.FC<{ onImported: () => void; onClose: () 
         <button
           type="submit"
           disabled={loading}
-          className="flex items-center gap-2 bg-mint hover:bg-mint disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2 rounded-full transition btn-press hover:text-on-accent"
+          className="flex items-center gap-2 bg-brand hover:bg-brand disabled:opacity-50 text-on-accent font-bold text-sm px-5 py-2 rounded-full transition btn-press hover:text-on-accent"
         >
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
           <span>{loading ? 'Подключение к серверам...' : 'Импортировать'}</span>

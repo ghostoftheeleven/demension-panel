@@ -63,7 +63,7 @@ export const PanelVersion: React.FC<{ canUpdate?: boolean }> = ({ canUpdate = tr
   if (!info) return null;
 
   return (
-    <div className="flex items-center gap-1.5 text-[10px] leading-4 whitespace-nowrap">
+    <div className="flex items-center gap-1.5 text-xs leading-4 whitespace-nowrap min-w-0">
       <button
         type="button"
         onClick={check}
@@ -72,7 +72,7 @@ export const PanelVersion: React.FC<{ canUpdate?: boolean }> = ({ canUpdate = tr
         className="group flex items-center gap-1.5 text-faint hover:text-ink disabled:cursor-default transition"
       >
         <span className="font-mono">{info.current}</span>
-        {info.latest && !info.update_available && <span className="text-ok">актуальная (GitHub: {info.latest})</span>}
+        {info.latest && !info.update_available && <span className="text-ok hidden sm:inline">актуальная (GitHub: {info.latest})</span>}
         {!info.latest && info.check_enabled && <span className={info.error ? 'text-bad' : ''}>GitHub: {info.error ? 'нет ответа' : '—'}</span>}
         {info.check_enabled && <RefreshCw className={`w-3 h-3 ${checking ? 'animate-spin' : 'opacity-0 group-hover:opacity-100'}`} />}
       </button>

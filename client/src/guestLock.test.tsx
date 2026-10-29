@@ -44,7 +44,7 @@ describe('гостевой режим интерфейса', () => {
 
   it('Navbar гостя: без добавления, учётной записи и разделов настройки', () => {
     const props = {
-      servers: [], user: { id: 0, username: 'guest', role: 'guest' as const }, activeTab: 'servers' as const,
+      servers: [], bridges: [], subscribers: [], live: 'poll' as const, user: { id: 0, username: 'guest', role: 'guest' as const }, activeTab: 'servers' as const,
       onSelectTab: vi.fn(), onAddServer: vi.fn(), onAddSubscriber: vi.fn(), onOpenAccount: vi.fn(), onLogout: vi.fn(),
     };
     render(<Navbar {...props} readOnly />);
