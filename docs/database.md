@@ -26,6 +26,7 @@ SQLite (`node:sqlite`, Node ≥ 22.13), файл `data/dementia.db`, режим 
 | v9 | Заглушка проверки (`servers.stub_port`, `stub_token`; `probe_results.method`, `tcp_ok`, `udp_ok`, `spoofed`, `verified`), мосты (`bridges`, `bridge_links`, `bridge_state`), `subscribers.country` |
 | v10 | Журнал событий панели: таблица `events` |
 | v11 | 2FA и сессии: `admins.totp_secret`, `totp_enabled`, `recovery_codes`; таблица `sessions` с `id`, `ip`, `user_agent`, `last_activity` |
+| v12 | Гостевой доступ: `sessions.role` (`admin` / `guest`); логин и хэш пароля гостя — в `settings` (`guest_*`) |
 
 ## Таблицы
 
@@ -92,7 +93,7 @@ SQLite (`node:sqlite`, Node ≥ 22.13), файл `data/dementia.db`, режим 
 Связи удаляются каскадно вместе с мостом и нодой.
 
 ### Прочее
-- `admins` — администратор (scrypt), зашифрованный `totp_secret`, `totp_enabled`, SHA-256 кодов восстановления; `sessions` — SHA-256 токенов с `expires_at`, IP, User-Agent и активностью, `trusted_login_ips` — IP успешных входов
+- `admins` — администратор (scrypt), зашифрованный `totp_secret`, `totp_enabled`, SHA-256 кодов восстановления; `sessions` — SHA-256 токенов с `expires_at`, ролью (`admin`/`guest`), IP, User-Agent и активностью, `trusted_login_ips` — IP успешных входов
   администратора (исключение из блокировки по логину, см. [security.md](security.md)).
 - `settings` — ключ/значение: `ssl_*`, `cf_token` (**зашифрован**), `public_url`, `client_dns`, `client_mtu`,
   `sub_*` (оформление подписки), `probe_*` (проверка из стран), `migration_*` (состояние переноса панели: `migration_state`,

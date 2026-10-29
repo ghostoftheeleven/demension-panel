@@ -1,6 +1,14 @@
 export interface AdminUser {
   id: number;
   username: string;
+  /** guest — гостевой доступ только для просмотра; нет поля у старых ответов — администратор */
+  role?: 'admin' | 'guest';
+}
+
+export interface GuestAccess {
+  enabled: boolean;
+  username: string;
+  has_password: boolean;
 }
 
 export interface Subscriber {

@@ -26,11 +26,18 @@ export class EventService {
     void TelegramService.deliverEvent({ level, type, message });
   }
 
-  static list(options: { level?: EventLevel; limit?: number; offset?: number }): { items: PanelEvent[]; total: number } {
+  /** `hideAccount` — без событий входа и учётной записи (их не показывают гостю: в них логин администратора и адреса) */
+  static list(options: { level?: EventLevel; limit?: number; offset?: number; hideAccount?: boolean }): { items: PanelEvent[]; total: number } {
     const limit = Math.min(Math.max(Math.trunc(options.limit ?? 50), 1), 200);
     const offset = Math.min(Math.max(Math.trunc(options.offset ?? 0), 0), 100000);
-    const where = options.level ? 'WHERE level = ?' : '';
-    const params = options.level ? [options.level] : [];
+    const conditions: string[] = [];
+    const params: string[] = [];
+    if (options.level) {
+      conditions.push('level = ?');
+      params.push(options.level);
+    }
+    if (options.hideAccount) conditions.push("type NOT LIKE 'auth.%' AND type NOT LIKE 'admin\\_%' ESCAPE '\\'");
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const total = (db.prepare(`SELECT COUNT(*) AS c FROM events ${where}`).get(...params) as { c: number }).c;
     const items = db.prepare(`SELECT * FROM events ${where} ORDER BY id DESC LIMIT ? OFFSET ?`).all(...params, limit, offset) as unknown as PanelEvent[];
     return { items, total };

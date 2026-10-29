@@ -1,14 +1,23 @@
 import crypto from 'node:crypto';
-import { db, transaction } from '../db/index.js';
+import { db, transaction, getSetting, setSetting } from '../db/index.js';
 import { encryptSecret, decryptSecret } from './secrets.service.js';
 import { EventService } from './event.service.js';
 
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+/** Гостевая сессия короче: гостю выдают доступ «посмотреть», а не постоянный вход */
+const GUEST_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 /** Сколько помнится IP, с которого администратор входил (исключение из блокировки по логину) */
 const KNOWN_IP_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 export const MIN_PASSWORD_LENGTH = 8;
 /** Допустимый логин администратора (тот же набор символов проверяет install.sh) */
 export const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
+
+export type SessionRole = 'admin' | 'guest';
+export interface SessionUser {
+  id: number;
+  username: string;
+  role: SessionRole;
+}
 
 function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
@@ -110,11 +119,11 @@ export class AuthService {
     return Boolean(row) && Date.now() - new Date(row!.last_login_at).getTime() < KNOWN_IP_TTL_MS;
   }
 
-  private static createSession(adminId: number, ip?: string, userAgent?: string): string {
+  private static createSession(adminId: number, ip?: string, userAgent?: string, role: SessionRole = 'admin'): string {
     const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
-    db.prepare('INSERT INTO sessions (token, admin_id, expires_at, ip, user_agent) VALUES (?, ?, ?, ?, ?)')
-      .run(hashToken(token), adminId, expiresAt, ip?.slice(0, 100) ?? null, userAgent?.slice(0, 500) ?? null);
+    const expiresAt = new Date(Date.now() + (role === 'guest' ? GUEST_SESSION_TTL_MS : SESSION_TTL_MS)).toISOString();
+    db.prepare('INSERT INTO sessions (token, admin_id, expires_at, ip, user_agent, role) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(hashToken(token), adminId, expiresAt, ip?.slice(0, 100) ?? null, userAgent?.slice(0, 500) ?? null, role);
     return token;
   }
 
@@ -125,7 +134,7 @@ export class AuthService {
   /**
    * Authenticate admin and generate a session token
    */
-  static login(username: string, password: string): { token: string; user: { id: number; username: string } } | null {
+  static login(username: string, password: string): { token: string; user: SessionUser } | null {
     const admin = db.prepare('SELECT * FROM admins WHERE username = ?').get(username) as any;
     if (!admin) {
       // Выравнивание времени ответа, чтобы нельзя было перебирать логины
@@ -137,25 +146,30 @@ export class AuthService {
 
     return {
       token: this.createSession(admin.id),
-      user: { id: admin.id, username: admin.username },
+      user: { id: admin.id, username: admin.username, role: 'admin' },
     };
   }
 
   /**
-   * Validate session token
+   * Validate session token. Гостевая сессия действует, только пока гостевой доступ включён (его отключение мгновенно
+   * закрывает вход); пользователь такой сессии — гость с id 0, он не совпадает ни с одним администратором.
    */
-  static validateSession(token: string): { id: number; username: string } | null {
+  static validateSession(token: string): SessionUser | null {
     if (!token) return null;
 
     const session = db.prepare(`
-      SELECT s.admin_id, a.username
+      SELECT s.admin_id, s.role, a.username
       FROM sessions s
       JOIN admins a ON s.admin_id = a.id
       WHERE s.token = ? AND s.expires_at > ?
     `).get(hashToken(token), new Date().toISOString()) as any;
 
     if (!session) return null;
-    return { id: session.admin_id, username: session.username };
+    if (session.role === 'guest') {
+      const guest = this.getGuestSettings();
+      return guest.enabled && guest.username ? { id: 0, username: guest.username, role: 'guest' } : null;
+    }
+    return { id: session.admin_id, username: session.username, role: 'admin' };
   }
 
   /**
@@ -204,7 +218,8 @@ export class AuthService {
 
     return transaction(() => {
       const taken = db.prepare('SELECT 1 FROM admins WHERE username = ? AND id != ?').get(newUsername, adminId);
-      if (taken) return 'taken' as const;
+      // Логин гостя занят: иначе вход этим логином шёл бы мимо гостевой проверки
+      if (taken || newUsername === getSetting('guest_username')) return 'taken' as const;
       db.prepare('UPDATE admins SET username = ? WHERE id = ?').run(newUsername, adminId);
       db.prepare('DELETE FROM sessions WHERE admin_id = ?').run(adminId);
       return { token: this.createSession(adminId), username: newUsername };
@@ -380,12 +395,9 @@ export class AuthService {
     recoveryCode?: string,
     ip?: string,
     userAgent?: string,
-  ): { token: string; user: { id: number; username: string } } | 'totp_required' | null {
+  ): { token: string; user: SessionUser } | 'totp_required' | null {
     const admin = db.prepare('SELECT * FROM admins WHERE username = ?').get(username) as any;
-    if (!admin) {
-      this.hashPassword(password);
-      return null;
-    }
+    if (!admin) return this.loginGuest(username, password, ip, userAgent);
 
     if (!this.verifyPassword(password, admin.password_hash, admin.salt)) return null;
 
@@ -405,7 +417,55 @@ export class AuthService {
 
     return {
       token: this.createSession(admin.id, ip, userAgent),
-      user: { id: admin.id, username: admin.username },
+      user: { id: admin.id, username: admin.username, role: 'admin' },
+    };
+  }
+
+  // ========== Гостевой доступ ==========
+
+  /** Гость: отдельные логин и пароль, сессия только для просмотра (ограничения — в auth.middleware.ts) */
+  static getGuestSettings(): { enabled: boolean; username: string; has_password: boolean } {
+    return {
+      enabled: getSetting('guest_enabled') === '1',
+      username: getSetting('guest_username') ?? '',
+      has_password: Boolean(getSetting('guest_password_hash')),
+    };
+  }
+
+  /** Логин гостя не должен совпадать с логином администратора: при входе сначала ищется администратор */
+  static isAdminUsername(username: string): boolean {
+    return Boolean(db.prepare('SELECT 1 FROM admins WHERE username = ?').get(username));
+  }
+
+  /**
+   * Сохраняет гостевой доступ. Любое изменение (в т.ч. отключение) завершает действующие гостевые сессии.
+   * Пароль не обязателен, если он уже задан.
+   */
+  static saveGuestSettings(input: { enabled: boolean; username: string; password?: string }): { enabled: boolean; username: string; has_password: boolean } {
+    transaction(() => {
+      setSetting('guest_enabled', input.enabled ? '1' : '0');
+      setSetting('guest_username', input.username || null);
+      if (input.password) {
+        const { hash, salt } = this.hashPassword(input.password);
+        setSetting('guest_password_hash', hash);
+        setSetting('guest_password_salt', salt);
+      }
+      db.prepare("DELETE FROM sessions WHERE role = 'guest'").run();
+    });
+    return this.getGuestSettings();
+  }
+
+  private static loginGuest(username: string, password: string, ip?: string, userAgent?: string): { token: string; user: SessionUser } | null {
+    const hash = getSetting('guest_password_hash');
+    const salt = getSetting('guest_password_salt');
+    const matches = getSetting('guest_enabled') === '1' && getSetting('guest_username') === username && Boolean(hash) && Boolean(salt);
+    // Хэш считается всегда: по времени ответа нельзя отличить гостевой логин от несуществующего
+    const valid = matches ? this.verifyPassword(password, hash!, salt!) : (this.hashPassword(password), false);
+    const owner = db.prepare('SELECT id FROM admins ORDER BY id LIMIT 1').get() as { id: number } | undefined;
+    if (!valid || !owner) return null;
+    return {
+      token: this.createSession(owner.id, ip, userAgent, 'guest'),
+      user: { id: 0, username, role: 'guest' },
     };
   }
 }

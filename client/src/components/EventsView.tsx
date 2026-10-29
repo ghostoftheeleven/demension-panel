@@ -26,7 +26,7 @@ export const EventsView: React.FC = () => {
   useEffect(() => { void load(); }, [load]);
 
   return (
-    <section className="bg-card border border-line rounded-2xl p-6 space-y-5">
+    <section data-guest-ok className="bg-card border border-line rounded-2xl p-6 space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-display text-xl font-bold text-ink">Журнал событий</h2>

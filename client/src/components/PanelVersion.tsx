@@ -19,7 +19,7 @@ function describe(info: VersionInfo): string {
 /**
  * Текущая версия панели и последняя версия из релизов GitHub
  */
-export const PanelVersion: React.FC = () => {
+export const PanelVersion: React.FC<{ canUpdate?: boolean }> = ({ canUpdate = true }) => {
   const [info, setInfo] = useState<VersionInfo | null>(null);
   const [checking, setChecking] = useState(false);
   const [updateOpen, setUpdateOpen] = useState(false);
@@ -81,7 +81,7 @@ export const PanelVersion: React.FC = () => {
           {result.text}
         </span>
       )}
-      {info.update_available && info.latest && (
+      {canUpdate && info.update_available && info.latest && (
         <button
           type="button"
           onClick={() => setUpdateOpen(true)}

@@ -13,9 +13,10 @@ import { SubscriptionModal } from './components/SubscriptionModal';
 import { AccountModal } from './components/AccountModal';
 import { QrCodeModal } from './components/QrCodeModal';
 import { LoginView } from './components/LoginView';
+import { useGuestLock } from './guestLock';
 import type { Server, Client, Subscriber, QrCodeData, AdminUser, MigrationStatus } from './types';
 import { api } from './api';
-import { ShieldCheck, Plus, Terminal, Zap, Sparkles, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, Plus, Terminal, Zap, Sparkles, AlertTriangle, Eye } from 'lucide-react';
 
 const SubscriptionSettingsView = React.lazy(() => import('./components/SubscriptionSettingsView').then((m) => ({ default: m.SubscriptionSettingsView })));
 const PartnersView = React.lazy(() => import('./components/PartnersView').then((m) => ({ default: m.PartnersView })));
@@ -55,6 +56,10 @@ export const App: React.FC = () => {
   const settingsLoadedRef = useRef(false);
   const [isAccountOpen, setIsAccountOpen] = useState(false);
   const [migrationState, setMigrationState] = useState<MigrationStatus['state']>('idle');
+  // Гость видит панель, но не меняет её: кнопки и поля внутри <main> блокируются (сервер всё равно отклонит запись)
+  const isGuest = user?.role === 'guest';
+  const mainRef = useRef<HTMLElement>(null);
+  useGuestLock(isGuest, mainRef);
 
   // Check auth on mount
   useEffect(() => {
@@ -84,7 +89,7 @@ export const App: React.FC = () => {
         api.getServers(),
         api.getSubscribers(),
         settingsLoadedRef.current ? Promise.resolve(null) : api.getSettings().catch(() => null),
-        api.getMigrationStatus().catch(() => null),
+        isGuest ? Promise.resolve(null) : api.getMigrationStatus().catch(() => null),
       ]);
       if (migration) setMigrationState(migration.state);
       setServers(serversData);
@@ -238,6 +243,7 @@ export const App: React.FC = () => {
       <Navbar
         servers={servers}
         user={user}
+        readOnly={isGuest}
         activeTab={activeTab}
         onSelectTab={(tab) => setActiveTab(tab)}
         onAddServer={() => setIsAddServerOpen(true)}
@@ -251,6 +257,15 @@ export const App: React.FC = () => {
           setUser(null);
         }}
       />
+
+      {isGuest && (
+        <div className="bg-info-soft border-b border-line text-info text-xs">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex flex-wrap items-center gap-2">
+            <Eye className="w-4 h-4 flex-shrink-0" />
+            <span>Гостевой режим: панель открыта только для просмотра. Ссылки подписок, ключи и доступы к серверам скрыты.</span>
+          </div>
+        </div>
+      )}
 
       {migrationState === 'exporting' && (
         <div className="bg-warn-soft border-b border-line text-warn text-xs">
@@ -266,7 +281,7 @@ export const App: React.FC = () => {
         </div>
       )}
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      <main ref={mainRef} className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         <React.Suspense fallback={<div className="flex items-center justify-center py-24 text-faint text-sm">Загрузка раздела...</div>}>
         {loading ? (
           <div className="flex items-center justify-center py-24 text-faint text-sm">

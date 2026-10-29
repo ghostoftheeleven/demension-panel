@@ -163,3 +163,9 @@ body {
     transition: none;
   }
 }
+
+/* Гостевой режим: заблокированные кнопки и поля (src/guestLock.ts) */
+[data-guest-locked] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

@@ -111,7 +111,7 @@ export const ClientList: React.FC<ClientListProps> = ({
 
         <div className="flex items-center gap-3">
           {/* Search */}
-          <div className="relative">
+          <div className="relative" data-guest-ok>
             <input
               type="text"
               placeholder="Поиск по имени или IP..."

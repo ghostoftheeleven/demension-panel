@@ -85,7 +85,12 @@ HTTP-кодом. Тела — JSON.
 - `GET/PUT /api/backups/settings`, `POST /api/backups/test`, `/api/backups/run`, `GET /api/backups`, `GET /api/backups/:id/download`, `DELETE /api/backups/:id`, `POST /api/backups/recovery-key`.
 
 ## Учётная запись и 2FA
-`POST /api/auth/login` дополнительно принимает `totp` или `recovery_code`. Настройка: `POST /api/auth/totp/setup`, `/totp/enable`, `/totp/disable`, `/totp/recovery/rotate`. Сессии: `GET /api/auth/sessions`, `DELETE /api/auth/sessions/:id`.
+`POST /api/auth/login` дополнительно принимает `totp` или `recovery_code`. Настройка: `POST /api/auth/totp/setup`, `/totp/enable`, `/totp/disable`, `/totp/recovery/rotate`. Сессии: `GET /api/auth/sessions` (поле `role`), `DELETE /api/auth/sessions/:id`.
+
+### Гостевой доступ
+`GET /api/auth/guest` → `{enabled, username, has_password}`; `PUT /api/auth/guest` `{enabled, username, password?, current_password}` — включить/отключить гостя,
+задать логин и пароль (пароль администратора обязателен, 409 если логин занят администратором); завершает гостевые сессии. Гость входит через
+`POST /api/auth/login` (в ответе `user.role = "guest"`) и может только читать адреса из белого списка (см. [security.md](security.md)); остальные запросы — 403 `{guest: true}`.
 
 ## Безопасность `/api/security`
 `GET /ssl`, `POST /ssl/verify-cf`, `/ssl/cf-zones`, `/ssl/issue-cf`, `/ssl/issue-http`, `/ssl/issue-ip`,

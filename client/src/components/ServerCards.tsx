@@ -154,7 +154,7 @@ export const ServerCards: React.FC<ServerCardsProps> = ({
   return (
     <div className="space-y-4">
       {/* Server Switcher Tabs */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+      <div data-guest-ok className="flex items-center gap-2 overflow-x-auto pb-1">
         {servers.map((s) => {
           const isSelected = s.id === selectedServer?.id;
           const isOnline = s.status === 'online';

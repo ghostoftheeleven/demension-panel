@@ -429,6 +429,11 @@ const migrations: Array<() => void> = [
       ALTER TABLE sessions_new RENAME TO sessions;
     `);
   },
+
+  // v12: гостевой доступ — роль сессии (admin | guest); логин и пароль гостя лежат в settings (guest_*)
+  () => {
+    addColumn('sessions', "role TEXT NOT NULL DEFAULT 'admin'");
+  },
 ];
 
 /** Версия схемы, которую умеет эта сборка панели (число миграций) */

@@ -62,8 +62,13 @@ authRouter.post('/login', (req, res) => {
   loginIpLimiter.reset(ipKey);
   loginUserLimiter.reset(userKey);
   reauthLimiter.reset(`admin:login:${username.toLowerCase()}`);
-  if (ipKey !== 'unknown') AuthService.rememberLoginIp(ipKey);
-  EventService.log('info', 'auth.login', `Администратор ${result.user.username} вошёл в панель`, { kind: 'admin', id: result.user.id });
+  // Адрес гостя в доверенные не попадает: исключение из блокировки по логину — только для администратора
+  if (ipKey !== 'unknown' && result.user.role === 'admin') AuthService.rememberLoginIp(ipKey);
+  if (result.user.role === 'guest') {
+    EventService.log('info', 'auth.guest_login', `Гость ${result.user.username} вошёл в панель с ${ipKey}`);
+  } else {
+    EventService.log('info', 'auth.login', `Администратор ${result.user.username} вошёл в панель`, { kind: 'admin', id: result.user.id });
+  }
   res.json(result);
 });
 
@@ -128,9 +133,56 @@ authRouter.post('/change-username', requireAuth, (req: AuthenticatedRequest, res
   res.json({
     success: true,
     token: result.token,
-    user: { id: req.user!.id, username: result.username },
+    user: { id: req.user!.id, username: result.username, role: 'admin' },
     message: 'Логин изменён. Остальные сессии завершены.',
   });
+});
+
+// ========== Гостевой доступ ==========
+
+// GET /api/auth/guest — настройки гостевого доступа (пароль не возвращается)
+authRouter.get('/guest', requireAuth, (req: AuthenticatedRequest, res) => {
+  res.json(AuthService.getGuestSettings());
+});
+
+// PUT /api/auth/guest — включить/отключить гостя, задать логин и пароль (по паролю администратора).
+// Любое изменение завершает действующие гостевые сессии.
+authRouter.put('/guest', requireAuth, (req: AuthenticatedRequest, res) => {
+  const { enabled, username, password, current_password } = req.body ?? {};
+  if (typeof enabled !== 'boolean' || typeof current_password !== 'string' || !current_password) {
+    return res.status(400).json({ error: 'Укажите, включить ли гостевой доступ, и пароль администратора' });
+  }
+
+  const current = AuthService.getGuestSettings();
+  const guestName = typeof username === 'string' ? username.trim() : current.username;
+  if (enabled || guestName) {
+    if (!USERNAME_PATTERN.test(guestName)) {
+      return res.status(400).json({ error: 'Логин гостя: от 1 до 64 символов — латинские буквы, цифры и . _ @ -' });
+    }
+    if (AuthService.isAdminUsername(guestName)) {
+      return res.status(409).json({ error: 'Этот логин принадлежит администратору — выберите другой' });
+    }
+  }
+  if (password !== undefined && (typeof password !== 'string' || password.length < MIN_PASSWORD_LENGTH)) {
+    return res.status(400).json({ error: `Пароль гостя должен содержать не менее ${MIN_PASSWORD_LENGTH} символов` });
+  }
+  if (enabled && !password && !current.has_password) {
+    return res.status(400).json({ error: 'Задайте пароль гостя' });
+  }
+
+  const limiterKey = assertReauthAllowed(req.user!.id);
+  if (!AuthService.confirmPassword(req.user!.id, current_password)) {
+    reauthLimiter.registerFailure(limiterKey);
+    return res.status(400).json({ error: 'Неверный пароль' });
+  }
+  reauthLimiter.reset(limiterKey);
+  if (password && AuthService.confirmPassword(req.user!.id, password)) {
+    return res.status(400).json({ error: 'Пароль гостя не должен совпадать с паролем администратора' });
+  }
+
+  const saved = AuthService.saveGuestSettings({ enabled, username: guestName, password: password || undefined });
+  EventService.log('warning', 'auth.guest_updated', enabled ? `Гостевой доступ включён (логин ${saved.username})` : 'Гостевой доступ отключён', { kind: 'admin', id: req.user!.id });
+  res.json(saved);
 });
 
 // ========== 2FA / TOTP ==========
@@ -206,7 +258,7 @@ authRouter.get('/sessions', requireAuth, (req: AuthenticatedRequest, res) => {
   const currentHash = currentToken ? crypto.createHash('sha256').update(currentToken).digest('hex') : null;
 
   const sessions = db.prepare(`
-    SELECT id, ip, user_agent, last_activity, created_at
+    SELECT id, ip, user_agent, last_activity, created_at, role
     FROM sessions
     WHERE admin_id = ? AND expires_at > ?
     ORDER BY last_activity DESC
@@ -218,6 +270,7 @@ authRouter.get('/sessions', requireAuth, (req: AuthenticatedRequest, res) => {
     user_agent: s.user_agent || 'Неизвестно',
     last_activity: s.last_activity,
     created_at: s.created_at,
+    role: s.role === 'guest' ? 'guest' : 'admin',
     current: currentHash ? (db.prepare('SELECT 1 FROM sessions WHERE id = ? AND token = ?').get(s.id, currentHash) !== undefined) : false,
   }));
 

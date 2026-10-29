@@ -7,7 +7,7 @@ import type { TLSSocket } from 'node:tls';
 import express, { Request } from 'express';
 import { WebSocketServer, WebSocket } from 'ws';
 import { initDatabase, db } from './db/index.js';
-import { AuthService } from './services/auth.service.js';
+import { AuthService, type SessionUser } from './services/auth.service.js';
 import { requireAuth } from './middleware/auth.middleware.js';
 import { loginIpLimiter, loginUserLimiter, migrationCodeLimiter, reauthLimiter } from './middleware/rate-limit.js';
 import { authRouter } from './routes/auth.js';
@@ -214,7 +214,7 @@ const send = (ws: WebSocket, payload: unknown) => {
 };
 
 wss.on('connection', (ws: WebSocket) => {
-  let user: { id: number; username: string } | null = null;
+  let user: SessionUser | null = null;
   // Некорректный фрейм не должен ронять процесс
   ws.on('error', () => ws.terminate());
   const authTimer = setTimeout(() => {
@@ -233,6 +233,8 @@ wss.on('connection', (ws: WebSocket) => {
     if (!user) {
       if (msg?.type === 'auth' && typeof msg.token === 'string') {
         user = AuthService.validateSession(msg.token);
+        // Установка нод меняет панель и ноды: гостю (только просмотр) WebSocket не нужен
+        if (user?.role === 'guest') user = null;
       }
       if (!user) {
         send(ws, { type: 'error', message: 'Необходима авторизация' });

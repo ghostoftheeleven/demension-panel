@@ -32,6 +32,7 @@ import type {
   TelegramSettings,
   BackupSettings,
   RemoteBackup,
+  GuestAccess,
 } from '../types';
 
 const API_BASE = '/api';
@@ -172,8 +173,16 @@ export const api = {
     return request(`${API_BASE}/auth/totp/recovery/rotate`, { method: 'POST', ...json({ password }) }, 'Ошибка перевыпуска кодов');
   },
 
-  async getSessions(): Promise<Array<{ id: number; ip: string; user_agent: string; last_activity: string; created_at: string; current: boolean }>> {
-    const data = await request<{ sessions: Array<{ id: number; ip: string; user_agent: string; last_activity: string; created_at: string; current: boolean }> }>(`${API_BASE}/auth/sessions`, {}, 'Ошибка загрузки сессий');
+  getGuestAccess(): Promise<GuestAccess> {
+    return request(`${API_BASE}/auth/guest`, {}, 'Ошибка загрузки гостевого доступа');
+  },
+
+  saveGuestAccess(input: { enabled: boolean; username: string; password?: string; current_password: string }): Promise<GuestAccess> {
+    return request(`${API_BASE}/auth/guest`, { method: 'PUT', ...json(input) }, 'Ошибка сохранения гостевого доступа');
+  },
+
+  async getSessions(): Promise<Array<{ id: number; ip: string; user_agent: string; last_activity: string; created_at: string; current: boolean; role?: 'admin' | 'guest' }>> {
+    const data = await request<{ sessions: Array<{ id: number; ip: string; user_agent: string; last_activity: string; created_at: string; current: boolean; role?: 'admin' | 'guest' }> }>(`${API_BASE}/auth/sessions`, {}, 'Ошибка загрузки сессий');
     return data.sessions;
   },
 

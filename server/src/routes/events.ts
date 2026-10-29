@@ -1,12 +1,12 @@
 import { Router } from 'express';
 import { EventService, EventLevel } from '../services/event.service.js';
-import { requireAuth } from '../middleware/auth.middleware.js';
+import { requireAuth, AuthenticatedRequest } from '../middleware/auth.middleware.js';
 import { HttpError } from '../utils/http.js';
 
 export const eventsRouter = Router();
 eventsRouter.use(requireAuth);
 
-eventsRouter.get('/', (req, res) => {
+eventsRouter.get('/', (req: AuthenticatedRequest, res) => {
   const level = req.query.level;
   if (level !== undefined && level !== '' && !['info', 'warning', 'error'].includes(String(level))) {
     throw new HttpError(400, 'Некорректный уровень события');
@@ -21,5 +21,6 @@ eventsRouter.get('/', (req, res) => {
     level: level ? String(level) as EventLevel : undefined,
     limit: numberQuery(req.query.limit, 50),
     offset: numberQuery(req.query.offset, 0),
+    hideAccount: req.user?.role === 'guest',
   }));
 });

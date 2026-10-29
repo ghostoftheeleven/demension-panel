@@ -453,7 +453,7 @@ export const PartnersView: React.FC<{ servers: Server[]; publicUrl: string | nul
               return (
                 <div key={p.id} className="py-3">
                   <div className="flex flex-wrap items-center gap-3">
-                    <button onClick={() => setExpanded(expanded === p.id ? null : p.id)} className="text-faint hover:text-ink">
+                    <button data-guest-ok onClick={() => setExpanded(expanded === p.id ? null : p.id)} className="text-faint hover:text-ink">
                       {expanded === p.id ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                     </button>
                     <div className="min-w-0 flex-1">

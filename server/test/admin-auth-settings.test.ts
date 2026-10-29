@@ -44,7 +44,7 @@ describe('вход', () => {
   it('успешный вход выдаёт токен и данные пользователя, пароль в ответе не возвращается', async () => {
     const res = await login(USER, PASSWORD);
     expect(res.status).toBe(200);
-    expect(res.body.user).toEqual({ id: expect.any(Number), username: USER });
+    expect(res.body.user).toEqual({ id: expect.any(Number), username: USER, role: 'admin' });
     expect(res.body.token).toMatch(/^[0-9a-f]{64}$/);
     expect(JSON.stringify(res.body)).not.toMatch(/password|hash|salt/i);
   });
@@ -201,7 +201,7 @@ describe('смена логина', () => {
     const otherSession = AuthService.login(USER, PASSWORD)!.token;
     const res = await changeUsername(PASSWORD, ' New.Login-1@x ');
     expect(res.status).toBe(200);
-    expect(res.body.user).toEqual({ id: adminId(), username: 'New.Login-1@x' });
+    expect(res.body.user).toEqual({ id: adminId(), username: 'New.Login-1@x', role: 'admin' });
 
     expect(AuthService.validateSession(otherSession)).toBeNull();
     expect((await admin.api('/api/auth/me')).status).toBe(401);

@@ -20,6 +20,7 @@ import { PanelSettingsCard } from './PanelSettingsCard';
 import { MigrationCard } from './MigrationCard';
 import { TelegramCard } from './TelegramCard';
 import { BackupsCard } from './BackupsCard';
+import { GuestAccessCard } from './GuestAccessCard';
 
 /**
  * HTTPS включается сразу (без перезапуска). Открытая по HTTP панель после этого
@@ -289,6 +290,7 @@ export const SecurityView: React.FC<{
   return (
     <div className="space-y-8">
       <PanelSettingsCard onSaved={onSettingsSaved} />
+      <GuestAccessCard />
       <TelegramCard />
       <BackupsCard />
 

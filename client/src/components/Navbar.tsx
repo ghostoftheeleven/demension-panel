@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Server as ServerIcon, Users, Activity, LogOut, KeyRound, Lock, Palette, Handshake, Waypoints, ScrollText } from 'lucide-react';
+import { Plus, Server as ServerIcon, Users, Activity, LogOut, KeyRound, Lock, Palette, Handshake, Waypoints, ScrollText, Eye } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { Server, AdminUser } from '../types';
 import { PanelVersion } from './PanelVersion';
@@ -10,6 +10,8 @@ export type AppTab = 'servers' | 'bridges' | 'subscribers' | 'subscription' | 'p
 interface NavbarProps {
   servers: Server[];
   user: AdminUser | null;
+  /** Гостевой режим: без кнопок добавления, учётной записи и разделов настройки */
+  readOnly?: boolean;
   activeTab: AppTab;
   onSelectTab: (tab: AppTab) => void;
   onAddServer: () => void;
@@ -28,9 +30,13 @@ const TABS: { id: AppTab; label: string; icon: LucideIcon }[] = [
   { id: 'security', label: 'Безопасность', icon: Lock },
 ];
 
+/** Разделы, доступные гостю (настройки подписки и безопасности скрыты) */
+const GUEST_TABS: AppTab[] = ['servers', 'bridges', 'subscribers', 'partners', 'events'];
+
 export const Navbar: React.FC<NavbarProps> = ({
   servers,
   user,
+  readOnly = false,
   activeTab,
   onSelectTab,
   onAddServer,
@@ -49,7 +55,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <BrandMark />
           <div className="min-w-0">
             <div className="font-display font-extrabold text-xl text-ink tracking-tight leading-none">dementia</div>
-            {user && <PanelVersion />}
+            {user && <PanelVersion canUpdate={!readOnly} />}
           </div>
         </div>
 
@@ -73,7 +79,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Действия и учётная запись */}
         <div className="flex items-center gap-2 shrink-0">
-          {activeTab === 'servers' && (
+          {!readOnly && activeTab === 'servers' && (
             <button
               onClick={onAddServer}
               className="flex items-center gap-1.5 bg-mint text-on-accent font-bold text-sm px-4 py-2 rounded-full btn-press"
@@ -83,7 +89,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           )}
 
-          {activeTab === 'subscribers' && (
+          {!readOnly && activeTab === 'subscribers' && (
             <button
               onClick={onAddSubscriber}
               className="flex items-center gap-1.5 bg-mint text-on-accent font-bold text-sm px-4 py-2 rounded-full btn-press"
@@ -95,6 +101,12 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {user && (
             <>
+              {readOnly ? (
+                <span title="Гостевой доступ: только просмотр" className="flex items-center gap-1.5 px-3 py-2 text-info bg-info-soft rounded-full text-xs font-semibold">
+                  <Eye className="w-4 h-4" />
+                  <span className="hidden md:inline">Гость</span>
+                </span>
+              ) : (
               <button
                 onClick={onOpenAccount}
                 title={`Учётная запись «${user.username}»: сменить логин или пароль`}
@@ -103,6 +115,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <KeyRound className="w-4 h-4" />
                 <span className="hidden md:inline max-w-28 truncate text-xs font-mono">{user.username}</span>
               </button>
+              )}
 
               <button
                 onClick={onLogout}
@@ -118,7 +131,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Разделы: на узком экране прокручиваются по горизонтали */}
       <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center gap-1.5 overflow-x-auto">
-        {TABS.map(({ id, label, icon: Icon }) => {
+        {TABS.filter(({ id }) => !readOnly || GUEST_TABS.includes(id)).map(({ id, label, icon: Icon }) => {
           const active = activeTab === id;
           return (
             <button

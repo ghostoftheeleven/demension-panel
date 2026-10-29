@@ -128,6 +128,7 @@ export const ProbesCard: React.FC<{ onChanged?: () => void }> = ({ onChanged }) 
     <div className="bg-card border border-line rounded-2xl shadow-pop">
       <button
         type="button"
+        data-guest-ok
         onClick={() => {
           setOpen(!open);
           if (!open) load(true);

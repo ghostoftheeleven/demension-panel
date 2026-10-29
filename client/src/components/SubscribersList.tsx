@@ -87,7 +87,7 @@ export const SubscribersList: React.FC<SubscribersListProps> = ({
 
         <div className="flex flex-wrap items-center gap-3">
           {/* Search */}
-          <div className="relative">
+          <div className="relative" data-guest-ok>
             <input
               type="text"
               placeholder="Поиск по имени..."
