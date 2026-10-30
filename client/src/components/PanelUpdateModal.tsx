@@ -12,7 +12,7 @@ interface PanelUpdateModalProps {
 
 /** Как часто спрашивать состояние, пока идёт обновление */
 const POLL_MS = 3000;
-const INSTALL_COMMAND = 'curl -sSL https://raw.githubusercontent.com/ghostoftheeleven/dementia-panel/main/install.sh | sudo bash';
+const INSTALL_COMMAND = 'curl -sSL https://raw.githubusercontent.com/team-ph4r0s/dementia-panel/main/install.sh | sudo bash';
 
 /**
  * Обновление панели до последнего релиза прямо из интерфейса. Обновление выполняет сервер (install.sh в отдельной службе

@@ -5,7 +5,7 @@ import { api } from '../api';
 import { copyToClipboard } from '../utils';
 import { useFeedback } from './ui/feedback-context';
 
-const INSTALL_COMMAND = 'curl -sSL https://raw.githubusercontent.com/ghostoftheeleven/dementia-panel/main/install.sh | sudo bash';
+const INSTALL_COMMAND = 'curl -sSL https://raw.githubusercontent.com/team-ph4r0s/dementia-panel/main/install.sh | sudo bash';
 
 const inputClass =
   'w-full bg-paper border border-line rounded-xl px-3.5 py-2 text-ink placeholder-faint focus:outline-none focus:border-brand transition text-sm';

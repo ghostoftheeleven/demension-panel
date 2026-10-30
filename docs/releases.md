@@ -37,10 +37,10 @@
 ## Проверка обновлений в панели
 
 `GET /api/version` → `VersionService.getInfo`: текущая версия и последний релиз
-`https://api.github.com/repos/ghostoftheeleven/dementia-panel/releases/latest`.
+`https://api.github.com/repos/team-ph4r0s/dementia-panel/releases/latest`.
 
 - Если API отказал (исчерпан лимит 60 запросов в час на адрес сервера, ошибка GitHub, сбой сети), версия берётся из перенаправления
-  `HEAD https://github.com/ghostoftheeleven/dementia-panel/releases/latest` → `…/releases/tag/vX.Y.Z` (`parseLatestRedirect`, только адрес
+  `HEAD https://github.com/team-ph4r0s/dementia-panel/releases/latest` → `…/releases/tag/vX.Y.Z` (`parseLatestRedirect`, только адрес
   тега этого репозитория). Ошибка показывается, только если не удалось ни то, ни другое.
 - Ответ кэшируется на 6 ч, после ошибки — повтор через 30 мин; `?refresh=1` (клик по надписи о версии в шапке) — не чаще раза в 15 секунд.
 - Ответ GitHub — внешние данные: принимается только тег `vX.Y.Z` и ссылка на страницу релиза этого репозитория.

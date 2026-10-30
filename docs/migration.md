@@ -114,7 +114,7 @@
 `PANEL_DOMAIN`, `PANEL_EMAIL`, `CF_API_TOKEN`, `PANEL_CERT_FILE`, `PANEL_KEY_FILE` — полностью автоматический перенос:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/ghostoftheeleven/dementia-panel/main/install.sh | \
+curl -sSL https://raw.githubusercontent.com/team-ph4r0s/dementia-panel/main/install.sh | \
   sudo MIGRATE_FROM=https://panel.example.com:3001 MIGRATION_CODE=XXXXX-XXXXX-XXXXX-XXXXX-XXXXX PANEL_CERT_MODE=keep bash
 ```
 

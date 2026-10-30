@@ -60,7 +60,7 @@ SSH-пароль и ключ моста шифруются так же, как �
 только после `isValidHost` и в `shellQuote`. См. [bridges.md](bridges.md).
 
 ## Проверка обновлений
-- Панель запрашивает `api.github.com/repos/ghostoftheeleven/dementia-panel/releases/latest` (не чаще раза в 6 ч, только
+- Панель запрашивает `api.github.com/repos/team-ph4r0s/dementia-panel/releases/latest` (не чаще раза в 6 ч, только
   после входа администратора; в запросе — лишь `User-Agent: dementia-panel/<версия>`). Ответ проверяется по формату
   (тег `vX.Y.Z`, ссылка только на релизы репозитория). Если API отказал, тот же тег берётся из перенаправления страницы
   `github.com/…/releases/latest` (запрос HEAD без перехода по ссылке, принимается только адрес тега репозитория). Отключение:

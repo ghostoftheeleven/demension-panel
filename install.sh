@@ -36,7 +36,7 @@ BOLD='\033[1m'
 NC='\033[0m' # No Color
 
 INSTALL_DIR="/opt/dementia-panel"
-REPO_URL="https://github.com/ghostoftheeleven/dementia-panel.git"
+REPO_URL="https://github.com/team-ph4r0s/dementia-panel.git"
 SERVICE="dementia.service"
 # Прежнее имя проекта (до v0.1.4)
 LEGACY_DIR="/opt/demension-panel"
@@ -322,8 +322,9 @@ echo -e "\n${CYAN}[3/7] Развертывание кодовой базы в ${
 # Новый код скачивается, пока панель ещё работает: при ошибке (нет сети, локальные правки) она остаётся запущенной
 if [ -d "$INSTALL_DIR/.git" ]; then
   echo "Обновление существующей установки..."
-  # Репозиторий переименован (demension-panel → dementia-panel): GitHub перенаправляет старый адрес, но храним новый
-  if git -c safe.directory="$CODE_DIR" -C "$CODE_DIR" remote get-url origin 2>/dev/null | grep -q 'ghostoftheeleven/demension-panel'; then
+  # Репозиторий переименован и перенесён в организацию (ghostoftheeleven/demension-panel → team-ph4r0s/dementia-panel):
+  # GitHub перенаправляет старые адреса, но храним новый
+  if git -c safe.directory="$CODE_DIR" -C "$CODE_DIR" remote get-url origin 2>/dev/null | grep -qE 'ghostoftheeleven/(demension|dementia)-panel'; then
     git -c safe.directory="$CODE_DIR" -C "$CODE_DIR" remote set-url origin "$REPO_URL" || true
   fi
   # safe.directory: каталог мог быть скопирован из клона обычного пользователя, а установщик работает от root.

@@ -3,7 +3,7 @@
 ## Сообщить об уязвимости
 
 Не создавайте публичный Issue и не публикуйте подробности уязвимости до исправления. Сообщите о ней через
-[приватную Security Advisory на GitHub](https://github.com/ghostoftheeleven/dementia-panel/security/advisories/new).
+[приватную Security Advisory на GitHub](https://github.com/team-ph4r0s/dementia-panel/security/advisories/new).
 
 Укажите затронутую версию, условия воспроизведения, ожидаемый и фактический результат. Не прикладывайте действующие
 пароли, токены, приватные ключи, резервные копии и другие секреты.

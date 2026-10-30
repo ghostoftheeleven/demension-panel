@@ -35,13 +35,13 @@
 Требования: Ubuntu / Debian / AlmaLinux, Node.js **≥ 22.13** (устанавливается автоматически).
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/ghostoftheeleven/dementia-panel/main/install.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/team-ph4r0s/dementia-panel/main/install.sh | sudo bash
 ```
 
 Без вопросов (например, для автоматизации):
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/ghostoftheeleven/dementia-panel/main/install.sh | sudo PANEL_PORT=3001 bash
+curl -sSL https://raw.githubusercontent.com/team-ph4r0s/dementia-panel/main/install.sh | sudo PANEL_PORT=3001 bash
 ```
 
 Скрипт:
@@ -69,7 +69,7 @@ curl -sSL https://raw.githubusercontent.com/ghostoftheeleven/dementia-panel/main
 ### Версии и обновления
 
 Текущая версия панели видна в шапке интерфейса рядом с названием; там же — последняя версия из
-[релизов на GitHub](https://github.com/ghostoftheeleven/dementia-panel/releases) и ссылка «Доступна vX.Y.Z», если вышло обновление.
+[релизов на GitHub](https://github.com/team-ph4r0s/dementia-panel/releases) и ссылка «Доступна vX.Y.Z», если вышло обновление.
 Что изменилось в каждой версии — [CHANGELOG.md](CHANGELOG.md). **Обновление — прямо из панели:** нажмите «Доступна vX.Y.Z» →
 «Обновить» (резервная копия БД, сборка, перезапуск; если новая версия не запустится — панель вернётся на прежнюю). Данные, логин
 и пароль сохраняются. Из терминала обновляет повторный запуск команды установки выше. В карточке
@@ -104,7 +104,7 @@ cd /opt/dementia-panel && node server/dist/cli/reset-admin.js
 ## 💻 Локальный запуск (Разработка)
 
 ```bash
-git clone https://github.com/ghostoftheeleven/dementia-panel.git
+git clone https://github.com/team-ph4r0s/dementia-panel.git
 cd dementia-panel
 
 npm install --prefix server

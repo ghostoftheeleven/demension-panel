@@ -4,12 +4,12 @@ import { fileURLToPath } from 'node:url';
 import { panelEnv } from '../utils/env.js';
 
 /** Репозиторий, в котором публикуются релизы панели */
-export const RELEASES_REPO = 'ghostoftheeleven/dementia-panel';
+export const RELEASES_REPO = 'team-ph4r0s/dementia-panel';
 const RELEASES_URL = `https://github.com/${RELEASES_REPO}/releases`;
 const LATEST_RELEASE_API = `https://api.github.com/repos/${RELEASES_REPO}/releases/latest`;
 /** Запасной путь, если API отказал (лимит 60 запросов в час на адрес, сбой): страница перенаправляет на тег последнего релиза */
 const LATEST_RELEASE_PAGE = `${RELEASES_URL}/latest`;
-const LATEST_TAG_LOCATION = /^https:\/\/github\.com\/ghostoftheeleven\/dementia-panel\/releases\/tag\/(v\d{1,4}\.\d{1,4}\.\d{1,6})$/;
+const LATEST_TAG_LOCATION = /^https:\/\/github\.com\/team-ph4r0s\/dementia-panel\/releases\/tag\/(v\d{1,4}\.\d{1,4}\.\d{1,6})$/;
 
 /** Как долго помнится ответ GitHub (без токена API разрешает 60 запросов в час с одного адреса) */
 const CHECK_TTL_MS = 6 * 60 * 60 * 1000;
